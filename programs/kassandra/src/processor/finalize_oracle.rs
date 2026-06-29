@@ -96,18 +96,12 @@ use crate::{
     state::{Oracle, Phase, CLAIM_OPTION_NONE},
 };
 
-/// Upper bound on the proposer set finalize_oracle will gather votes for, set to
-/// a realistic single-transaction account-lock budget (Solana caps a tx at 64
-/// account locks; finalize also locks the oracle + program + fee payer, leaving
-/// ~60 read-only proposer slots).
-///
-/// CONTRACT: this is the DEFENSIVE backstop that keeps the fixed `votes` buffer
-/// from overflowing — NOT the liveness guarantee. The future propose/
-/// registration processor MUST cap `proposer_count` at or below this so the
-/// one-shot finalize always fits one transaction; otherwise an oversized set
-/// would brick the oracle in [`Phase::Challenge`] (see the module-level CONTRACT
-/// note). Task 13's fuzzer must stay within this cap.
-const MAX_PROPOSERS: usize = 60;
+/// Upper bound on the proposer set finalize_oracle will gather votes for. Lives
+/// in [`crate::config::MAX_PROPOSERS`] so `propose` (the registration cap, the
+/// real liveness guarantee) and `finalize_oracle` (this defensive backstop that
+/// keeps the fixed `votes` buffer from overflowing) share one constant. See the
+/// config doc + module-level CONTRACT note. Task 13's fuzzer must stay within it.
+const MAX_PROPOSERS: usize = crate::config::MAX_PROPOSERS as usize;
 
 /// Reject if `key` appears in `prior` (distinctness within the call).
 fn require_distinct(prior: &[AccountInfo], key: &Pubkey) -> ProgramResult {

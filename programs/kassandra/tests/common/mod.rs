@@ -159,6 +159,13 @@ impl TestCtx {
         Pubkey::find_program_address(&[b"protocol"], program_id)
     }
 
+    /// Derive the stake-vault PDA for an oracle: seeds `[b"vault", oracle]`.
+    /// The vault is an SPL token account on the KASS mint whose authority is the
+    /// oracle PDA, created by `create_oracle`.
+    pub fn stake_vault_pda(program_id: &Pubkey, oracle: &Pubkey) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[b"vault", oracle.as_ref()], program_id)
+    }
+
     /// Derive the Proposer PDA: seeds `[b"proposer", oracle, authority]`.
     pub fn proposer_pda(program_id: &Pubkey, oracle: &Pubkey, authority: &Pubkey) -> (Pubkey, u8) {
         Pubkey::find_program_address(
@@ -207,6 +214,77 @@ impl TestCtx {
                 AccountMeta::new_readonly(system_program::ID, false),
             ],
             data: vec![kassandra_program::instruction::Ix::InitProtocol as u8],
+        }
+    }
+
+    /// Send a real `CreateOracle` instruction with `creator == payer`, using the
+    /// harness KASS/USDC mints and the protocol singleton. Returns the Oracle PDA
+    /// derived from `nonce`. `init_protocol` must have been called first. The
+    /// returned [`TransactionResult`] lets tests assert success or the various
+    /// rejection paths.
+    #[allow(clippy::result_large_err)]
+    pub fn create_oracle(
+        &mut self,
+        nonce: u64,
+        options_count: u8,
+        deadline: i64,
+        twap_window: i64,
+        prompt_hash: [u8; 32],
+    ) -> (Pubkey, TransactionResult) {
+        let (oracle_pda, _) = Self::oracle_pda(&self.program_id, nonce);
+        let ix = self.create_oracle_ix(
+            nonce,
+            options_count,
+            deadline,
+            twap_window,
+            prompt_hash,
+            oracle_pda,
+            self.kass_mint,
+            self.usdc_mint,
+        );
+        let res = self.send(ix, &[]);
+        (oracle_pda, res)
+    }
+
+    /// Build a `CreateOracle` instruction. Exposes the oracle account and the
+    /// KASS/USDC mints as parameters so tests can pass deliberately wrong values
+    /// (mint spoof, etc.). Creator = payer (fee payer signs, pays rent).
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_oracle_ix(
+        &self,
+        nonce: u64,
+        options_count: u8,
+        deadline: i64,
+        twap_window: i64,
+        prompt_hash: [u8; 32],
+        oracle: Pubkey,
+        kass_mint: Pubkey,
+        usdc_mint: Pubkey,
+    ) -> Instruction {
+        let (protocol_pda, _) = Self::protocol_pda(&self.program_id);
+        let (stake_vault, _) = Self::stake_vault_pda(&self.program_id, &oracle);
+
+        let mut data = Vec::with_capacity(1 + 57);
+        data.push(kassandra_program::instruction::Ix::CreateOracle as u8);
+        data.extend_from_slice(&nonce.to_le_bytes());
+        data.extend_from_slice(&prompt_hash);
+        data.push(options_count);
+        data.extend_from_slice(&deadline.to_le_bytes());
+        data.extend_from_slice(&twap_window.to_le_bytes());
+
+        Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new_readonly(protocol_pda, false),
+                AccountMeta::new(oracle, false),
+                AccountMeta::new(stake_vault, false),
+                AccountMeta::new(self.payer.pubkey(), true),
+                AccountMeta::new_readonly(kass_mint, false),
+                AccountMeta::new_readonly(usdc_mint, false),
+                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+                AccountMeta::new_readonly(system_program::ID, false),
+            ],
+            data,
         }
     }
 
@@ -418,6 +496,18 @@ impl TestCtx {
     /// Read and decode the `Protocol` singleton account.
     pub fn protocol(&self, key: Pubkey) -> kassandra_program::state::Protocol {
         self.read_pod(key)
+    }
+
+    /// Read an SPL token account's `(mint, owner, amount)`, with `mint`/`owner`
+    /// as raw 32-byte arrays so callers can compare against `Pubkey::to_bytes()`
+    /// without crossing the `solana_program` / `solana_sdk` Pubkey type boundary.
+    pub fn token_account(&self, key: Pubkey) -> ([u8; 32], [u8; 32], u64) {
+        let acc = self
+            .svm
+            .get_account(&key)
+            .unwrap_or_else(|| panic!("token account {key} not found"));
+        let ta = TokenAccount::unpack(&acc.data).expect("not a token account");
+        (ta.mint.to_bytes(), ta.owner.to_bytes(), ta.amount)
     }
 
     /// Read the token balance (base units) of an SPL token account.

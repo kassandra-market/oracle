@@ -13,6 +13,7 @@ use pinocchio::{
 use crate::instruction::Ix;
 
 pub mod advance_phase;
+pub mod create_oracle;
 pub mod finalize_ai_claims;
 pub mod finalize_facts;
 pub mod finalize_oracle;
@@ -42,5 +43,6 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> Pr
         Ix::SettleChallenge => settle_challenge::process(program_id, accounts, payload),
         Ix::FinalizeOracle => finalize_oracle::process(program_id, accounts, payload),
         Ix::InitProtocol => init_protocol::process(program_id, accounts, payload),
+        Ix::CreateOracle => create_oracle::process(program_id, accounts, payload),
     }
 }

@@ -66,6 +66,12 @@ pub enum KassandraError {
     /// (non-zero lamports or non-empty data): the protocol singleton is created
     /// exactly once.
     AlreadyInitialized = 17,
+    /// `create_oracle` was called with a `deadline` in the past (`deadline <
+    /// now`): proposals open at the deadline, so it must be in the future.
+    InvalidDeadline = 18,
+    /// `create_oracle` was called with `options_count < 2`: a categorical oracle
+    /// needs at least two options to be meaningful.
+    InvalidOptionsCount = 19,
 }
 
 impl From<KassandraError> for ProgramError {

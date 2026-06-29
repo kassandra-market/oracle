@@ -8,6 +8,24 @@
 /// new `phase_ends_at` is set to `now + PHASE_WINDOW`.
 pub const PHASE_WINDOW: i64 = 3600;
 
+/// Duration (seconds) of the proposal-registration window. `create_oracle` sets
+/// the new oracle's `phase_ends_at = deadline + PROPOSAL_WINDOW`: proposals open
+/// at the `deadline` and the window runs for this long afterward.
+pub const PROPOSAL_WINDOW: i64 = 3600;
+
+/// Upper bound on an oracle's proposer set, set to a realistic single-transaction
+/// account-lock budget (Solana caps a tx at 64 account locks; `finalize_oracle`
+/// also locks the oracle + program + fee payer, leaving ~60 read-only proposer
+/// slots).
+///
+/// CONTRACT: this is the DEFENSIVE backstop that keeps `finalize_oracle`'s fixed
+/// `votes` buffer from overflowing — AND the liveness guarantee enforced at
+/// registration. The `propose` processor caps `proposer_count` at or below this
+/// so the one-shot `finalize_oracle` always fits one transaction; otherwise an
+/// oversized set would brick the oracle in [`Phase::Challenge`]. Shared by
+/// `propose` and `finalize_oracle` so both reason about one constant.
+pub const MAX_PROPOSERS: u16 = 60;
+
 /// Protocol-global supermajority threshold (numerator) for fact approval.
 ///
 /// A fact is agreed only if its approve-stake reaches this fraction of the

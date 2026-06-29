@@ -28,6 +28,10 @@ pub enum Ix {
     /// One-time protocol initializer: creates the `[b"protocol"]` singleton
     /// recording the admin + canonical KASS/USDC mints. Stable contract.
     InitProtocol = 9,
+    /// Create an oracle in [`crate::state::Phase::Proposal`] with a future
+    /// deadline plus its program-controlled stake vault (KASS token account at
+    /// PDA `[b"vault", oracle]`, authority = oracle PDA). No fee yet (Task H2).
+    CreateOracle = 10,
     // Future variants are APPENDED here with the next discriminant; add a
     // matching arm to `from_u8` below.
 }
@@ -47,6 +51,7 @@ impl Ix {
             7 => Some(Ix::AdvancePhase),
             8 => Some(Ix::FinalizeAiClaims),
             9 => Some(Ix::InitProtocol),
+            10 => Some(Ix::CreateOracle),
             _ => None,
         }
     }
