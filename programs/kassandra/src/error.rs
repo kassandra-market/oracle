@@ -72,6 +72,22 @@ pub enum KassandraError {
     /// `create_oracle` was called with `options_count < 2`: a categorical oracle
     /// needs at least two options to be meaningful.
     InvalidOptionsCount = 19,
+    /// `propose` was called before the oracle's `deadline` (`now < deadline`):
+    /// the proposal window opens only at the creation-time deadline.
+    DeadlineNotReached = 20,
+    /// `propose` was called after the proposal window closed: `now >=
+    /// phase_ends_at` while `proposer_count > 0` (an empty window instead
+    /// re-opens for the seeding first proposal). The caller must
+    /// `finalize_proposals` rather than register late.
+    ProposalWindowClosed = 21,
+    /// `propose` would push `proposer_count` past [`crate::config::MAX_PROPOSERS`]:
+    /// the on-chain liveness guarantee that keeps the one-shot `finalize_oracle`
+    /// within a single transaction's account-lock budget.
+    TooManyProposers = 22,
+    /// `propose` was called by an authority that already registered a proposal on
+    /// this oracle (the Proposer PDA is already initialized): one proposal per
+    /// (oracle, authority).
+    DuplicateProposer = 23,
 }
 
 impl From<KassandraError> for ProgramError {

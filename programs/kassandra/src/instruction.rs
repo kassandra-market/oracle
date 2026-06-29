@@ -32,6 +32,11 @@ pub enum Ix {
     /// deadline plus its program-controlled stake vault (KASS token account at
     /// PDA `[b"vault", oracle]`, authority = oracle PDA). No fee yet (Task H2).
     CreateOracle = 10,
+    /// Register a proposal against an oracle in [`crate::state::Phase::Proposal`]
+    /// after its `deadline`: a categorical `option` + a KASS `bond` escrowed into
+    /// the oracle's stake vault, creating one `Proposer` PDA per (oracle,
+    /// authority). Enforces the `MAX_PROPOSERS` cap on-chain.
+    Propose = 11,
     // Future variants are APPENDED here with the next discriminant; add a
     // matching arm to `from_u8` below.
 }
@@ -52,6 +57,7 @@ impl Ix {
             8 => Some(Ix::FinalizeAiClaims),
             9 => Some(Ix::InitProtocol),
             10 => Some(Ix::CreateOracle),
+            11 => Some(Ix::Propose),
             _ => None,
         }
     }

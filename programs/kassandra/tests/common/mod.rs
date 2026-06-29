@@ -298,6 +298,75 @@ impl TestCtx {
         }
     }
 
+    /// Send a real `Propose` instruction registering `authority`'s proposal
+    /// (`option` + KASS `bond`) against `oracle`. Airdrops the authority SOL for
+    /// rent and funds it a KASS token account holding `bond` (the bond source).
+    /// `authority` co-signs. Returns the Proposer PDA + result. The oracle must
+    /// already be in [`Phase::Proposal`] (i.e. created via `create_oracle`).
+    #[allow(clippy::result_large_err)]
+    pub fn propose(
+        &mut self,
+        oracle: Pubkey,
+        authority: &Keypair,
+        option: u8,
+        bond: u64,
+    ) -> (Pubkey, TransactionResult) {
+        // Fund the authority: SOL for the Proposer-PDA rent, and a KASS account
+        // holding the bond. Fund at least 1 base unit so the bond==0 path still
+        // has a valid source account.
+        self.svm
+            .airdrop(&authority.pubkey(), 1_000_000_000)
+            .unwrap();
+        let authority_kass = self.fund_kass(authority, bond.max(1));
+        let (proposer_pda, _) = Self::proposer_pda(&self.program_id, &oracle, &authority.pubkey());
+        let (vault, _) = Self::stake_vault_pda(&self.program_id, &oracle);
+        let ix = self.propose_ix(
+            oracle,
+            proposer_pda,
+            authority.pubkey(),
+            authority_kass,
+            vault,
+            option,
+            bond,
+        );
+        let res = self.send(ix, &[authority]);
+        (proposer_pda, res)
+    }
+
+    /// Build a `Propose` instruction with the locked-in account order. Exposes
+    /// the proposer/authority-KASS/vault accounts so tests can pass deliberately
+    /// wrong values.
+    #[allow(clippy::too_many_arguments)]
+    pub fn propose_ix(
+        &self,
+        oracle: Pubkey,
+        proposer: Pubkey,
+        authority: Pubkey,
+        authority_kass: Pubkey,
+        vault: Pubkey,
+        option: u8,
+        bond: u64,
+    ) -> Instruction {
+        let mut data = Vec::with_capacity(1 + 9);
+        data.push(kassandra_program::instruction::Ix::Propose as u8);
+        data.push(option);
+        data.extend_from_slice(&bond.to_le_bytes());
+
+        Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new(oracle, false),
+                AccountMeta::new(proposer, false),
+                AccountMeta::new(authority, true),
+                AccountMeta::new(authority_kass, false),
+                AccountMeta::new(vault, false),
+                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+                AccountMeta::new_readonly(system_program::ID, false),
+            ],
+            data,
+        }
+    }
+
     // ----- seeding -----------------------------------------------------------
 
     /// Fabricate an oracle already in [`Phase::FactProposal`] with one proposer
