@@ -71,3 +71,28 @@ dump "${AMM_ID}"               "${FIXTURE_DIR}/metadao_amm.so"
 
 echo "Done. Fixtures in ${FIXTURE_DIR}:"
 ls -l "${FIXTURE_DIR}"/*.so
+
+# Pinned fixture hashes (captured 2026-06-29). `solana program dump` always
+# fetches the program's CURRENT bytes, so if MetaDAO upgrades a program a re-run
+# would silently change a fixture. Verify against these pins so drift is loud,
+# not silent. If a mismatch is expected (intentional version bump), update both
+# the hash here AND the documented slot/version above in the same commit.
+EXPECTED_VAULT_SHA="bd19fac056e9d777ec0a4eb93d658293a31a7f4a2a701cda6eafb515009a1b89"
+EXPECTED_AMM_SHA="c19026b4748c6f9d6dafd4c5ed46712150f9227b46858d16d543ebdb8b0dda1d"
+
+sha_of() { shasum -a 256 "$1" | awk '{print $1}'; }
+check() {
+    local out="$1" expected="$2" got
+    got="$(sha_of "${out}")"
+    if [[ "${got}" != "${expected}" ]]; then
+        echo "WARNING: sha256 drift for ${out}" >&2
+        echo "  expected ${expected}" >&2
+        echo "  got      ${got}" >&2
+        echo "  MetaDAO may have upgraded this program; review before committing." >&2
+        return 1
+    fi
+    echo "OK ${out} sha256=${got}"
+}
+echo "Verifying pinned hashes:"
+check "${FIXTURE_DIR}/metadao_conditional_vault.so" "${EXPECTED_VAULT_SHA}"
+check "${FIXTURE_DIR}/metadao_amm.so"               "${EXPECTED_AMM_SHA}"
