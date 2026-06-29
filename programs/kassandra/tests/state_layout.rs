@@ -19,7 +19,7 @@ fn account_sizes_are_stable() {
     assert_eq!(Fact::LEN, 336);
     assert_eq!(FactVote::LEN, 88);
     assert_eq!(AiClaim::LEN, 176);
-    assert_eq!(Market::LEN, 320);
+    assert_eq!(Market::LEN, 384);
 }
 
 #[test]
@@ -61,9 +61,11 @@ fn field_offsets_are_pinned() {
     assert_eq!(offset_of!(Market, usdc_vault), 200);
     assert_eq!(offset_of!(Market, pass_amm), 232);
     assert_eq!(offset_of!(Market, fail_amm), 264);
-    assert_eq!(offset_of!(Market, twap_end), 296);
-    assert_eq!(offset_of!(Market, challenger_usdc), 304);
-    assert_eq!(offset_of!(Market, settled), 312);
+    assert_eq!(offset_of!(Market, oracle_pass_kass), 296);
+    assert_eq!(offset_of!(Market, oracle_fail_kass), 328);
+    assert_eq!(offset_of!(Market, twap_end), 360);
+    assert_eq!(offset_of!(Market, challenger_usdc), 368);
+    assert_eq!(offset_of!(Market, settled), 376);
 }
 
 #[test]

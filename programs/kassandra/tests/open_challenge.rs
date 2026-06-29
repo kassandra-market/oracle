@@ -433,6 +433,8 @@ fn open_challenge_happy_path() {
     assert_eq!(market.usdc_vault, f.m.usdc_vault.to_bytes());
     assert_eq!(market.pass_amm, f.m.pass_amm.to_bytes());
     assert_eq!(market.fail_amm, f.m.fail_amm.to_bytes());
+    assert_eq!(market.oracle_pass_kass, f.oracle_pass_kass.to_bytes());
+    assert_eq!(market.oracle_fail_kass, f.oracle_fail_kass.to_bytes());
     assert_eq!(market.challenger_usdc, challenger_usdc);
     assert_eq!(market.twap_end, now_before + TWAP_WINDOW);
     assert_eq!(market.settled, 0);

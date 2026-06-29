@@ -111,6 +111,39 @@ fn read_u32(data: &[u8], off: usize) -> Result<u32, ProgramError> {
         .ok_or_else(|| KassandraError::InvalidAccount.into())
 }
 
+/// Minimum size of an SPL token account (`spl_token::state::Account::LEN`).
+const SPL_TOKEN_ACCOUNT_LEN: usize = 165;
+/// `spl_token::state::Account.mint` byte offset.
+const SPL_TOKEN_MINT_OFFSET: usize = 0;
+/// `spl_token::state::Account.owner` byte offset.
+const SPL_TOKEN_OWNER_OFFSET: usize = 32;
+
+/// Assert `account` is an SPL token account owned (token authority) by
+/// `oracle_key` on `expected_mint`, else [`KassandraError::InvalidAccount`].
+/// Defense-in-depth on the conditional-KASS split destinations: the
+/// conditional_vault enforces the same constraints, but a clean local error is
+/// clearer than a downstream MetaDAO custom error and pins the recorded
+/// `Market.oracle_{pass,fail}_kass` contract for Task 11.
+fn assert_oracle_owned_token(
+    account: &AccountInfo,
+    expected_mint: &Pubkey,
+    oracle_key: &Pubkey,
+) -> ProgramResult {
+    if !account.is_owned_by(&pinocchio_token::ID) {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    let data = account.try_borrow_data()?;
+    if data.len() < SPL_TOKEN_ACCOUNT_LEN {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    let mint = read_pubkey(&data, SPL_TOKEN_MINT_OFFSET)?;
+    let owner = read_pubkey(&data, SPL_TOKEN_OWNER_OFFSET)?;
+    if &mint != expected_mint || &owner != oracle_key {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    Ok(())
+}
+
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) -> ProgramResult {
     if payload.len() != PAYLOAD_LEN {
         return Err(ProgramError::InvalidInstructionData);
@@ -170,14 +203,15 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     assert_key(stake_vault_ai, &oracle.stake_vault)?;
 
     // --- verify the MetaDAO question binds to THIS oracle -------------------
+    // (Offsets are the single-source-of-truth consts in `cpi::metadao`.)
     assert_owned_by_program(question_ai, &metadao::CONDITIONAL_VAULT_ID)?;
     {
         let data = question_ai.try_borrow_data()?;
-        let q_oracle = read_pubkey(&data, 40)?; // Question.oracle @40
+        let q_oracle = read_pubkey(&data, metadao::QUESTION_ORACLE_OFFSET)?;
         if &q_oracle != oracle_ai.key() {
             return Err(KassandraError::InvalidAccount.into());
         }
-        let num_outcomes = read_u32(&data, 72)?; // payout_numerators Vec len @72
+        let num_outcomes = read_u32(&data, metadao::QUESTION_NUM_OUTCOMES_LEN_OFFSET)?;
         if num_outcomes != 2 {
             return Err(KassandraError::InvalidAccount.into());
         }
@@ -187,9 +221,9 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     assert_owned_by_program(kass_vault_ai, &metadao::CONDITIONAL_VAULT_ID)?;
     {
         let data = kass_vault_ai.try_borrow_data()?;
-        let v_question = read_pubkey(&data, 8)?; // ConditionalVault.question @8
-        let v_underlying = read_pubkey(&data, 40)?; // underlying_token_mint @40
-        let v_underlying_acct = read_pubkey(&data, 72)?; // underlying_token_account @72
+        let v_question = read_pubkey(&data, metadao::VAULT_QUESTION_OFFSET)?;
+        let v_underlying = read_pubkey(&data, metadao::VAULT_UNDERLYING_MINT_OFFSET)?;
+        let v_underlying_acct = read_pubkey(&data, metadao::VAULT_UNDERLYING_ACCOUNT_OFFSET)?;
         if &v_question != question_ai.key()
             || v_underlying != oracle.kass_mint
             || &v_underlying_acct != kass_vault_underlying_ai.key()
@@ -202,14 +236,19 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     assert_owned_by_program(usdc_vault_ai, &metadao::CONDITIONAL_VAULT_ID)?;
     {
         let data = usdc_vault_ai.try_borrow_data()?;
-        let v_question = read_pubkey(&data, 8)?;
-        let v_underlying = read_pubkey(&data, 40)?;
+        let v_question = read_pubkey(&data, metadao::VAULT_QUESTION_OFFSET)?;
+        let v_underlying = read_pubkey(&data, metadao::VAULT_UNDERLYING_MINT_OFFSET)?;
         if &v_question != question_ai.key() || v_underlying != oracle.usdc_mint {
             return Err(KassandraError::InvalidAccount.into());
         }
     }
 
-    // --- verify the AMMs (best-effort: program ownership; see module docs) --
+    // --- verify the AMMs -----------------------------------------------------
+    // DEFERRED-MUST-VERIFY-IN-TASK-11: only owner==AMM_ID is checked here; the
+    // standalone v0.4 AMM layout is not re-derivable from current MetaDAO
+    // source. settle_challenge MUST verify each AMM is bound to this market's
+    // pass/fail conditional (KASS,USDC) mint pair and that pass_amm != fail_amm
+    // before reading its TWAP.
     assert_owned_by_program(pass_amm_ai, &metadao::AMM_ID)?;
     assert_owned_by_program(fail_amm_ai, &metadao::AMM_ID)?;
 
@@ -218,6 +257,14 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     let (expect_fail_mint, _) = metadao::conditional_token_mint_pda(kass_vault_ai.key(), 1);
     assert_key(pass_mint_ai, &expect_pass_mint)?;
     assert_key(fail_mint_ai, &expect_fail_mint)?;
+
+    // --- verify the conditional-KASS split DESTINATIONS (defense-in-depth) --
+    // The vault enforces these too, but a clean InvalidAccount here beats a
+    // downstream MetaDAO custom error and locks the contract the docstring
+    // claims: each dest is an SPL token account owned by the oracle PDA on the
+    // matching conditional KASS mint. Task 11 redeems from exactly these.
+    assert_oracle_owned_token(oracle_pass_kass_ai, &expect_pass_mint, oracle_ai.key())?;
+    assert_oracle_owned_token(oracle_fail_kass_ai, &expect_fail_mint, oracle_ai.key())?;
 
     // --- market PDA derivation + uninit check -------------------------------
     let (expected_market, market_bump) =
@@ -230,6 +277,9 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     // --- program-signed KASS split (oracle PDA authority) -------------------
     // Move proposer.bond KASS from oracle.stake_vault into the KASS conditional
     // vault, minting pass-KASS/fail-KASS to the oracle-PDA-owned destinations.
+    // NOTE: `oracle.total_oracle_stake` is intentionally NOT decremented — the
+    // KASS is still in-system, now escrowed in the conditional vault recorded on
+    // the Market (Task 13 conservation counts it there).
     let (cv_event_auth, _) = metadao::event_authority_pda(&metadao::CONDITIONAL_VAULT_ID);
     assert_key(cv_event_auth_ai, &cv_event_auth)?;
 
@@ -306,6 +356,8 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     market.usdc_vault = *usdc_vault_ai.key();
     market.pass_amm = *pass_amm_ai.key();
     market.fail_amm = *fail_amm_ai.key();
+    market.oracle_pass_kass = *oracle_pass_kass_ai.key();
+    market.oracle_fail_kass = *oracle_fail_kass_ai.key();
     market.twap_end = now
         .checked_add(oracle.twap_window)
         .ok_or(ProgramError::ArithmeticOverflow)?;

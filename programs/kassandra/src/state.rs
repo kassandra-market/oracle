@@ -98,7 +98,11 @@ pub struct Oracle {
     pub proposer_count: u16,
     pub surviving_count: u16, // proposers not disqualified
     pub fact_count: u16,
-    pub total_oracle_stake: u64, // conservation accumulator (== vault balance)
+    // Conservation accumulator; equals the `stake_vault` balance UNTIL a
+    // challenge splits a proposer's bond into a MetaDAO conditional vault —
+    // Task 13 conservation must also count conditional-vault-held KASS recorded
+    // on the corresponding `Market` (`open_challenge` does NOT decrement this).
+    pub total_oracle_stake: u64,
     pub bond_pool: u64,          // accumulated slashed KASS (base units)
     pub dispute_bond_total: u64, // Σ proposer bonds, fixed at dispute start; fact-quorum denominator
     pub settled_count: u16,      // facts settled so far (drives incremental finalize)
@@ -248,16 +252,19 @@ impl AiClaim {
     }
 }
 
-/// A challenge decision-market binding for one [`AiClaim`]. `size_of == 320`.
+/// A challenge decision-market binding for one [`AiClaim`]. `size_of == 384`.
 ///
 /// Created lazily by `open_challenge` only when a claim is actually challenged
 /// — uncontested claims have NO `Market` account (markets are dormant by
 /// default, design §6). It RECORDS the MetaDAO accounts the challenger composed
 /// (a binary pass/fail `question` whose resolver is the Kassandra oracle PDA, a
-/// KASS conditional vault, a USDC conditional vault, and the pass/fail AMMs) so
-/// `settle_challenge` (Task 11) can read the TWAP and resolve the question. The
-/// security-critical bindings (question.oracle, vault underlying mints) are
-/// verified at creation; this struct is the durable record of that binding.
+/// KASS conditional vault, a USDC conditional vault, and the pass/fail AMMs),
+/// the oracle-PDA-owned conditional-KASS destinations the proposer's bond was
+/// split into, and the challenger's committed USDC — so `settle_challenge`
+/// (Task 11) can read the TWAP, resolve the question, and redeem from the exact
+/// recorded accounts (no off-chain bookkeeping). The security-critical bindings
+/// (question.oracle, vault underlying mints, dest owner/mint) are verified at
+/// creation; this struct is the durable record of that binding.
 ///
 /// # Market PDA seeds (CONTRACT)
 /// `[b"market", ai_claim_pubkey]`, program = [`crate::ID`].
@@ -270,14 +277,27 @@ pub struct Market {
     pub ai_claim: Pubkey,
     pub proposer: Pubkey,
     pub challenger: Pubkey,
-    pub question: Pubkey,     // MetaDAO binary question (resolver == oracle PDA)
-    pub kass_vault: Pubkey,   // MetaDAO conditional vault, underlying == oracle.kass_mint
-    pub usdc_vault: Pubkey,   // MetaDAO conditional vault, underlying == oracle.usdc_mint
-    pub pass_amm: Pubkey,     // outcome-0 (pass) AMM
-    pub fail_amm: Pubkey,     // outcome-1 (fail) AMM
-    pub twap_end: i64,        // now + oracle.twap_window; settle allowed only after
-    pub challenger_usdc: u64, // USDC the challenger committed (recorded; deposited in test)
-    pub settled: u8,          // bool; set by settle_challenge (Task 11)
+    pub question: Pubkey,   // MetaDAO binary question (resolver == oracle PDA)
+    pub kass_vault: Pubkey, // MetaDAO conditional vault, underlying == oracle.kass_mint
+    pub usdc_vault: Pubkey, // MetaDAO conditional vault, underlying == oracle.usdc_mint
+    // DEFERRED-MUST-VERIFY-IN-TASK-11: only owner==AMM_ID was checked at
+    // open_challenge; settle_challenge MUST verify each AMM is bound to this
+    // market's pass/fail conditional (KASS,USDC) mint pair and that
+    // pass_amm != fail_amm before reading its TWAP.
+    pub pass_amm: Pubkey, // outcome-0 (pass) AMM
+    pub fail_amm: Pubkey, // outcome-1 (fail) AMM
+    // Oracle-PDA-owned conditional-KASS token accounts the proposer's bond was
+    // split into (outcome 0 = pass, 1 = fail). Verified owner==oracle PDA and
+    // mint==derived conditional KASS mint at creation; Task 11 redeems/settles
+    // from exactly these.
+    pub oracle_pass_kass: Pubkey,
+    pub oracle_fail_kass: Pubkey,
+    pub twap_end: i64, // now + oracle.twap_window; settle allowed only after
+    // DEFERRED-MUST-VERIFY-IN-TASK-11: recorded from the payload, NOT escrowed
+    // or verified at open_challenge; settle_challenge must treat it as untrusted
+    // until the challenger's USDC deposit/split is reconciled.
+    pub challenger_usdc: u64,
+    pub settled: u8, // bool; set by settle_challenge (Task 11)
     pub bump: u8,
     pub _pad: [u8; 6],
 }

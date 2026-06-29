@@ -93,6 +93,28 @@ pub const SEED_CONDITIONAL_TOKEN: &[u8] = b"conditional_token";
 pub const SEED_EVENT_AUTHORITY: &[u8] = b"__event_authority";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Account layout byte offsets (single source of truth — verified against the
+// deployed v0.4.0 source `metaDAOproject/programs`, declare_id! == VLTX1…)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Both `Question` and `ConditionalVault` carry the 8-byte Anchor account
+// discriminator first, so every field offset below is `8 + <borsh offset>`.
+// Task 10 (`open_challenge`) and Task 11 (`settle_challenge`) read these.
+
+/// `Question.oracle: Pubkey` — byte offset (after the 8-byte Anchor disc).
+pub const QUESTION_ORACLE_OFFSET: usize = 40;
+/// `Question.payout_numerators: Vec<u32>` length-prefix offset. At
+/// `initialize_question` the Vec is `vec![0; num_outcomes]`, so this u32 LE
+/// length equals `num_outcomes`.
+pub const QUESTION_NUM_OUTCOMES_LEN_OFFSET: usize = 72;
+/// `ConditionalVault.question: Pubkey` — byte offset.
+pub const VAULT_QUESTION_OFFSET: usize = 8;
+/// `ConditionalVault.underlying_token_mint: Pubkey` — byte offset.
+pub const VAULT_UNDERLYING_MINT_OFFSET: usize = 40;
+/// `ConditionalVault.underlying_token_account: Pubkey` — byte offset.
+pub const VAULT_UNDERLYING_ACCOUNT_OFFSET: usize = 72;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Seed-slice assembly (host-runnable)
 // ─────────────────────────────────────────────────────────────────────────────
 //
