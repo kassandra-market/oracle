@@ -108,11 +108,14 @@ pub struct Oracle {
     pub settled_count: u16,      // facts settled so far (drives incremental finalize)
     pub ai_finalized_count: u16, // proposers ai-finalized so far (drives incremental finalize_ai_claims)
     pub bump: u8,
-    // Final resolved categorical option, written by `finalize_oracle` ONLY when
-    // the dispute resolves to a [`Phase::Resolved`] winner. It is MEANINGFUL
-    // ONLY when `phase == Resolved`: in every other phase (including the terminal
-    // [`Phase::InvalidDeadend`]) it is unset (its zeroed default) and must not be
-    // read as a result. Absorbs the former `_pad1[1]`, so Oracle::LEN stays 232.
+    // Final resolved categorical option, written by `finalize_oracle`. CONTRACT:
+    // it is the winning option ONLY when `phase == Resolved`. On the terminal
+    // [`Phase::InvalidDeadend`] (tie / no survivors) finalize_oracle stamps it
+    // with the loud `CLAIM_OPTION_NONE` (0xFF) sentinel, so a consumer that
+    // forgets to gate on `phase == Resolved` reads `0xFF` rather than a plausible
+    // "option 0 won." Before finalize (any non-terminal phase) it is its zeroed
+    // default and must not be read. Absorbs the former `_pad1[1]`, so
+    // Oracle::LEN stays 232.
     pub resolved_option: u8,
     // Number of OPEN (created-but-not-yet-settled) challenge decision markets.
     // `open_challenge` does `checked_add(1)` when it creates a Market;

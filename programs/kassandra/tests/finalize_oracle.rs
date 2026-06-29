@@ -30,8 +30,9 @@ use solana_sdk::{
 fn finalize_oracle_ix(ctx: &TestCtx, oracle: Pubkey, tail: &[Pubkey]) -> Instruction {
     let mut accounts = Vec::with_capacity(1 + tail.len());
     accounts.push(AccountMeta::new(oracle, false));
+    // Proposers are READ-ONLY: finalize only reads claim_option / disqualified.
     for k in tail {
-        accounts.push(AccountMeta::new(*k, false));
+        accounts.push(AccountMeta::new_readonly(*k, false));
     }
     Instruction {
         program_id: ctx.program_id,
@@ -113,7 +114,9 @@ fn tie_is_invalid_deadend() {
     ctx.send(finalize_oracle_ix(&ctx, oracle, &pdas), &[])
         .expect("finalize should succeed");
 
-    assert_eq!(ctx.oracle(oracle).phase, Phase::InvalidDeadend as u8);
+    let o = ctx.oracle(oracle);
+    assert_eq!(o.phase, Phase::InvalidDeadend as u8);
+    assert_eq!(o.resolved_option, CLAIM_OPTION_NONE);
 }
 
 #[test]
@@ -143,8 +146,8 @@ fn all_disqualified_is_invalid_deadend() {
 
     let o = ctx.oracle(oracle);
     assert_eq!(o.phase, Phase::InvalidDeadend as u8);
-    // resolved_option is meaningless on a dead-end; it stays at its default.
-    assert_eq!(o.resolved_option, 0);
+    // Dead-end: resolved_option is stamped with the loud sentinel, not 0.
+    assert_eq!(o.resolved_option, CLAIM_OPTION_NONE);
 }
 
 #[test]

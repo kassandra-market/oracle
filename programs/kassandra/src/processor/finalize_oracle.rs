@@ -7,9 +7,15 @@
 //! phase:
 //! * [`Plurality::Winner`]`(opt)` → [`Phase::Resolved`], `oracle.resolved_option
 //!   = opt`.
-//! * [`Plurality::Tie`] → [`Phase::InvalidDeadend`].
+//! * [`Plurality::Tie`] → [`Phase::InvalidDeadend`], `resolved_option =
+//!   CLAIM_OPTION_NONE`.
 //! * [`Plurality::NoSurvivors`] (every proposer disqualified) →
-//!   [`Phase::InvalidDeadend`].
+//!   [`Phase::InvalidDeadend`], `resolved_option = CLAIM_OPTION_NONE`.
+//!
+//! CONTRACT: `oracle.resolved_option` is the winning option ONLY when
+//! `phase == Resolved`. On [`Phase::InvalidDeadend`] it is set to the loud
+//! [`CLAIM_OPTION_NONE`] sentinel so a consumer that forgets to gate on the
+//! phase reads `0xFF` instead of a plausible "option 0 won."
 //!
 //! # One-shot (NOT incremental)
 //! Unlike `finalize_facts` / `finalize_ai_claims`, the plurality needs the WHOLE
@@ -18,7 +24,17 @@
 //! proposer_count`). The full set is therefore bounded by Solana's per-tx
 //! account-lock limit — fine, since a dispute's proposer set is small. The
 //! survivor votes are gathered into a fixed stack buffer (no heap, matching the
-//! rest of the program); [`MAX_PROPOSERS`] caps it well above any single-tx set.
+//! rest of the program); [`MAX_PROPOSERS`] caps it.
+//!
+//! # CONTRACT: `proposer_count` must stay finalizable
+//! finalize_oracle is one-shot, so the WHOLE proposer set must fit in a single
+//! transaction's account-lock budget. The future propose/registration processor
+//! (NOT built here) MUST cap `proposer_count` at a value that fits one finalize
+//! transaction — see [`MAX_PROPOSERS`]. The `tail.len() > MAX_PROPOSERS` check
+//! below is a DEFENSIVE backstop against buffer overflow, NOT the liveness
+//! guarantee: without a registration cap, an oversized proposer set could never
+//! be finalized and would brick the oracle in [`Phase::Challenge`]. Task 13's
+//! fuzzer must stay within this cap.
 //!
 //! # Gating
 //! * [`Phase::Challenge`] (the only entry; `FinalRecompute` is reserved/unused —
@@ -58,10 +74,12 @@
 //! into this recompute, and finalize must not block on it.
 //!
 //! # Accounts
-//! 0. oracle — writable, owned by this program.
+//! 0. oracle — writable, owned by this program (the ONLY account mutated).
 //! 1. onward — the FULL proposer set: exactly `proposer_count` accounts, each
-//!    writable, owned by this program, tagged Proposer, belonging to this oracle,
-//!    distinct within the call.
+//!    READ-ONLY (finalize only reads `claim_option` / `disqualified`), owned by
+//!    this program, tagged Proposer, belonging to this oracle, distinct within
+//!    the call. Read-only avoids write-lock contention and raises the practical
+//!    per-tx account ceiling for the one-shot finalize.
 //!
 //! # Instruction payload
 //! Empty (after the 1-byte discriminant).
@@ -78,10 +96,18 @@ use crate::{
     state::{Oracle, Phase, CLAIM_OPTION_NONE},
 };
 
-/// Upper bound on the proposer set finalize_oracle will gather votes for. The
-/// real bound is Solana's per-tx account-lock limit (well under this); the
-/// buffer is sized generously so the cap is never the limiting factor.
-const MAX_PROPOSERS: usize = 256;
+/// Upper bound on the proposer set finalize_oracle will gather votes for, set to
+/// a realistic single-transaction account-lock budget (Solana caps a tx at 64
+/// account locks; finalize also locks the oracle + program + fee payer, leaving
+/// ~60 read-only proposer slots).
+///
+/// CONTRACT: this is the DEFENSIVE backstop that keeps the fixed `votes` buffer
+/// from overflowing — NOT the liveness guarantee. The future propose/
+/// registration processor MUST cap `proposer_count` at or below this so the
+/// one-shot finalize always fits one transaction; otherwise an oversized set
+/// would brick the oracle in [`Phase::Challenge`] (see the module-level CONTRACT
+/// note). Task 13's fuzzer must stay within this cap.
+const MAX_PROPOSERS: usize = 60;
 
 /// Reject if `key` appears in `prior` (distinctness within the call).
 fn require_distinct(prior: &[AccountInfo], key: &Pubkey) -> ProgramResult {
@@ -116,8 +142,9 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
         return Err(KassandraError::InvalidAccount.into());
     }
     if tail.len() > MAX_PROPOSERS {
-        // Unreachable within a single transaction's account-lock limit;
-        // defensive so the fixed votes buffer can never overflow.
+        // Defensive backstop so the fixed votes buffer can never overflow. A
+        // registration cap (future propose processor) is the real liveness
+        // guarantee; see the module + MAX_PROPOSERS CONTRACT notes.
         return Err(KassandraError::InvalidAccount.into());
     }
 
@@ -156,8 +183,11 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
             oracle.set_phase(Phase::Resolved);
         }
         // A tie has no plurality winner, and zero survivors means every proposer
-        // was disqualified: both are terminal dead-ends (design §7).
+        // was disqualified: both are terminal dead-ends (design §7). Stamp the
+        // loud sentinel so a consumer that skips the phase gate never misreads
+        // the dead-end as "option 0 won."
         Plurality::Tie | Plurality::NoSurvivors => {
+            oracle.resolved_option = CLAIM_OPTION_NONE;
             oracle.set_phase(Phase::InvalidDeadend);
         }
     }
