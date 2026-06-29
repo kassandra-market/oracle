@@ -51,6 +51,38 @@ fn second_init_fails_already_initialized() {
 }
 
 #[test]
+fn prefunded_pda_is_adopted() {
+    let mut ctx = TestCtx::new();
+    let (protocol_pda, _) = TestCtx::protocol_pda(&ctx.program_id);
+
+    // Attacker grief: drop 1 lamport on the deterministic singleton PDA before
+    // anyone bootstraps. A plain CreateAccount would now fail forever.
+    ctx.svm.airdrop(&protocol_pda, 1).unwrap();
+
+    let (pda, res) = ctx.init_protocol();
+    assert_eq!(pda, protocol_pda);
+    assert!(
+        res.is_ok(),
+        "init must adopt a pre-funded PDA, not brick: {res:?}"
+    );
+
+    let p = ctx.protocol(protocol_pda);
+    assert_eq!(p.account_type, AccountType::Protocol.as_u8());
+    assert_eq!(p.admin, ctx.payer.pubkey().to_bytes());
+    assert_eq!(p.kass_mint, ctx.kass_mint.to_bytes());
+    assert_eq!(p.usdc_mint, ctx.usdc_mint.to_bytes());
+    assert_eq!(p.fee_ema, 0);
+
+    // Double-init still fails (now via the account_type tag, not lamports).
+    let (_pda2, res2) = ctx.init_protocol();
+    assert_eq!(
+        custom_code(&res2),
+        Some(KassandraError::AlreadyInitialized as u32),
+        "second init must still fail AlreadyInitialized: {res2:?}"
+    );
+}
+
+#[test]
 fn wrong_protocol_pda_fails() {
     let mut ctx = TestCtx::new();
     // A non-canonical address for the protocol account.

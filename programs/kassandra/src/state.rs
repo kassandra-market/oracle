@@ -47,6 +47,9 @@ impl AccountType {
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Phase {
+    /// RESERVED / UNUSED: `create_oracle` (H1) initializes oracles directly into
+    /// [`Phase::Proposal`], so no live oracle is ever in `Created`. Kept for ABI
+    /// stability (the discriminant must not be renumbered); do not remove.
     Created = 0,
     Proposal = 1,
     FactProposal = 2,

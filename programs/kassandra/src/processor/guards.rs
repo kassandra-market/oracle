@@ -6,7 +6,7 @@ use pinocchio::{
     account_info::AccountInfo,
     instruction::{Seed, Signer},
     program_error::ProgramError,
-    pubkey::Pubkey,
+    pubkey::{find_program_address, Pubkey},
     ProgramResult,
 };
 use pinocchio_system::instructions::CreateAccount;
@@ -118,11 +118,16 @@ pub fn load_ai_claim(account: &AccountInfo, program_id: &Pubkey) -> Result<AiCla
     Ok(claim)
 }
 
-/// Load and validate the [`Protocol`] singleton: owned by `program_id`, large
-/// enough, and tagged [`AccountType::Protocol`] (the type-confusion guard,
-/// mirroring [`load_oracle`]). Returns an owned, alignment-safe copy. Reused by
-/// H1/H2 to pin the canonical mints and read the fee-EMA state.
+/// Load and validate the [`Protocol`] singleton: its address must be the
+/// canonical `[b"protocol"]` PDA, owned by `program_id`, large enough, and
+/// tagged [`AccountType::Protocol`] (the type-confusion guard, mirroring
+/// [`load_oracle`]). Re-deriving + pinning the singleton address here means a
+/// future second Protocol-typed account can never be substituted for the real
+/// one — every caller (H1 `create_oracle`, H2) gets that defense for free.
+/// Returns an owned, alignment-safe copy.
 pub fn load_protocol(account: &AccountInfo, program_id: &Pubkey) -> Result<Protocol, ProgramError> {
+    let (expected, _) = find_program_address(&[b"protocol"], program_id);
+    assert_key(account, &expected)?;
     assert_owned_by_program(account, program_id)?;
     if account.data_len() < Protocol::LEN {
         return Err(KassandraError::InvalidAccount.into());

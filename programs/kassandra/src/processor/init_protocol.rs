@@ -3,15 +3,30 @@
 //! Creates the `[b"protocol"]` PDA recording the admin and the canonical
 //! KASS/USDC mints (so a later `create_oracle` fee-burn cannot be spoofed with a
 //! fake KASS mint), with the fee-EMA state zeroed (genesis is free; the dynamic
-//! fee is Task H2). Idempotency is structural: a second call sees a funded /
-//! non-empty PDA and fails [`KassandraError::AlreadyInitialized`].
+//! fee is Task H2).
+//!
+//! # Bootstrap-DoS resistance: create-or-adopt (Allocate + Assign)
+//! The `[b"protocol"]` address is deterministic and known at deploy time, so an
+//! attacker could pre-fund it with 1 lamport before the first `init_protocol`.
+//! A plain system `CreateAccount` FAILS on any already-funded account, which
+//! would brick the entire program permanently (every `create_oracle` needs the
+//! Protocol account). To tolerate a pre-funded singleton we instead **adopt**
+//! it: top the balance up to rent-exempt with a system `Transfer` (only if it is
+//! short), then system `Allocate` the space and `Assign` ownership to this
+//! program — both signed by the protocol PDA seeds. A system-owned, attacker-
+//! pre-funded account carries no data and cannot have been `Allocate`d by anyone
+//! but the PDA signer, so adoption always succeeds.
+//!
+//! Idempotency is enforced by the **account-type tag, not lamports**: a real
+//! second init finds an account ALREADY owned by this program and stamped
+//! [`AccountType::Protocol`], and fails [`KassandraError::AlreadyInitialized`].
 //!
 //! # Protocol PDA seeds (CONTRACT)
 //! `[b"protocol"]` (singleton), program = [`crate::ID`].
 //!
 //! # Accounts
-//! 0. protocol PDA   — writable, uninitialized (created here)
-//! 1. admin          — signer, writable; pays the rent, recorded as `admin`
+//! 0. protocol PDA   — writable; created-or-adopted here, signs via its seeds
+//! 1. admin          — signer, writable; tops up rent, recorded as `admin`
 //! 2. kass_mint      — canonical KASS mint (owned by the SPL token program)
 //! 3. usdc_mint      — canonical USDC mint (owned by the SPL token program)
 //! 4. system program
@@ -22,16 +37,17 @@
 use bytemuck::Zeroable;
 use pinocchio::{
     account_info::AccountInfo,
-    instruction::Seed,
+    instruction::{Seed, Signer},
     program_error::ProgramError,
     pubkey::{find_program_address, Pubkey},
     sysvars::{rent::Rent, Sysvar},
     ProgramResult,
 };
+use pinocchio_system::instructions::{Allocate, Assign, Transfer};
 
 use crate::{
     error::KassandraError,
-    processor::guards::{assert_key, assert_signer, create_pda},
+    processor::guards::{assert_key, assert_signer},
     state::{AccountType, Protocol},
 };
 
@@ -48,9 +64,15 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
     let (expected_protocol, bump) = find_program_address(&[b"protocol"], program_id);
     assert_key(protocol_ai, &expected_protocol)?;
 
-    // One-time: reject if the singleton already exists.
-    if protocol_ai.lamports() != 0 || !protocol_ai.data_is_empty() {
-        return Err(KassandraError::AlreadyInitialized.into());
+    // Re-init guard via the account-type TAG (not lamports): a genuine second
+    // init finds the account already owned by this program AND stamped
+    // `Protocol`. A freshly-created or attacker-pre-funded-but-system-owned
+    // account is not yet program-owned, so adoption below proceeds.
+    if protocol_ai.is_owned_by(program_id) {
+        let data = protocol_ai.try_borrow_data()?;
+        if data.len() >= Protocol::LEN && data[0] == AccountType::Protocol.as_u8() {
+            return Err(KassandraError::AlreadyInitialized.into());
+        }
     }
 
     // Cheap defense-in-depth: the recorded mints must be SPL token-program
@@ -61,18 +83,33 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
         return Err(KassandraError::InvalidAccount.into());
     }
 
-    // --- create the Protocol account (program-signed) -----------------------
+    // --- create-or-adopt the Protocol account (program-signed) --------------
     let rent = Rent::get()?.minimum_balance(Protocol::LEN);
     let bump_seed = [bump];
     let signer_seeds = [Seed::from(b"protocol".as_ref()), Seed::from(&bump_seed)];
-    create_pda(
-        admin_ai,
-        protocol_ai,
-        &signer_seeds,
-        rent,
-        Protocol::LEN,
-        program_id,
-    )?;
+
+    // Top the (possibly pre-funded) account up to rent-exempt, only if short.
+    let current = protocol_ai.lamports();
+    if current < rent {
+        Transfer {
+            from: admin_ai,
+            to: protocol_ai,
+            lamports: rent - current,
+        }
+        .invoke()?;
+    }
+    // Allocate the data and take ownership — both signed by the PDA. Tolerates a
+    // pre-funded account where a plain CreateAccount would fail.
+    Allocate {
+        account: protocol_ai,
+        space: Protocol::LEN as u64,
+    }
+    .invoke_signed(&[Signer::from(&signer_seeds)])?;
+    Assign {
+        account: protocol_ai,
+        owner: program_id,
+    }
+    .invoke_signed(&[Signer::from(&signer_seeds)])?;
 
     // --- initialize the Protocol --------------------------------------------
     let mut protocol = Protocol::zeroed();
