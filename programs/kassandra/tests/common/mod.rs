@@ -219,6 +219,7 @@ impl TestCtx {
         oracle.bond_pool = 0;
         // Fixed fact-quorum denominator: Σ proposer bonds at dispute start.
         oracle.dispute_bond_total = total_stake;
+        oracle.settled_count = 0;
         oracle.bump = bump;
         oracle.prompt_hash = [0x11; 32];
         self.set_program_account(oracle_pda, bytemuck::bytes_of(&oracle).to_vec());
@@ -270,6 +271,14 @@ impl TestCtx {
     pub fn set_phase(&mut self, oracle: Pubkey, phase: Phase) {
         let mut o = self.oracle(oracle);
         o.set_phase(phase);
+        self.set_program_account(oracle, bytemuck::bytes_of(&o).to_vec());
+    }
+
+    /// Overwrite the `dispute_bond_total` of a seeded oracle. Lets tests drive
+    /// the defensive zero-denominator path in `finalize_facts`.
+    pub fn set_dispute_bond_total(&mut self, oracle: Pubkey, value: u64) {
+        let mut o = self.oracle(oracle);
+        o.dispute_bond_total = value;
         self.set_program_account(oracle, bytemuck::bytes_of(&o).to_vec());
     }
 

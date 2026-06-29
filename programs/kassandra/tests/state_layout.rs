@@ -36,6 +36,7 @@ fn field_offsets_are_pinned() {
     assert_eq!(offset_of!(Oracle, total_oracle_stake), 168);
     assert_eq!(offset_of!(Oracle, bond_pool), 176);
     assert_eq!(offset_of!(Oracle, dispute_bond_total), 184);
+    assert_eq!(offset_of!(Oracle, settled_count), 192);
     assert_eq!(offset_of!(Oracle, prompt_hash), 200);
 
     assert_eq!(offset_of!(Proposer, bond), 72);

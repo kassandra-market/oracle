@@ -7,34 +7,45 @@
 //! duplicate/voter stakes, draining the bond pool) is a DEFERRED later task.
 //! `bond_pool` here is purely an accounting counter.
 //!
+//! # Incremental finalization
+//! A dispute may have an unbounded number of facts / proposers, but a single
+//! transaction can only carry so many accounts. So finalization is INCREMENTAL:
+//! each call settles ANY non-empty subset of the not-yet-settled set, bumping
+//! `Oracle.settled_count` (facts) or decrementing `Oracle.surviving_count`
+//! (proposers). The phase only advances once the WHOLE set is processed
+//! (`settled_count == fact_count`, or `surviving_count == 0`), so a large set
+//! can be finalized in chunks across many txs without ever getting stuck.
+//!
 //! # Behavior
 //! Gated to [`Phase::FactVoting`] after the voting window has elapsed.
 //!
-//! * **No-facts dead-end** (`fact_count == 0`): the account tail is ALL of the
-//!   oracle's proposers. Each is disqualified + slashed, its bond is added to
-//!   `bond_pool`, `surviving_count` drops to 0, and the oracle terminates in
-//!   [`Phase::InvalidDeadend`]. No facts ever existed to drive a resolution.
-//! * **Otherwise**: the tail is ALL of the oracle's facts. Each is classified:
+//! * **No-facts dead-end** (`fact_count == 0`): the tail is a subset of the
+//!   oracle's proposers. Each is disqualified + slashed, its bond added to
+//!   `bond_pool`, and `surviving_count` decremented. Once `surviving_count`
+//!   reaches 0 the oracle terminates in [`Phase::InvalidDeadend`].
+//! * **Otherwise**: the tail is a subset of the oracle's facts. Each is:
 //!   - duplicate-dominant (`duplicate_stake > approve_stake`) → `duplicate=1`,
 //!     not slashed (its stake is returned later).
 //!   - agreed (`approve_stake > duplicate_stake` AND
 //!     `approve_stake * THRESHOLD_DEN >= dispute_bond_total * THRESHOLD_NUM`)
 //!     → `agreed=1`, no bond_pool change (reward is a later claim).
-//!   - rejected (neither of the above) → `settled` only, and the submitter's
-//!     `fact.stake` is added to `bond_pool` (the rejected-fact slash). Voter
-//!     stakes on rejected facts are settled later; out of scope here.
+//!   - rejected (neither of the above) → `settled` only, and the FULL
+//!     `fact.stake` is added to `bond_pool`. The rejected-fact submitter
+//!     forfeits 100% of their fact-submission stake to the pool — this is the
+//!     intended penalty. Approve-voter stake settlement on rejected facts is a
+//!     separate DEFERRED task.
 //!
-//! In the facts case the oracle then advances to [`Phase::AiClaim`] with a
-//! fresh window.
+//! Once `settled_count == fact_count` the oracle advances to
+//! [`Phase::AiClaim`] with a fresh window.
 //!
-//! All facts/proposers are settled exactly once: `settled` is an idempotency
-//! guard, and the tail length must match the full set exactly (no partial
-//! finalization).
+//! Each fact/proposer is settled exactly once: an already-`settled` fact (or
+//! already-slashed proposer) aborts with [`KassandraError::AlreadySettled`].
 //!
 //! # Accounts
 //! 0. oracle — writable, owned by this program
-//! 1. onward — the tail: either ALL proposers (no-facts case) or ALL facts.
-//!    Each writable, owned by this program, belonging to this oracle, distinct.
+//! 1. onward — the tail: a non-empty subset of the oracle's proposers
+//!    (no-facts case) or facts. Each writable, owned by this program,
+//!    belonging to this oracle, distinct within the call.
 //!
 //! # Instruction payload
 //! Empty (after the 1-byte discriminant).
@@ -47,8 +58,8 @@ use crate::{
     clock::{now, require_after_end, require_phase},
     config::{PHASE_WINDOW, THRESHOLD_DEN, THRESHOLD_NUM},
     error::KassandraError,
-    processor::guards::{assert_owned_by_program, load_fact, load_oracle},
-    state::{AccountType, Oracle, Phase, Proposer},
+    processor::guards::{load_fact, load_oracle, load_proposer},
+    state::{Fact, Oracle, Phase, Proposer},
 };
 
 /// A fact is agreed iff approve strictly beats duplicate AND clears the
@@ -60,7 +71,7 @@ fn is_agreed(approve_stake: u64, duplicate_stake: u64, dispute_bond_total: u64) 
             >= (dispute_bond_total as u128) * (THRESHOLD_NUM as u128)
 }
 
-/// Reject if `key` appears in `prior` (distinctness within the tail).
+/// Reject if `key` appears in `prior` (distinctness within the call).
 fn require_distinct(prior: &[AccountInfo], key: &Pubkey) -> ProgramResult {
     for a in prior {
         if a.key() == key {
@@ -82,6 +93,16 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
     let now = now()?;
     require_after_end(&oracle, now)?;
 
+    // The fact-approval threshold is undefined without a positive denominator.
+    if oracle.dispute_bond_total == 0 {
+        return Err(KassandraError::NoDisputeBond.into());
+    }
+
+    // At least one account must be supplied to do any work.
+    if tail.is_empty() {
+        return Err(KassandraError::IncompleteFactSet.into());
+    }
+
     if oracle.fact_count == 0 {
         finalize_no_facts(program_id, oracle_ai, &mut oracle, tail)?;
     } else {
@@ -91,33 +112,25 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
     Ok(())
 }
 
-/// No facts ever cleared: slash every proposer's bond into the pool and
-/// terminate the oracle in [`Phase::InvalidDeadend`].
+/// No facts ever cleared: slash a subset of proposers into the pool. Once every
+/// proposer is slashed (`surviving_count == 0`), terminate in
+/// [`Phase::InvalidDeadend`].
 fn finalize_no_facts(
     program_id: &Pubkey,
     oracle_ai: &AccountInfo,
     oracle: &mut Oracle,
     proposers: &[AccountInfo],
 ) -> ProgramResult {
-    if proposers.len() != oracle.proposer_count as usize {
-        return Err(KassandraError::IncompleteFactSet.into());
-    }
-
     for (i, p_ai) in proposers.iter().enumerate() {
         require_distinct(&proposers[..i], p_ai.key())?;
-        assert_owned_by_program(p_ai, program_id)?;
-        if p_ai.data_len() < Proposer::LEN {
+
+        let mut proposer = load_proposer(p_ai, program_id)?;
+        if proposer.oracle != *oracle_ai.key() {
             return Err(KassandraError::InvalidAccount.into());
         }
-
-        let mut proposer: Proposer = {
-            let data = p_ai.try_borrow_data()?;
-            bytemuck::pod_read_unaligned::<Proposer>(&data[..Proposer::LEN])
-        };
-        if proposer.account_type != AccountType::Proposer.as_u8()
-            || proposer.oracle != *oracle_ai.key()
-        {
-            return Err(KassandraError::InvalidAccount.into());
+        // Idempotency: each proposer is slashed exactly once.
+        if proposer.is_slashed() {
+            return Err(KassandraError::AlreadySettled.into());
         }
 
         proposer.disqualified = 1;
@@ -126,17 +139,24 @@ fn finalize_no_facts(
             .bond_pool
             .checked_add(proposer.bond)
             .ok_or(ProgramError::ArithmeticOverflow)?;
+        oracle.surviving_count = oracle
+            .surviving_count
+            .checked_sub(1)
+            .ok_or(ProgramError::ArithmeticOverflow)?;
 
         let mut data = p_ai.try_borrow_mut_data()?;
         data[..Proposer::LEN].copy_from_slice(bytemuck::bytes_of(&proposer));
     }
 
-    oracle.surviving_count = 0;
-    oracle.set_phase(Phase::InvalidDeadend);
+    // Terminal only once the whole proposer set has been slashed.
+    if oracle.surviving_count == 0 {
+        oracle.set_phase(Phase::InvalidDeadend);
+    }
     write_oracle(oracle_ai, oracle)
 }
 
-/// Classify and settle every fact, then advance to [`Phase::AiClaim`].
+/// Classify and settle a subset of facts. Once every fact is settled
+/// (`settled_count == fact_count`), advance to [`Phase::AiClaim`].
 fn finalize_with_facts(
     program_id: &Pubkey,
     oracle_ai: &AccountInfo,
@@ -144,10 +164,6 @@ fn finalize_with_facts(
     facts: &[AccountInfo],
     now: i64,
 ) -> ProgramResult {
-    if facts.len() != oracle.fact_count as usize {
-        return Err(KassandraError::IncompleteFactSet.into());
-    }
-
     for (i, f_ai) in facts.iter().enumerate() {
         require_distinct(&facts[..i], f_ai.key())?;
 
@@ -167,22 +183,30 @@ fn finalize_with_facts(
             // Agreed: reward is a later claim, no bond_pool change here.
             fact.agreed = 1;
         } else {
-            // Rejected: slash the submitter's stake into the pool counter.
+            // Rejected: the submitter forfeits 100% of their fact-submission
+            // stake to the pool counter.
             oracle.bond_pool = oracle
                 .bond_pool
                 .checked_add(fact.stake)
                 .ok_or(ProgramError::ArithmeticOverflow)?;
         }
         fact.settled = 1;
+        oracle.settled_count = oracle
+            .settled_count
+            .checked_add(1)
+            .ok_or(ProgramError::ArithmeticOverflow)?;
 
         let mut data = f_ai.try_borrow_mut_data()?;
-        data[..crate::state::Fact::LEN].copy_from_slice(bytemuck::bytes_of(&fact));
+        data[..Fact::LEN].copy_from_slice(bytemuck::bytes_of(&fact));
     }
 
-    oracle.set_phase(Phase::AiClaim);
-    oracle.phase_ends_at = now
-        .checked_add(PHASE_WINDOW)
-        .ok_or(ProgramError::ArithmeticOverflow)?;
+    // Advance only once the whole fact set has been settled.
+    if oracle.settled_count == oracle.fact_count {
+        oracle.set_phase(Phase::AiClaim);
+        oracle.phase_ends_at = now
+            .checked_add(PHASE_WINDOW)
+            .ok_or(ProgramError::ArithmeticOverflow)?;
+    }
     write_oracle(oracle_ai, oracle)
 }
 

@@ -301,14 +301,148 @@ fn finalize_no_facts_deadend_slashes_all_proposers() {
 }
 
 #[test]
-fn finalize_incomplete_fact_set_fails() {
+fn finalize_empty_tail_fails() {
+    let (mut ctx, oracle, vault) = seed();
+    let _fact = submit_one(&mut ctx, oracle, vault, 1);
+    advance_to_voting(&mut ctx, oracle);
+    ctx.warp(WINDOW + 1);
+
+    // No facts passed at all -> nothing to settle.
+    let err = ctx
+        .send(finalize_facts_ix(&ctx, oracle, &[]), &[])
+        .unwrap_err()
+        .err;
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(
+            0,
+            InstructionError::Custom(KassandraError::IncompleteFactSet as u32),
+        ),
+    );
+}
+
+#[test]
+fn finalize_subset_keeps_phase_then_completes() {
+    // 3 facts: A agreed, B rejected, C duplicate-dominant. Finalize in two
+    // calls ([A, B] then [C]); phase stays FactVoting until all are settled.
+    let (mut ctx, oracle, vault) = seed();
+    let fact_a = submit_one(&mut ctx, oracle, vault, 1);
+    let fact_b = submit_one(&mut ctx, oracle, vault, 2);
+    let fact_c = submit_one(&mut ctx, oracle, vault, 3);
+    advance_to_voting(&mut ctx, oracle);
+
+    cast_vote(&mut ctx, oracle, vault, fact_a, VOTE_APPROVE, 2_500); // agreed
+    cast_vote(&mut ctx, oracle, vault, fact_b, VOTE_APPROVE, 500); // rejected
+    cast_vote(&mut ctx, oracle, vault, fact_c, VOTE_APPROVE, 100); // duplicate-dominant
+    cast_vote(&mut ctx, oracle, vault, fact_c, VOTE_DUPLICATE, 600);
+
+    ctx.warp(WINDOW + 1);
+
+    // Call 1: settle A and B. Phase must stay FactVoting (C still pending).
+    ctx.send(finalize_facts_ix(&ctx, oracle, &[fact_a, fact_b]), &[])
+        .expect("first chunk should succeed");
+
+    let o = ctx.oracle(oracle);
+    assert_eq!(o.phase, Phase::FactVoting as u8, "phase must not advance yet");
+    assert_eq!(o.settled_count, 2);
+    assert_eq!(ctx.fact(fact_a).agreed, 1);
+    assert_eq!(ctx.fact(fact_b).settled, 1);
+    assert_eq!(ctx.fact(fact_b).agreed, 0);
+    assert_eq!(ctx.fact(fact_c).settled, 0);
+
+    // Call 2: settle C. Now settled_count == fact_count -> AiClaim.
+    ctx.send(finalize_facts_ix(&ctx, oracle, &[fact_c]), &[])
+        .expect("second chunk should succeed");
+
+    let o = ctx.oracle(oracle);
+    assert_eq!(o.phase, Phase::AiClaim as u8);
+    assert_eq!(o.settled_count, 3);
+    assert_eq!(ctx.fact(fact_c).duplicate, 1);
+    // bond_pool == sum of rejected facts' stakes (only B, stake 100).
+    assert_eq!(o.bond_pool, ctx.fact(fact_b).stake);
+}
+
+#[test]
+fn finalize_same_fact_twice_in_one_call_fails() {
+    let (mut ctx, oracle, vault) = seed();
+    let fact = submit_one(&mut ctx, oracle, vault, 1);
+    advance_to_voting(&mut ctx, oracle);
+    cast_vote(&mut ctx, oracle, vault, fact, VOTE_APPROVE, 2_500);
+    ctx.warp(WINDOW + 1);
+
+    // Same fact passed twice -> distinctness violation.
+    let err = ctx
+        .send(finalize_facts_ix(&ctx, oracle, &[fact, fact]), &[])
+        .unwrap_err()
+        .err;
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(
+            0,
+            InstructionError::Custom(KassandraError::InvalidAccount as u32),
+        ),
+    );
+}
+
+#[test]
+fn finalize_equal_stakes_is_rejected() {
+    // approve == duplicate: NOT duplicate-dominant (needs strictly greater)
+    // and NOT agreed (needs approve > duplicate) -> rejected + slashed.
+    let (mut ctx, oracle, vault) = seed();
+    let fact = submit_one(&mut ctx, oracle, vault, 1);
+    advance_to_voting(&mut ctx, oracle);
+
+    cast_vote(&mut ctx, oracle, vault, fact, VOTE_APPROVE, 500);
+    cast_vote(&mut ctx, oracle, vault, fact, VOTE_DUPLICATE, 500);
+
+    let stake = ctx.fact(fact).stake;
+    ctx.warp(WINDOW + 1);
+    ctx.send(finalize_facts_ix(&ctx, oracle, &[fact]), &[])
+        .expect("finalize_facts should succeed");
+
+    let f = ctx.fact(fact);
+    assert_eq!(f.agreed, 0);
+    assert_eq!(f.duplicate, 0);
+    assert_eq!(f.settled, 1);
+    assert_eq!(ctx.oracle(oracle).bond_pool, stake);
+}
+
+#[test]
+fn finalize_exact_threshold_is_agreed() {
+    // dispute_bond_total == 3_000, THRESHOLD 2/3 -> boundary approve == 2_000:
+    // 2_000 * 3 == 3_000 * 2, and approve (2_000) > duplicate (0) -> agreed.
+    let (mut ctx, oracle, vault) = seed();
+    let fact = submit_one(&mut ctx, oracle, vault, 1);
+    advance_to_voting(&mut ctx, oracle);
+
+    cast_vote(&mut ctx, oracle, vault, fact, VOTE_APPROVE, 2_000);
+
+    ctx.warp(WINDOW + 1);
+    ctx.send(finalize_facts_ix(&ctx, oracle, &[fact]), &[])
+        .expect("finalize_facts should succeed");
+
+    let f = ctx.fact(fact);
+    assert_eq!(f.agreed, 1, "exact 2/3 boundary must pass (>=)");
+    assert_eq!(f.settled, 1);
+}
+
+#[test]
+fn finalize_already_settled_fact_fails() {
+    // Two facts so settling one leaves the oracle in FactVoting (phase only
+    // advances once the whole set is settled) — that keeps the AlreadySettled
+    // path reachable on a re-finalize of the same fact.
     let (mut ctx, oracle, vault) = seed();
     let fact_a = submit_one(&mut ctx, oracle, vault, 1);
     let _fact_b = submit_one(&mut ctx, oracle, vault, 2);
     advance_to_voting(&mut ctx, oracle);
+    cast_vote(&mut ctx, oracle, vault, fact_a, VOTE_APPROVE, 2_500);
     ctx.warp(WINDOW + 1);
 
-    // Only one of two facts passed -> incomplete set.
+    ctx.send(finalize_facts_ix(&ctx, oracle, &[fact_a]), &[])
+        .expect("first finalize should succeed");
+    assert_eq!(ctx.oracle(oracle).phase, Phase::FactVoting as u8);
+
+    // Re-finalizing the same (now settled) fact must abort.
     let err = ctx
         .send(finalize_facts_ix(&ctx, oracle, &[fact_a]), &[])
         .unwrap_err()
@@ -317,7 +451,31 @@ fn finalize_incomplete_fact_set_fails() {
         err,
         TransactionError::InstructionError(
             0,
-            InstructionError::Custom(KassandraError::IncompleteFactSet as u32),
+            InstructionError::Custom(KassandraError::AlreadySettled as u32),
+        ),
+    );
+}
+
+#[test]
+fn finalize_zero_dispute_bond_fails() {
+    let (mut ctx, oracle, vault) = seed();
+    let fact = submit_one(&mut ctx, oracle, vault, 1);
+    advance_to_voting(&mut ctx, oracle);
+    cast_vote(&mut ctx, oracle, vault, fact, VOTE_APPROVE, 2_500);
+    ctx.warp(WINDOW + 1);
+
+    // Corrupt the denominator: threshold is now undefined.
+    ctx.set_dispute_bond_total(oracle, 0);
+
+    let err = ctx
+        .send(finalize_facts_ix(&ctx, oracle, &[fact]), &[])
+        .unwrap_err()
+        .err;
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(
+            0,
+            InstructionError::Custom(KassandraError::NoDisputeBond as u32),
         ),
     );
 }

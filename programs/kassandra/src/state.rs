@@ -100,8 +100,9 @@ pub struct Oracle {
     pub total_oracle_stake: u64, // conservation accumulator (== vault balance)
     pub bond_pool: u64,          // accumulated slashed KASS (base units)
     pub dispute_bond_total: u64, // Σ proposer bonds, fixed at dispute start; fact-quorum denominator
+    pub settled_count: u16,      // facts settled so far (drives incremental finalize)
     pub bump: u8,
-    pub _pad1: [u8; 7],
+    pub _pad1: [u8; 5],
     pub prompt_hash: [u8; 32], // hash of fixed prompt + interpretation
 }
 

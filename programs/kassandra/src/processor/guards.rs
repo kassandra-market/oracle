@@ -13,7 +13,7 @@ use pinocchio_system::instructions::CreateAccount;
 
 use crate::{
     error::KassandraError,
-    state::{AccountType, Fact, Oracle},
+    state::{AccountType, Fact, Oracle, Proposer},
 };
 
 /// Require that `account` is owned by `program_id`, else
@@ -79,6 +79,25 @@ pub fn load_fact(account: &AccountInfo, program_id: &Pubkey) -> Result<Fact, Pro
         return Err(KassandraError::InvalidAccount.into());
     }
     Ok(fact)
+}
+
+/// Load and validate a [`Proposer`] account: it must be owned by `program_id`,
+/// large enough, and carry the [`AccountType::Proposer`] tag (the type-confusion
+/// guard, mirroring [`load_oracle`]/[`load_fact`]). Returns an owned,
+/// alignment-safe copy.
+pub fn load_proposer(account: &AccountInfo, program_id: &Pubkey) -> Result<Proposer, ProgramError> {
+    assert_owned_by_program(account, program_id)?;
+    if account.data_len() < Proposer::LEN {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    let proposer: Proposer = {
+        let data = account.try_borrow_data()?;
+        bytemuck::pod_read_unaligned::<Proposer>(&data[..Proposer::LEN])
+    };
+    if proposer.account_type != AccountType::Proposer.as_u8() {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    Ok(proposer)
 }
 
 /// Create a fresh, rent-exempt, program-owned PDA account, signing with the
