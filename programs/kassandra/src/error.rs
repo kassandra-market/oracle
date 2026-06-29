@@ -25,6 +25,9 @@ pub enum KassandraError {
     /// An account passed to the instruction is invalid (wrong owner, address,
     /// or contents).
     InvalidAccount = 5,
+    /// A fact with this `content_hash` already exists for this oracle (the
+    /// Fact PDA is already initialized).
+    DuplicateFact = 6,
 }
 
 impl From<KassandraError> for ProgramError {

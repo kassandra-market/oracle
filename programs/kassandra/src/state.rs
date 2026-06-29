@@ -67,8 +67,8 @@ pub struct Oracle {
     pub deadline: i64,       // unix; proposals rejected before this
     pub phase_ends_at: i64,  // end of the current window
     pub twap_window: i64,    // per-oracle, seconds
-    pub options_count: u8,    // number of categorical options
-    pub phase: u8,            // Phase as u8
+    pub options_count: u8,   // number of categorical options
+    pub phase: u8,           // Phase as u8
     pub proposer_count: u16,
     pub surviving_count: u16, // proposers not disqualified
     pub fact_count: u16,
@@ -99,12 +99,12 @@ impl Oracle {
 pub struct Proposer {
     pub oracle: Pubkey,
     pub authority: Pubkey,
-    pub bond: u64,            // locked KASS
-    pub original_option: u8,  // value at proposal time (no proofs)
-    pub claim_option: u8,     // value after AI claim; CLAIM_OPTION_NONE = not yet submitted
-    pub disqualified: u8,     // bool
-    pub slashed: u8,          // bool
-    pub flipped: u8,          // bool: claim_option != original_option
+    pub bond: u64,           // locked KASS
+    pub original_option: u8, // value at proposal time (no proofs)
+    pub claim_option: u8,    // value after AI claim; CLAIM_OPTION_NONE = not yet submitted
+    pub disqualified: u8,    // bool
+    pub slashed: u8,         // bool
+    pub flipped: u8,         // bool: claim_option != original_option
     pub bump: u8,
     pub _pad: [u8; 2],
 }
@@ -131,8 +131,8 @@ pub struct Fact {
     pub proposer: Pubkey, // who submitted the fact
     pub content_hash: [u8; 32],
     pub stake: u64,
-    pub approve_stake: u64,    // running tally
-    pub duplicate_stake: u64,  // running tally of "duplicate" votes
+    pub approve_stake: u64,   // running tally
+    pub duplicate_stake: u64, // running tally of "duplicate" votes
     pub uri_len: u16,
     pub agreed: u8,    // set at finalize: 1 if accepted
     pub duplicate: u8, // set at finalize: 1 if duplicate-dominant
@@ -178,9 +178,9 @@ impl FactVote {
 pub struct AiClaim {
     pub oracle: Pubkey,
     pub proposer: Pubkey,
-    pub model_id: [u8; 32],     // hash/ident of pinned model
-    pub params_hash: [u8; 32],  // hash of declared params (temp, seed, ...)
-    pub io_hash: [u8; 32],      // hash(prompt + agreed facts + raw response)
+    pub model_id: [u8; 32],    // hash/ident of pinned model
+    pub params_hash: [u8; 32], // hash of declared params (temp, seed, ...)
+    pub io_hash: [u8; 32],     // hash(prompt + agreed facts + raw response)
     pub option: u8,
     pub challenged: u8, // bool
     pub bump: u8,

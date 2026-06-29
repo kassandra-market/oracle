@@ -1,6 +1,8 @@
 //! Clock access and phase/window guards shared by every instruction processor.
 
-use pinocchio::{program_error::ProgramError, sysvars::clock::Clock, sysvars::Sysvar, ProgramResult};
+use pinocchio::{
+    program_error::ProgramError, sysvars::clock::Clock, sysvars::Sysvar, ProgramResult,
+};
 
 use crate::{
     error::KassandraError,

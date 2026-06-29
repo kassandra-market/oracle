@@ -47,8 +47,9 @@ fn unknown_discriminant_is_invalid() {
 #[test]
 fn known_discriminant_returns_not_implemented() {
     let mut ctx = TestCtx::new();
-    // A known discriminant with an arbitrary trailing payload byte.
-    let ix = ix_with_data(&ctx, vec![Ix::SubmitFact as u8, 0xAB]);
+    // A known-but-unimplemented discriminant with an arbitrary trailing byte.
+    // (SubmitFact is implemented; use a still-stubbed instruction here.)
+    let ix = ix_with_data(&ctx, vec![Ix::VoteFact as u8, 0xAB]);
     let err = ctx.send(ix, &[]).unwrap_err().err;
     assert_eq!(
         err,

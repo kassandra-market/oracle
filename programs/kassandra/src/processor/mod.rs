@@ -12,20 +12,19 @@ use pinocchio::{
 
 use crate::{error::KassandraError, instruction::Ix};
 
-pub fn process(
-    _program_id: &Pubkey,
-    _accounts: &[AccountInfo],
-    data: &[u8],
-) -> ProgramResult {
-    // First byte = discriminant; the rest is the (not-yet-parsed) payload.
-    let (&disc, _payload) = data
+pub mod guards;
+pub mod submit_fact;
+
+pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
+    // First byte = discriminant; the rest is the per-instruction payload.
+    let (&disc, payload) = data
         .split_first()
         .ok_or(ProgramError::InvalidInstructionData)?;
     let ix = Ix::from_u8(disc).ok_or(ProgramError::InvalidInstructionData)?;
 
     match ix {
-        Ix::SubmitFact
-        | Ix::VoteFact
+        Ix::SubmitFact => submit_fact::process(program_id, accounts, payload),
+        Ix::VoteFact
         | Ix::FinalizeFacts
         | Ix::SubmitAiClaim
         | Ix::OpenChallenge
