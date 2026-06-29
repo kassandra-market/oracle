@@ -301,6 +301,13 @@ impl TestCtx {
         key
     }
 
+    /// Fabricate a program-owned account at a SPECIFIC address holding `data`.
+    /// Lets tests stand up a PDA-addressed account (e.g. an `AiClaim` at its
+    /// `[b"claim", oracle, proposer]` PDA) without the create/submit flow.
+    pub fn seed_program_account_at(&mut self, key: Pubkey, data: Vec<u8>) {
+        self.set_program_account(key, data);
+    }
+
     /// Create an SPL token account on the KASS mint owned by `owner` and fund
     /// it with `amount` base units of KASS. Returns the token account address.
     /// Used to bankroll a fact submitter.
@@ -388,6 +395,26 @@ impl TestCtx {
         all_signers.extend_from_slice(signers);
         let tx = Transaction::new_signed_with_payer(
             &[ix],
+            Some(&self.payer.pubkey()),
+            &all_signers,
+            blockhash,
+        );
+        self.svm.send_transaction(tx)
+    }
+
+    /// Sign and submit a MULTI-instruction transaction (e.g. a ComputeBudget
+    /// prefix plus a CPI-heavy instruction). Mirrors [`TestCtx::send`] but takes
+    /// a slice of instructions. Signed by the payer plus every keypair in
+    /// `signers`; the blockhash is rotated for signature uniqueness.
+    #[allow(clippy::result_large_err)]
+    pub fn send_many(&mut self, ixs: &[Instruction], signers: &[&Keypair]) -> TransactionResult {
+        self.svm.expire_blockhash();
+        let blockhash = self.svm.latest_blockhash();
+        let mut all_signers: Vec<&Keypair> = Vec::with_capacity(signers.len() + 1);
+        all_signers.push(&self.payer);
+        all_signers.extend_from_slice(signers);
+        let tx = Transaction::new_signed_with_payer(
+            ixs,
             Some(&self.payer.pubkey()),
             &all_signers,
             blockhash,

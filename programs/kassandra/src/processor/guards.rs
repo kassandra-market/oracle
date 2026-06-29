@@ -13,7 +13,7 @@ use pinocchio_system::instructions::CreateAccount;
 
 use crate::{
     error::KassandraError,
-    state::{AccountType, Fact, Oracle, Proposer},
+    state::{AccountType, AiClaim, Fact, Oracle, Proposer},
 };
 
 /// Require that `account` is owned by `program_id`, else
@@ -98,6 +98,24 @@ pub fn load_proposer(account: &AccountInfo, program_id: &Pubkey) -> Result<Propo
         return Err(KassandraError::InvalidAccount.into());
     }
     Ok(proposer)
+}
+
+/// Load and validate an [`AiClaim`] account: owned by `program_id`, large
+/// enough, and tagged [`AccountType::AiClaim`] (the type-confusion guard,
+/// mirroring [`load_oracle`]). Returns an owned, alignment-safe copy.
+pub fn load_ai_claim(account: &AccountInfo, program_id: &Pubkey) -> Result<AiClaim, ProgramError> {
+    assert_owned_by_program(account, program_id)?;
+    if account.data_len() < AiClaim::LEN {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    let claim: AiClaim = {
+        let data = account.try_borrow_data()?;
+        bytemuck::pod_read_unaligned::<AiClaim>(&data[..AiClaim::LEN])
+    };
+    if claim.account_type != AccountType::AiClaim.as_u8() {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    Ok(claim)
 }
 
 /// Create a fresh, rent-exempt, program-owned PDA account, signing with the

@@ -161,7 +161,8 @@ fn submit_one(ctx: &mut TestCtx, oracle: Pubkey, vault: Pubkey, tag: u8) -> Pubk
         vault,
         submit_fact_payload(&content_hash, 100, b"ipfs://fact"),
     );
-    ctx.send(ix, &[&submitter]).expect("submit_fact should succeed");
+    ctx.send(ix, &[&submitter])
+        .expect("submit_fact should succeed");
     fact
 }
 
@@ -343,7 +344,11 @@ fn finalize_subset_keeps_phase_then_completes() {
         .expect("first chunk should succeed");
 
     let o = ctx.oracle(oracle);
-    assert_eq!(o.phase, Phase::FactVoting as u8, "phase must not advance yet");
+    assert_eq!(
+        o.phase,
+        Phase::FactVoting as u8,
+        "phase must not advance yet"
+    );
     assert_eq!(o.settled_count, 2);
     assert_eq!(ctx.fact(fact_a).agreed, 1);
     assert_eq!(ctx.fact(fact_b).settled, 1);

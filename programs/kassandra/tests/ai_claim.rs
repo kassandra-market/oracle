@@ -32,10 +32,7 @@ use solana_sdk::{
 
 /// Derive the AiClaim PDA: seeds `[b"claim", oracle, proposer]`.
 fn claim_pda(program_id: &Pubkey, oracle: &Pubkey, proposer: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(
-        &[b"claim", oracle.as_ref(), proposer.as_ref()],
-        program_id,
-    )
+    Pubkey::find_program_address(&[b"claim", oracle.as_ref(), proposer.as_ref()], program_id)
 }
 
 fn submit_payload(option: u8) -> Vec<u8> {
@@ -123,8 +120,14 @@ fn submit_for(
 fn submit_claim_matching_original() {
     // Two proposers (options 0 and 1). Proposer 0 claims its original option 0.
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     let proposer_pda = ctx.proposers(oracle)[0].pda;
     submit_for(&mut ctx, oracle, 0, 0).expect("submit should succeed");
@@ -148,8 +151,14 @@ fn submit_claim_matching_original() {
 fn submit_flipped_claim_marks_flipped() {
     // Proposer 0's original option is 0; it claims 1 instead -> flipped.
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     let proposer_pda = ctx.proposers(oracle)[0].pda;
     submit_for(&mut ctx, oracle, 0, 1).expect("submit should succeed");
@@ -162,8 +171,14 @@ fn submit_flipped_claim_marks_flipped() {
 #[test]
 fn submit_wrong_authority_fails() {
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     let proposer_pda = ctx.proposers(oracle)[0].pda;
     let (claim, _) = claim_pda(&ctx.program_id, &oracle, &proposer_pda);
@@ -192,8 +207,14 @@ fn submit_wrong_authority_fails() {
 #[test]
 fn submit_duplicate_claim_fails() {
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     submit_for(&mut ctx, oracle, 0, 0).expect("first submit should succeed");
 
@@ -212,8 +233,14 @@ fn submit_wrong_phase_fails() {
     // Leave the oracle in FactProposal (seed default), never force AiClaim.
     let mut ctx = TestCtx::new();
     let oracle = ctx.seed_disputed_oracle(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     let err = submit_for(&mut ctx, oracle, 0, 0).unwrap_err().err;
     assert_eq!(
@@ -228,8 +255,14 @@ fn submit_wrong_phase_fails() {
 #[test]
 fn submit_after_window_fails() {
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     ctx.warp(WINDOW + 1);
     let err = submit_for(&mut ctx, oracle, 0, 0).unwrap_err().err;
@@ -246,8 +279,14 @@ fn submit_after_window_fails() {
 fn submit_option_out_of_range_fails() {
     // options_count == 2 (max option 1, min 2). Option 2 is out of range.
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     let err = submit_for(&mut ctx, oracle, 0, 2).unwrap_err().err;
     assert_eq!(
@@ -265,8 +304,14 @@ fn submit_option_out_of_range_fails() {
 fn finalize_no_show_full_slash() {
     // Proposer 0 submits a valid claim; proposer 1 is a no-show.
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 3_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 3_000,
+        },
     ]);
     submit_for(&mut ctx, oracle, 0, 0).expect("submit should succeed");
     let p0 = ctx.proposers(oracle)[0].pda;
@@ -307,8 +352,14 @@ fn finalize_no_show_full_slash() {
 fn finalize_flipped_partial_slash_remains_surviving() {
     // Proposer 0 flips (original 0, claims 1); proposer 1 submits honestly.
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 2_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 2_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     submit_for(&mut ctx, oracle, 0, 1).expect("flip submit should succeed");
     submit_for(&mut ctx, oracle, 1, 1).expect("submit should succeed");
@@ -346,9 +397,18 @@ fn finalize_flipped_partial_slash_remains_surviving() {
 fn finalize_incremental_then_completes() {
     // Three honest submitters; finalize across two calls.
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
-        ProposerSpec { option: 0, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
     ]);
     submit_for(&mut ctx, oracle, 0, 0).expect("submit 0");
     submit_for(&mut ctx, oracle, 1, 1).expect("submit 1");
@@ -380,8 +440,14 @@ fn finalize_incremental_then_completes() {
 #[test]
 fn finalize_already_processed_fails() {
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     submit_for(&mut ctx, oracle, 0, 0).expect("submit 0");
     submit_for(&mut ctx, oracle, 1, 1).expect("submit 1");
@@ -410,8 +476,14 @@ fn finalize_already_processed_fails() {
 #[test]
 fn finalize_window_still_open_fails() {
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     let p0 = ctx.proposers(oracle)[0].pda;
     // No warp: window still open.
@@ -432,8 +504,14 @@ fn finalize_window_still_open_fails() {
 #[test]
 fn seeded_proposer_is_no_show_by_default() {
     let (ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     let p0 = ctx.proposers(oracle)[0].pda;
     assert_eq!(ctx.proposer(p0).claim_option, CLAIM_OPTION_NONE);
@@ -442,8 +520,14 @@ fn seeded_proposer_is_no_show_by_default() {
 #[test]
 fn submit_by_disqualified_proposer_fails() {
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     let p0 = ctx.proposers(oracle)[0].pda;
     ctx.set_proposer_disqualified(p0);
@@ -463,12 +547,24 @@ fn finalize_proposer_from_other_oracle_fails() {
     // Two independent oracles; pass oracle A but a proposer from oracle B.
     let mut ctx = TestCtx::new();
     let oracle_a = ctx.seed_disputed_oracle(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     let oracle_b = ctx.seed_disputed_oracle(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     ctx.set_phase(oracle_a, Phase::AiClaim);
     let foreign = ctx.proposers(oracle_b)[0].pda;
@@ -490,8 +586,14 @@ fn finalize_proposer_from_other_oracle_fails() {
 #[test]
 fn finalize_same_proposer_twice_in_one_call_fails() {
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     let p0 = ctx.proposers(oracle)[0].pda;
     ctx.warp(WINDOW + 1);
@@ -512,8 +614,14 @@ fn finalize_same_proposer_twice_in_one_call_fails() {
 #[test]
 fn finalize_empty_tail_fails() {
     let (mut ctx, oracle) = seed_ai(&[
-        ProposerSpec { option: 0, bond: 1_000 },
-        ProposerSpec { option: 1, bond: 1_000 },
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
     ]);
     ctx.warp(WINDOW + 1);
 

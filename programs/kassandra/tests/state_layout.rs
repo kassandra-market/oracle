@@ -9,6 +9,7 @@ fn account_sizes_are_stable() {
     assert_eq!(size_of::<Fact>(), Fact::LEN);
     assert_eq!(size_of::<FactVote>(), FactVote::LEN);
     assert_eq!(size_of::<AiClaim>(), AiClaim::LEN);
+    assert_eq!(size_of::<Market>(), Market::LEN);
 
     // Absolute pinned on-chain ABI sizes. Changing a struct's layout must
     // be a deliberate, visible break of these constants. Each carries an
@@ -18,6 +19,7 @@ fn account_sizes_are_stable() {
     assert_eq!(Fact::LEN, 336);
     assert_eq!(FactVote::LEN, 88);
     assert_eq!(AiClaim::LEN, 176);
+    assert_eq!(Market::LEN, 320);
 }
 
 #[test]
@@ -28,6 +30,7 @@ fn field_offsets_are_pinned() {
     assert_eq!(offset_of!(Fact, account_type), 0);
     assert_eq!(offset_of!(FactVote, account_type), 0);
     assert_eq!(offset_of!(AiClaim, account_type), 0);
+    assert_eq!(offset_of!(Market, account_type), 0);
 
     // Lock a few key field offsets per struct so reordering/resizing breaks.
     // (All shifted +8 by the header relative to the pre-tag layout.)
@@ -49,6 +52,18 @@ fn field_offsets_are_pinned() {
     assert_eq!(offset_of!(FactVote, stake), 72);
 
     assert_eq!(offset_of!(AiClaim, io_hash), 136);
+
+    // Market: 9 pubkeys packed after the 8-byte header, then the i64/u64 tail.
+    assert_eq!(offset_of!(Market, oracle), 8);
+    assert_eq!(offset_of!(Market, ai_claim), 40);
+    assert_eq!(offset_of!(Market, question), 136);
+    assert_eq!(offset_of!(Market, kass_vault), 168);
+    assert_eq!(offset_of!(Market, usdc_vault), 200);
+    assert_eq!(offset_of!(Market, pass_amm), 232);
+    assert_eq!(offset_of!(Market, fail_amm), 264);
+    assert_eq!(offset_of!(Market, twap_end), 296);
+    assert_eq!(offset_of!(Market, challenger_usdc), 304);
+    assert_eq!(offset_of!(Market, settled), 312);
 }
 
 #[test]

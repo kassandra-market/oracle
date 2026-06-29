@@ -150,7 +150,8 @@ fn setup(num_facts: usize, advance: bool) -> Setup {
             vault,
             submit_fact_payload(&content_hash, 100, b"ipfs://fact"),
         );
-        ctx.send(ix, &[&submitter]).expect("submit_fact should succeed");
+        ctx.send(ix, &[&submitter])
+            .expect("submit_fact should succeed");
         facts.push(fact);
     }
 
@@ -205,7 +206,8 @@ fn vote_fact_approve_tallies_and_moves_stake() {
         vault,
         vote_payload(VOTE_APPROVE, stake),
     );
-    ctx.send(ix, &[&voter]).expect("approve vote should succeed");
+    ctx.send(ix, &[&voter])
+        .expect("approve vote should succeed");
 
     let f = ctx.fact(fact);
     assert_eq!(f.approve_stake, stake);

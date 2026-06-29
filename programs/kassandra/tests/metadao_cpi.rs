@@ -28,8 +28,7 @@ const VAULT_SO: &[u8] = include_bytes!("fixtures/metadao_conditional_vault.so");
 const AMM_SO: &[u8] = include_bytes!("fixtures/metadao_amm.so");
 
 /// SPL associated-token-account program id (loaded by `LiteSVM::new()`).
-const ATA_PROGRAM_ID: Pubkey =
-    solana_sdk::pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const ATA_PROGRAM_ID: Pubkey = solana_sdk::pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 fn vault_id() -> Pubkey {
     Pubkey::new_from_array(metadao::CONDITIONAL_VAULT_ID)
@@ -109,12 +108,63 @@ fn fabricate_token_account(
 
 fn token_balance(svm: &LiteSVM, addr: Pubkey) -> u64 {
     let acc = svm.get_account(&addr).expect("token account missing");
-    TokenAccount::unpack(&acc.data).expect("not a token account").amount
+    TokenAccount::unpack(&acc.data)
+        .expect("not a token account")
+        .amount
 }
 
 fn load_metadao(svm: &mut LiteSVM) {
     svm.add_program(vault_id(), VAULT_SO);
     svm.add_program(amm_id(), AMM_SO);
+}
+
+/// Drift guard: the host-runnable seed-assembly helpers must produce exactly
+/// the documented seed byte-slices in the documented order. The `*_pda`
+/// wrappers (SBF-only) reuse these same helpers, so this pins their seeds
+/// without needing the `find_program_address` syscall. The end-to-end
+/// `split_tokens_mints_conditional_tokens` test then proves the order matches
+/// the deployed binary.
+#[test]
+fn seed_helpers_match_documented_layout() {
+    let question_id = [9u8; 32];
+    let oracle = [3u8; 32];
+    let num_outcomes = [2u8; 1];
+    assert_eq!(
+        metadao::question_seeds(&question_id, &oracle, &num_outcomes),
+        [
+            b"question".as_ref(),
+            question_id.as_ref(),
+            oracle.as_ref(),
+            num_outcomes.as_ref(),
+        ],
+    );
+
+    let question = [4u8; 32];
+    let mint = [5u8; 32];
+    assert_eq!(
+        metadao::vault_seeds(&question, &mint),
+        [
+            b"conditional_vault".as_ref(),
+            question.as_ref(),
+            mint.as_ref()
+        ],
+    );
+
+    let vault = [6u8; 32];
+    let index = [1u8; 1];
+    assert_eq!(
+        metadao::conditional_token_mint_seeds(&vault, &index),
+        [
+            b"conditional_token".as_ref(),
+            vault.as_ref(),
+            index.as_ref()
+        ],
+    );
+
+    assert_eq!(
+        metadao::event_authority_seeds(),
+        [b"__event_authority".as_ref()]
+    );
 }
 
 #[test]
@@ -146,7 +196,13 @@ fn split_tokens_mints_conditional_tokens() {
     // User (acts as both payer of these txs and split authority).
     let underlying_amount: u64 = 5_000_000_000;
     let user_underlying = ata(&payer.pubkey(), &kass);
-    fabricate_token_account(&mut svm, user_underlying, kass, payer.pubkey(), underlying_amount);
+    fabricate_token_account(
+        &mut svm,
+        user_underlying,
+        kass,
+        payer.pubkey(),
+        underlying_amount,
+    );
 
     // ----- derive all PDAs using the cpi::metadao SEED constants ------------
     // (PDA *derivation* uses solana_sdk here because pinocchio's
@@ -158,33 +214,32 @@ fn split_tokens_mints_conditional_tokens() {
     let resolver = Pubkey::new_unique(); // the question's oracle/resolver authority
     let resolver_pk = resolver.to_bytes();
 
+    // Derive every PDA via the module's host-runnable SEED-ASSEMBLY helpers
+    // (NOT inline seed arrays). `find_program_address` itself is an SBF-only
+    // syscall, so the host test still does the search with `solana_sdk`, but the
+    // SEED ORDER comes from `metadao::*_seeds`. A green end-to-end run below
+    // proves those helpers match the deployed binary, guarding against drift in
+    // the dead-code `*_pda` wrappers that reuse the same builders.
+    let question_resolver = resolver.to_bytes();
+    let kass_arr = kass.to_bytes();
     let (question, _) = Pubkey::find_program_address(
-        &[
-            metadao::SEED_QUESTION,
-            &question_id,
-            resolver.as_ref(),
-            &[num_outcomes],
-        ],
+        &metadao::question_seeds(&question_id, &question_resolver, &[num_outcomes]),
         &vault_id(),
     );
-    let (vault, _) = Pubkey::find_program_address(
-        &[
-            metadao::SEED_CONDITIONAL_VAULT,
-            question.as_ref(),
-            kass.as_ref(),
-        ],
-        &vault_id(),
-    );
+    let question_arr = question.to_bytes();
+    let (vault, _) =
+        Pubkey::find_program_address(&metadao::vault_seeds(&question_arr, &kass_arr), &vault_id());
+    let vault_arr = vault.to_bytes();
     let (cond0, _) = Pubkey::find_program_address(
-        &[metadao::SEED_CONDITIONAL_TOKEN, vault.as_ref(), &[0u8]],
+        &metadao::conditional_token_mint_seeds(&vault_arr, &[0u8]),
         &vault_id(),
     );
     let (cond1, _) = Pubkey::find_program_address(
-        &[metadao::SEED_CONDITIONAL_TOKEN, vault.as_ref(), &[1u8]],
+        &metadao::conditional_token_mint_seeds(&vault_arr, &[1u8]),
         &vault_id(),
     );
     let (event_authority, _) =
-        Pubkey::find_program_address(&[metadao::SEED_EVENT_AUTHORITY], &vault_id());
+        Pubkey::find_program_address(&metadao::event_authority_seeds(), &vault_id());
 
     let vault_underlying = ata(&vault, &kass);
 
@@ -254,9 +309,21 @@ fn split_tokens_mints_conditional_tokens() {
     send(&mut svm, &payer, &[ix_s]).expect("split_tokens failed");
 
     // ----- assertions: real binary minted the conditional tokens -----------
-    assert_eq!(token_balance(&svm, user_cond0), split_amount, "pass/outcome-0 balance");
-    assert_eq!(token_balance(&svm, user_cond1), split_amount, "fail/outcome-1 balance");
-    assert_eq!(token_balance(&svm, vault_underlying), split_amount, "vault escrowed underlying");
+    assert_eq!(
+        token_balance(&svm, user_cond0),
+        split_amount,
+        "pass/outcome-0 balance"
+    );
+    assert_eq!(
+        token_balance(&svm, user_cond1),
+        split_amount,
+        "fail/outcome-1 balance"
+    );
+    assert_eq!(
+        token_balance(&svm, vault_underlying),
+        split_amount,
+        "vault escrowed underlying"
+    );
     assert_eq!(
         token_balance(&svm, user_underlying),
         underlying_amount - split_amount,

@@ -179,7 +179,11 @@ fn finalize_with_facts(
         if fact.duplicate_stake > fact.approve_stake {
             // Duplicate-dominant: ignored, stake returned later, NOT slashed.
             fact.duplicate = 1;
-        } else if is_agreed(fact.approve_stake, fact.duplicate_stake, oracle.dispute_bond_total) {
+        } else if is_agreed(
+            fact.approve_stake,
+            fact.duplicate_stake,
+            oracle.dispute_bond_total,
+        ) {
             // Agreed: reward is a later claim, no bond_pool change here.
             fact.agreed = 1;
         } else {

@@ -108,7 +108,11 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
 
     // --- ai_claim PDA derivation + duplicate rejection ----------------------
     let (expected_claim, bump) = find_program_address(
-        &[b"claim", oracle_ai.key().as_ref(), proposer_ai.key().as_ref()],
+        &[
+            b"claim",
+            oracle_ai.key().as_ref(),
+            proposer_ai.key().as_ref(),
+        ],
         program_id,
     );
     assert_key(claim_ai, &expected_claim)?;

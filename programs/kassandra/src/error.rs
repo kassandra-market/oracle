@@ -51,6 +51,9 @@ pub enum KassandraError {
     /// The claimed `option` is out of range for this oracle
     /// (`option >= options_count`).
     InvalidOption = 13,
+    /// `open_challenge` was called against an `AiClaim` that already has an open
+    /// challenge market (`ai_claim.challenged == 1`): one market per claim.
+    AlreadyChallenged = 14,
 }
 
 impl From<KassandraError> for ProgramError {

@@ -31,6 +31,7 @@ pub enum AccountType {
     Fact = 3,
     FactVote = 4,
     AiClaim = 5,
+    Market = 6,
 }
 
 impl AccountType {
@@ -244,5 +245,47 @@ impl AiClaim {
 
     pub fn is_challenged(&self) -> bool {
         self.challenged != 0
+    }
+}
+
+/// A challenge decision-market binding for one [`AiClaim`]. `size_of == 320`.
+///
+/// Created lazily by `open_challenge` only when a claim is actually challenged
+/// — uncontested claims have NO `Market` account (markets are dormant by
+/// default, design §6). It RECORDS the MetaDAO accounts the challenger composed
+/// (a binary pass/fail `question` whose resolver is the Kassandra oracle PDA, a
+/// KASS conditional vault, a USDC conditional vault, and the pass/fail AMMs) so
+/// `settle_challenge` (Task 11) can read the TWAP and resolve the question. The
+/// security-critical bindings (question.oracle, vault underlying mints) are
+/// verified at creation; this struct is the durable record of that binding.
+///
+/// # Market PDA seeds (CONTRACT)
+/// `[b"market", ai_claim_pubkey]`, program = [`crate::ID`].
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+pub struct Market {
+    pub account_type: u8, // AccountType::Market
+    pub _pad_hdr: [u8; 7],
+    pub oracle: Pubkey,
+    pub ai_claim: Pubkey,
+    pub proposer: Pubkey,
+    pub challenger: Pubkey,
+    pub question: Pubkey,     // MetaDAO binary question (resolver == oracle PDA)
+    pub kass_vault: Pubkey,   // MetaDAO conditional vault, underlying == oracle.kass_mint
+    pub usdc_vault: Pubkey,   // MetaDAO conditional vault, underlying == oracle.usdc_mint
+    pub pass_amm: Pubkey,     // outcome-0 (pass) AMM
+    pub fail_amm: Pubkey,     // outcome-1 (fail) AMM
+    pub twap_end: i64,        // now + oracle.twap_window; settle allowed only after
+    pub challenger_usdc: u64, // USDC the challenger committed (recorded; deposited in test)
+    pub settled: u8,          // bool; set by settle_challenge (Task 11)
+    pub bump: u8,
+    pub _pad: [u8; 6],
+}
+
+impl Market {
+    pub const LEN: usize = core::mem::size_of::<Market>();
+
+    pub fn is_settled(&self) -> bool {
+        self.settled != 0
     }
 }
