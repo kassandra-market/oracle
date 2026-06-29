@@ -35,9 +35,11 @@ use std::collections::HashMap;
 
 use bytemuck::Zeroable;
 use kassandra_program::config::{
-    FLIP_SLASH_DEN, FLIP_SLASH_NUM, MARKET_THRESHOLD_DEN, MARKET_THRESHOLD_NUM, PHASE_WINDOW,
-    PROPOSAL_WINDOW, THRESHOLD_DEN, THRESHOLD_NUM,
+    CHALLENGE_FAIL_USDC_FEE_DEN, CHALLENGE_FAIL_USDC_FEE_NUM, CHALLENGE_SUCCESS_KASS_FEE_DEN,
+    CHALLENGE_SUCCESS_KASS_FEE_NUM, FLIP_SLASH_DEN, FLIP_SLASH_NUM, MARKET_THRESHOLD_DEN,
+    MARKET_THRESHOLD_NUM, PHASE_WINDOW, PROPOSAL_WINDOW, THRESHOLD_DEN, THRESHOLD_NUM,
 };
+use kassandra_program::cpi::metadao_v06 as md6;
 use kassandra_program::state::{AccountType, Oracle, Phase, Proposer, CLAIM_OPTION_NONE};
 use litesvm::{types::TransactionResult, LiteSVM};
 use solana_sdk::{
@@ -69,6 +71,20 @@ pub const DEADLINE_DELTA: i64 = 1_000;
 pub const KASS_DECIMALS: u8 = 9;
 /// USDC mint decimals.
 pub const USDC_DECIMALS: u8 = 6;
+
+/// Deterministic `kass_price` TWAP the harness blesses for challenge-escrow
+/// tests: raw USDC per raw KASS × `1e12` (== KASS at $0.50). With a 1 KASS bond
+/// (`1e9` base units) this escrows `1e9 × 5e8 / 1e12 = 500_000` USDC base units.
+pub const KASS_PRICE_TWAP: u128 = 500_000_000;
+/// The `kass_price` fixed-point scale (`KASS_PRICE_SCALE`), mirrored here so
+/// tests compute the expected escrow without importing the program const.
+pub const KASS_PRICE_SCALE: u128 = 1_000_000_000_000;
+
+/// Expected challenger USDC escrow for `bond` KASS base units at
+/// [`KASS_PRICE_TWAP`]: `bond × twap / KASS_PRICE_SCALE` (the on-chain formula).
+pub fn required_escrow_usdc(bond: u64) -> u64 {
+    (bond as u128 * KASS_PRICE_TWAP / KASS_PRICE_SCALE) as u64
+}
 
 /// Specification for one proposer to seed into a disputed oracle.
 #[derive(Clone, Copy, Debug)]
@@ -130,6 +146,10 @@ pub struct ConfigParams {
     pub fact_vote_slash_den: u64,
     pub reward_proposer_weight: u64,
     pub reward_fact_weight: u64,
+    pub challenge_fail_usdc_fee_num: u64,
+    pub challenge_fail_usdc_fee_den: u64,
+    pub challenge_success_kass_fee_num: u64,
+    pub challenge_success_kass_fee_den: u64,
 }
 
 impl ConfigParams {
@@ -156,13 +176,17 @@ impl ConfigParams {
             fact_vote_slash_den: 1,
             reward_proposer_weight: 1,
             reward_fact_weight: 1,
+            challenge_fail_usdc_fee_num: CHALLENGE_FAIL_USDC_FEE_NUM,
+            challenge_fail_usdc_fee_den: CHALLENGE_FAIL_USDC_FEE_DEN,
+            challenge_success_kass_fee_num: CHALLENGE_SUCCESS_KASS_FEE_NUM,
+            challenge_success_kass_fee_den: CHALLENGE_SUCCESS_KASS_FEE_DEN,
         }
     }
 
-    /// Pack into the fixed 144-byte little-endian wire layout `set_config` expects.
-    pub fn to_payload(self) -> [u8; 144] {
-        let mut out = [0u8; 144];
-        let fields: [[u8; 8]; 18] = [
+    /// Pack into the fixed 176-byte little-endian wire layout `set_config` expects.
+    pub fn to_payload(self) -> [u8; 176] {
+        let mut out = [0u8; 176];
+        let fields: [[u8; 8]; 22] = [
             self.emission_num.to_le_bytes(),
             self.emission_den.to_le_bytes(),
             self.total_supply_cap.to_le_bytes(),
@@ -181,6 +205,10 @@ impl ConfigParams {
             self.fact_vote_slash_den.to_le_bytes(),
             self.reward_proposer_weight.to_le_bytes(),
             self.reward_fact_weight.to_le_bytes(),
+            self.challenge_fail_usdc_fee_num.to_le_bytes(),
+            self.challenge_fail_usdc_fee_den.to_le_bytes(),
+            self.challenge_success_kass_fee_num.to_le_bytes(),
+            self.challenge_success_kass_fee_den.to_le_bytes(),
         ];
         for (i, f) in fields.iter().enumerate() {
             out[i * 8..i * 8 + 8].copy_from_slice(f);
@@ -270,6 +298,14 @@ impl TestCtx {
     /// oracle PDA, created by `create_oracle`.
     pub fn stake_vault_pda(program_id: &Pubkey, oracle: &Pubkey) -> (Pubkey, u8) {
         Pubkey::find_program_address(&[b"vault", oracle.as_ref()], program_id)
+    }
+
+    /// Derive the challenger USDC escrow vault PDA for a market: seeds
+    /// `[b"challenge_usdc", market]`. The vault is an SPL token account on the
+    /// USDC mint whose token authority is the oracle PDA, created by
+    /// `open_challenge`.
+    pub fn challenge_usdc_vault_pda(program_id: &Pubkey, market: &Pubkey) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[b"challenge_usdc", market.as_ref()], program_id)
     }
 
     /// Derive the Proposer PDA: seeds `[b"proposer", oracle, authority]`.
@@ -408,7 +444,7 @@ impl TestCtx {
         authority: Pubkey,
         params: ConfigParams,
     ) -> Instruction {
-        let mut data = Vec::with_capacity(1 + 144);
+        let mut data = Vec::with_capacity(1 + 176);
         data.push(kassandra_program::instruction::Ix::SetConfig as u8);
         data.extend_from_slice(&params.to_payload());
         Instruction {
@@ -500,6 +536,35 @@ impl TestCtx {
                 },
             )
             .unwrap();
+    }
+
+    /// Ensure the Protocol singleton exists and hand governance off with a
+    /// hand-built futarchy `Dao` account whose embedded spot TWAP equals
+    /// [`KASS_PRICE_TWAP`], recorded as `Protocol.kass_dao`. This makes
+    /// `open_challenge`'s `kass_price` read return a deterministic value so the
+    /// escrow size ([`required_escrow_usdc`]) is computable. Returns the
+    /// `kass_dao` account key. One-shot per `TestCtx` (set_governance is
+    /// one-shot).
+    pub fn bless_kass_price(&mut self) -> Pubkey {
+        self.ensure_protocol();
+        let kass_dao = Pubkey::new_unique();
+        let owner = Pubkey::new_from_array(md6::FUTARCHY_ID);
+        // twap = aggregator / (last_updated - (created_at + start_delay)).
+        // Pick a 1_000_000s window so aggregator = twap * 1e6 yields KASS_PRICE_TWAP.
+        let last_updated: i64 = 1_000_000;
+        let created_at: i64 = 0;
+        let start_delay: u32 = 0;
+        let aggregator: u128 = KASS_PRICE_TWAP * 1_000_000;
+        self.fabricate_owned_account(
+            kass_dao,
+            owner,
+            build_dao_blob(aggregator, last_updated, created_at, start_delay),
+        );
+        let (dao_authority, _) = Self::stand_in_governance(0x77);
+        let payer = self.payer.insecure_clone();
+        let (_p, res) = self.set_governance(&payer, dao_authority, kass_dao);
+        assert!(res.is_ok(), "bless_kass_price governance handoff: {res:?}");
+        kass_dao
     }
 
     /// Send a real `CreateOracle` instruction with `creator == payer`, using the
@@ -839,6 +904,12 @@ impl TestCtx {
         oracle.fact_vote_slash_den = 1;
         oracle.reward_proposer_weight = 0;
         oracle.reward_fact_weight = 0;
+        // C1 challenge-fee config snapshot (matches init_protocol/create_oracle
+        // defaults), so a fabricated oracle sizes/settles like a real one.
+        oracle.challenge_fail_usdc_fee_num = CHALLENGE_FAIL_USDC_FEE_NUM;
+        oracle.challenge_fail_usdc_fee_den = CHALLENGE_FAIL_USDC_FEE_DEN;
+        oracle.challenge_success_kass_fee_num = CHALLENGE_SUCCESS_KASS_FEE_NUM;
+        oracle.challenge_success_kass_fee_den = CHALLENGE_SUCCESS_KASS_FEE_DEN;
         self.set_program_account(oracle_pda, bytemuck::bytes_of(&oracle).to_vec());
 
         // Build and write each Proposer account.
@@ -957,6 +1028,13 @@ impl TestCtx {
     /// Used to bankroll a fact submitter.
     pub fn fund_kass(&mut self, owner: &Keypair, amount: u64) -> Pubkey {
         self.create_token_account(self.kass_mint, owner.pubkey(), amount)
+    }
+
+    /// Create an SPL token account on the USDC mint owned by `owner` and fund it
+    /// with `amount` base units. Returns the token account address. Mirrors
+    /// [`TestCtx::fund_kass`]; the challenge-escrow source for `open_challenge`.
+    pub fn fund_usdc(&mut self, owner: &Keypair, amount: u64) -> Pubkey {
+        self.create_token_account(self.usdc_mint, owner.pubkey(), amount)
     }
 
     /// Like [`TestCtx::fund_kass`] but ALSO increases the KASS mint's `supply` by
@@ -1251,4 +1329,28 @@ impl Default for TestCtx {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Hand-build a futarchy `Dao` account blob with a `PoolState::Spot` embedded
+/// spot `Pool` whose `TwapOracle` carries the given fields at the F0-documented
+/// fixed offsets (mirrors `tests/kass_price.rs`). Used to give `open_challenge`
+/// a deterministic `kass_price`.
+pub fn build_dao_blob(
+    aggregator: u128,
+    last_updated: i64,
+    created_at: i64,
+    start_delay: u32,
+) -> Vec<u8> {
+    let mut data = vec![0u8; md6::DAO_SPOT_TWAP_MIN_LEN];
+    data[0..8].copy_from_slice(&md6::DAO_ACCOUNT_DISCRIMINATOR);
+    data[md6::DAO_POOLSTATE_TAG_OFFSET] = 0; // PoolState::Spot
+    data[md6::DAO_SPOT_AGGREGATOR_OFFSET..md6::DAO_SPOT_AGGREGATOR_OFFSET + 16]
+        .copy_from_slice(&aggregator.to_le_bytes());
+    data[md6::DAO_SPOT_LAST_UPDATED_TS_OFFSET..md6::DAO_SPOT_LAST_UPDATED_TS_OFFSET + 8]
+        .copy_from_slice(&last_updated.to_le_bytes());
+    data[md6::DAO_SPOT_CREATED_AT_TS_OFFSET..md6::DAO_SPOT_CREATED_AT_TS_OFFSET + 8]
+        .copy_from_slice(&created_at.to_le_bytes());
+    data[md6::DAO_SPOT_START_DELAY_SECONDS_OFFSET..md6::DAO_SPOT_START_DELAY_SECONDS_OFFSET + 4]
+        .copy_from_slice(&start_delay.to_le_bytes());
+    data
 }

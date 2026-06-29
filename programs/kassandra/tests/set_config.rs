@@ -4,7 +4,10 @@
 mod common;
 use common::*;
 
-use kassandra_program::config::{PHASE_WINDOW, THRESHOLD_DEN, THRESHOLD_NUM};
+use kassandra_program::config::{
+    CHALLENGE_FAIL_USDC_FEE_DEN, CHALLENGE_FAIL_USDC_FEE_NUM, CHALLENGE_SUCCESS_KASS_FEE_DEN,
+    CHALLENGE_SUCCESS_KASS_FEE_NUM, PHASE_WINDOW, THRESHOLD_DEN, THRESHOLD_NUM,
+};
 use kassandra_program::error::KassandraError;
 use solana_sdk::signature::{Keypair, Signer};
 
@@ -76,6 +79,93 @@ fn dao_sets_config_and_new_oracle_snapshots_new_values() {
     assert_eq!(
         o.threshold_den, 4,
         "new oracle must snapshot new threshold_den"
+    );
+}
+
+#[test]
+fn new_oracle_snapshots_default_challenge_fees() {
+    let (mut ctx, _protocol_pda, _dao) = governed_ctx();
+
+    // A created oracle snapshots the default (1/100) challenge-fee rates.
+    let oracle = ctx.create_real_oracle(2, TWAP_WINDOW);
+    let o = ctx.oracle(oracle);
+    assert_eq!(o.challenge_fail_usdc_fee_num, CHALLENGE_FAIL_USDC_FEE_NUM);
+    assert_eq!(o.challenge_fail_usdc_fee_den, CHALLENGE_FAIL_USDC_FEE_DEN);
+    assert_eq!(
+        o.challenge_success_kass_fee_num,
+        CHALLENGE_SUCCESS_KASS_FEE_NUM
+    );
+    assert_eq!(
+        o.challenge_success_kass_fee_den,
+        CHALLENGE_SUCCESS_KASS_FEE_DEN
+    );
+}
+
+#[test]
+fn dao_updates_challenge_fees_and_new_oracle_snapshots() {
+    let (mut ctx, protocol_pda, dao) = governed_ctx();
+
+    let mut params = ConfigParams::defaults();
+    params.challenge_fail_usdc_fee_num = 5; // 5%
+    params.challenge_fail_usdc_fee_den = 100;
+    params.challenge_success_kass_fee_num = 25; // 2.5%
+    params.challenge_success_kass_fee_den = 1000;
+    let (_pda, res) = ctx.set_config(&dao, params);
+    assert!(
+        res.is_ok(),
+        "set_config should accept valid fee rates: {res:?}"
+    );
+
+    let p = ctx.protocol(protocol_pda);
+    assert_eq!(p.challenge_fail_usdc_fee_num, 5);
+    assert_eq!(p.challenge_fail_usdc_fee_den, 100);
+    assert_eq!(p.challenge_success_kass_fee_num, 25);
+    assert_eq!(p.challenge_success_kass_fee_den, 1000);
+
+    // A subsequently-created oracle snapshots the NEW fee rates.
+    let oracle = ctx.create_real_oracle(2, TWAP_WINDOW);
+    let o = ctx.oracle(oracle);
+    assert_eq!(o.challenge_fail_usdc_fee_num, 5);
+    assert_eq!(o.challenge_fail_usdc_fee_den, 100);
+    assert_eq!(o.challenge_success_kass_fee_num, 25);
+    assert_eq!(o.challenge_success_kass_fee_den, 1000);
+}
+
+#[test]
+fn challenge_fee_zero_denominator_rejected() {
+    let (mut ctx, _protocol_pda, dao) = governed_ctx();
+
+    let mut params = ConfigParams::defaults();
+    params.challenge_fail_usdc_fee_den = 0;
+    let (_pda, res) = ctx.set_config(&dao, params);
+    assert_eq!(
+        custom_code(&res),
+        Some(KassandraError::InvalidConfig as u32),
+        "challenge_fail_usdc_fee_den==0 must be rejected: {res:?}"
+    );
+
+    let mut params = ConfigParams::defaults();
+    params.challenge_success_kass_fee_den = 0;
+    let (_pda, res) = ctx.set_config(&dao, params);
+    assert_eq!(
+        custom_code(&res),
+        Some(KassandraError::InvalidConfig as u32),
+        "challenge_success_kass_fee_den==0 must be rejected: {res:?}"
+    );
+}
+
+#[test]
+fn challenge_fee_over_one_rejected() {
+    let (mut ctx, _protocol_pda, dao) = governed_ctx();
+
+    let mut params = ConfigParams::defaults();
+    params.challenge_success_kass_fee_num = 101;
+    params.challenge_success_kass_fee_den = 100;
+    let (_pda, res) = ctx.set_config(&dao, params);
+    assert_eq!(
+        custom_code(&res),
+        Some(KassandraError::InvalidConfig as u32),
+        "a challenge fee >100% must be rejected: {res:?}"
     );
 }
 

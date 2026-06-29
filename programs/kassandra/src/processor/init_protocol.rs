@@ -153,6 +153,11 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
     protocol.fact_vote_slash_den = 1;
     protocol.reward_proposer_weight = 0;
     protocol.reward_fact_weight = 0;
+    // Challenge-fee config (C1): default to the config consts (1/100 each).
+    protocol.challenge_fail_usdc_fee_num = crate::config::CHALLENGE_FAIL_USDC_FEE_NUM;
+    protocol.challenge_fail_usdc_fee_den = crate::config::CHALLENGE_FAIL_USDC_FEE_DEN;
+    protocol.challenge_success_kass_fee_num = crate::config::CHALLENGE_SUCCESS_KASS_FEE_NUM;
+    protocol.challenge_success_kass_fee_den = crate::config::CHALLENGE_SUCCESS_KASS_FEE_DEN;
     {
         let mut data = protocol_ai.try_borrow_mut_data()?;
         data.copy_from_slice(bytemuck::bytes_of(&protocol));

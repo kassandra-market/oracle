@@ -240,6 +240,11 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     oracle.fact_vote_slash_den = protocol.fact_vote_slash_den;
     oracle.reward_proposer_weight = protocol.reward_proposer_weight;
     oracle.reward_fact_weight = protocol.reward_fact_weight;
+    // Snapshot the challenge-fee config (C1) too.
+    oracle.challenge_fail_usdc_fee_num = protocol.challenge_fail_usdc_fee_num;
+    oracle.challenge_fail_usdc_fee_den = protocol.challenge_fail_usdc_fee_den;
+    oracle.challenge_success_kass_fee_num = protocol.challenge_success_kass_fee_num;
+    oracle.challenge_success_kass_fee_den = protocol.challenge_success_kass_fee_den;
     {
         let mut data = oracle_ai.try_borrow_mut_data()?;
         data.copy_from_slice(bytemuck::bytes_of(&oracle));

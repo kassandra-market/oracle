@@ -75,3 +75,77 @@ TDD; `just build` before `cargo test`; clippy + fmt clean; commit trailer `Co-Au
 
 ## Execution note
 After each task: `just build` → `cargo test` → clippy/fmt, green, commit. Re-pin layouts on change. The kass_price→USDC sizing conversion (decimals/scale) and the redeem_tokens CPI are the two trickiest spots — validate against the real binary. Append a C1/C2/C3 delta log here.
+
+---
+
+## C1 delta log — challenger USDC escrow + governable challenge fees (DONE)
+
+### kass_price units/scale + the USDC conversion (the load-bearing bit)
+- `kass_price(&Protocol, kass_dao_ai) -> u128` returns the futarchy spot TWAP =
+  `aggregator / seconds_elapsed`, which is a price in **raw quote units per raw
+  base unit, scaled by `KASS_PRICE_SCALE = 1e12`** (`futarchy_spot_twap`'s
+  `PRICE_SCALE`). For the KASS DAO base = KASS (9dp), quote = USDC (6dp), so the
+  value is **raw-USDC per raw-KASS × 1e12** — the cross-decimal (9dp↔6dp)
+  adjustment is ALREADY folded into the raw price, so NO extra `10^Δdec` factor
+  is needed.
+- **Conversion (overflow-safe, u128 intermediate):**
+  `required_usdc (USDC base units) = bond_kass (KASS base units) × twap / KASS_PRICE_SCALE`,
+  then checked back into `u64`. `bond_kass == proposer.bond`.
+- **Worked example (the test price):** KASS at $0.50 → `twap = 500_000_000`; a
+  1 KASS bond (`1e9` base units) escrows `1e9 × 5e8 / 1e12 = 500_000` USDC base
+  units = $0.50. Dimensionally `[KASS_raw] × [USDC_raw/KASS_raw] = [USDC_raw]`.
+- New const `config::KASS_PRICE_SCALE = 1_000_000_000_000`.
+
+### New config consts (`config.rs`)
+- `KASS_PRICE_SCALE = 1e12`.
+- `CHALLENGE_FAIL_USDC_FEE_NUM/DEN = 1/100` (1% USDC fee on a failed challenge → proposer; routed at C2).
+- `CHALLENGE_SUCCESS_KASS_FEE_NUM/DEN = 1/100` (1% KASS fee on a successful challenge → challenger; routed at C2).
+
+### Layout re-pins (each adds fields; `tests/state_layout.rs` updated)
+- **Protocol** `336 → 368`: appended 4 × u64 after `reward_fact_weight@328`:
+  `challenge_fail_usdc_fee_num@336`, `_den@344`, `challenge_success_kass_fee_num@352`, `_den@360`.
+- **Oracle** `328 → 360`: appended the same 4 × u64 after `reward_fact_weight@320`:
+  `challenge_fail_usdc_fee_num@328`, `_den@336`, `challenge_success_kass_fee_num@344`, `_den@352`.
+  (`init_protocol` defaults the Protocol copies; `create_oracle` snapshots them onto the Oracle.)
+- **Market** `384 → 416`: inserted `challenger_usdc_vault: Pubkey @360` (after
+  `oracle_fail_kass@328`); shifting `twap_end@392`, `challenger_usdc@400`,
+  `settled@408`, `bump@409`, `_pad[6]@410`.
+
+### Escrow vault
+- PDA seeds **`[b"challenge_usdc", market]`** (program = `crate::ID`); SPL token
+  account on `oracle.usdc_mint`, **token authority = the oracle PDA** (mirrors
+  `oracle.stake_vault`, so C2 settle signs returns/fees with the oracle seeds).
+  Created in `open_challenge` via `create_pda` + `InitializeAccount3` (rent paid
+  by the challenger), then funded by a challenger-signed SPL `Transfer` of
+  `required_usdc`. Under-funded source → the `Transfer` fails → whole ix reverts.
+- `Market.challenger_usdc` is now the ON-CHAIN-computed amount (not a payload
+  value); `Market.challenger_usdc_vault` records the escrow account.
+
+### `open_challenge` account order (Ix=4) — appended 5 accounts; payload now nonce-only (8 bytes)
+`0 oracle(w) · 1 ai_claim(w) · 2 proposer(w) · 3 market(w) · 4 challenger(signer,w) ·
+5 question · 6 kass_vault(w) · 7 usdc_vault · 8 pass_amm · 9 fail_amm · 10 stake_vault(w) ·
+11 kass_vault_underlying(w) · 12 pass_mint(w) · 13 fail_mint(w) · 14 oracle_pass_kass(w) ·
+15 oracle_fail_kass(w) · 16 cv_program · 17 token_program · 18 system_program ·
+19 cv_event_authority · 20 protocol · 21 kass_dao · 22 usdc_mint · 23 challenger_usdc_src(w) ·
+24 challenger_usdc_vault(w, uninit, created here)`. The escrow is sized + created
+AFTER all MetaDAO bindings are verified (no funds move before validation).
+Payload dropped the legacy `challenger_usdc` field (compute-on-chain is cleaner).
+
+### set_config payload growth + new bounds
+- Payload `18 → 22` u64 fields (`144 → 176` bytes); 4 appended:
+  `challenge_fail_usdc_fee_num/den`, `challenge_success_kass_fee_num/den`.
+- New bounds (→ `InvalidConfig`): `challenge_fail_usdc_fee_den > 0`,
+  `challenge_success_kass_fee_den > 0`, `challenge_fail_usdc_fee_num ≤ den`,
+  `challenge_success_kass_fee_num ≤ den`.
+- Harness `ConfigParams` grew the 4 fields + `to_payload` is now `[u8; 176]`.
+
+### Tests
+- `open_challenge.rs`: happy path now asserts escrow == `bond × kass_price` USDC
+  in the vault + Market record + challenger debit + vault mint/authority; new
+  `open_challenge_insufficient_usdc_fails` (under-funded source reverts, no
+  Market). All existing open_challenge + settle_challenge tests updated for the
+  new accounts (harness `bless_kass_price` blesses a deterministic futarchy Dao
+  blob; `fund_usdc` funds the challenger).
+- `set_config.rs`: default-fee snapshot, fee update + new-oracle snapshot, and
+  den==0 / num>den rejection.
+- C2 (settle-side fee routing / redeem) intentionally NOT implemented here.

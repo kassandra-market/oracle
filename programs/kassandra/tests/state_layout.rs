@@ -15,13 +15,13 @@ fn account_sizes_are_stable() {
     // Absolute pinned on-chain ABI sizes. Changing a struct's layout must
     // be a deliberate, visible break of these constants. Each carries an
     // 8-byte header (account_type: u8 + _pad_hdr: [u8;7]) at offset 0.
-    assert_eq!(Oracle::LEN, 328);
+    assert_eq!(Oracle::LEN, 360);
     assert_eq!(Proposer::LEN, 96);
     assert_eq!(Fact::LEN, 336);
     assert_eq!(FactVote::LEN, 88);
     assert_eq!(AiClaim::LEN, 176);
-    assert_eq!(Market::LEN, 384);
-    assert_eq!(Protocol::LEN, 336);
+    assert_eq!(Market::LEN, 416);
+    assert_eq!(Protocol::LEN, 368);
 }
 
 #[test]
@@ -60,6 +60,11 @@ fn field_offsets_are_pinned() {
     assert_eq!(offset_of!(Oracle, fact_vote_slash_den), 304);
     assert_eq!(offset_of!(Oracle, reward_proposer_weight), 312);
     assert_eq!(offset_of!(Oracle, reward_fact_weight), 320);
+    // C1 challenge-fee config snapshot block.
+    assert_eq!(offset_of!(Oracle, challenge_fail_usdc_fee_num), 328);
+    assert_eq!(offset_of!(Oracle, challenge_fail_usdc_fee_den), 336);
+    assert_eq!(offset_of!(Oracle, challenge_success_kass_fee_num), 344);
+    assert_eq!(offset_of!(Oracle, challenge_success_kass_fee_den), 352);
 
     assert_eq!(offset_of!(Proposer, bond), 72);
     assert_eq!(offset_of!(Proposer, ai_finalized), 86);
@@ -81,9 +86,10 @@ fn field_offsets_are_pinned() {
     assert_eq!(offset_of!(Market, fail_amm), 264);
     assert_eq!(offset_of!(Market, oracle_pass_kass), 296);
     assert_eq!(offset_of!(Market, oracle_fail_kass), 328);
-    assert_eq!(offset_of!(Market, twap_end), 360);
-    assert_eq!(offset_of!(Market, challenger_usdc), 368);
-    assert_eq!(offset_of!(Market, settled), 376);
+    assert_eq!(offset_of!(Market, challenger_usdc_vault), 360);
+    assert_eq!(offset_of!(Market, twap_end), 392);
+    assert_eq!(offset_of!(Market, challenger_usdc), 400);
+    assert_eq!(offset_of!(Market, settled), 408);
 
     // Protocol: 3 pubkeys packed after the 8-byte header, then the fee-EMA tail,
     // then (F1) the governance flag + DAO linkage + governable monetary params.
@@ -117,6 +123,11 @@ fn field_offsets_are_pinned() {
     assert_eq!(offset_of!(Protocol, fact_vote_slash_den), 312);
     assert_eq!(offset_of!(Protocol, reward_proposer_weight), 320);
     assert_eq!(offset_of!(Protocol, reward_fact_weight), 328);
+    // C1 challenge-fee config (mutable source; snapshotted onto Oracle).
+    assert_eq!(offset_of!(Protocol, challenge_fail_usdc_fee_num), 336);
+    assert_eq!(offset_of!(Protocol, challenge_fail_usdc_fee_den), 344);
+    assert_eq!(offset_of!(Protocol, challenge_success_kass_fee_num), 352);
+    assert_eq!(offset_of!(Protocol, challenge_success_kass_fee_den), 360);
 }
 
 #[test]

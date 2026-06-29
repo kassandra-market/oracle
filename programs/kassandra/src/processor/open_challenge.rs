@@ -70,9 +70,25 @@
 //! 17. token program
 //! 18. system program
 //! 19. cv_event_authority  — read-only; conditional_vault `#[event_cpi]` authority
+//! 20. protocol            — read-only; the `[b"protocol"]` singleton (`kass_dao` source)
+//! 21. kass_dao            — read-only; the futarchy `Dao` (== `protocol.kass_dao`), kass_price source
+//! 22. usdc_mint           — read-only; == `oracle.usdc_mint` (escrow vault mint)
+//! 23. challenger_usdc_src — writable; challenger's USDC source token account (challenger signs)
+//! 24. challenger_usdc_vault — writable, uninit; market-owned USDC escrow created here
+//!     at PDA `[b"challenge_usdc", market]`, token authority = oracle PDA
+//!
+//! # Challenger USDC escrow (Task C1)
+//! The escrow is sized via `kass_price` (the governance-anchored futarchy spot
+//! TWAP, raw USDC per raw KASS × `1e12`): `required_usdc = bond × twap /
+//! KASS_PRICE_SCALE` (u128, overflow-checked), where `bond == proposer.bond`.
+//! The cross-decimal (KASS 9dp / USDC 6dp) adjustment is folded into the raw
+//! price, so no extra `10^Δdecimals` factor is needed (see
+//! [`crate::config::KASS_PRICE_SCALE`]). The amount is computed ON-CHAIN and
+//! transferred challenger→escrow; the legacy payload `challenger_usdc` field is
+//! gone (it was never trustworthy).
 //!
 //! # Instruction payload (after the 1-byte discriminant)
-//! `challenger_usdc: u64 LE` ++ `oracle_nonce: u64 LE` (exactly 16 bytes).
+//! `oracle_nonce: u64 LE` (exactly 8 bytes).
 
 use bytemuck::Zeroable;
 use pinocchio::{
@@ -83,20 +99,23 @@ use pinocchio::{
     sysvars::{rent::Rent, Sysvar},
     ProgramResult,
 };
+use pinocchio_token::instructions::{InitializeAccount3, Transfer};
 
 use crate::{
     clock::{now, require_before_end, require_phase},
+    config::KASS_PRICE_SCALE,
     cpi::metadao,
     error::KassandraError,
+    price::kass_price,
     processor::guards::{
         assert_key, assert_owned_by_program, assert_signer, create_pda, load_ai_claim, load_oracle,
-        load_proposer,
+        load_proposer, load_protocol,
     },
     state::{AccountType, Market, Oracle, Phase},
 };
 
-/// Exact payload length: challenger_usdc[8] ++ oracle_nonce[8].
-const PAYLOAD_LEN: usize = 16;
+/// Exact payload length: oracle_nonce[8].
+const PAYLOAD_LEN: usize = 8;
 
 /// Minimum size of an SPL token account (`spl_token::state::Account::LEN`).
 const SPL_TOKEN_ACCOUNT_LEN: usize = 165;
@@ -135,10 +154,9 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     if payload.len() != PAYLOAD_LEN {
         return Err(ProgramError::InvalidInstructionData);
     }
-    let challenger_usdc = u64::from_le_bytes(payload[0..8].try_into().unwrap());
-    let oracle_nonce = u64::from_le_bytes(payload[8..16].try_into().unwrap());
+    let oracle_nonce = u64::from_le_bytes(payload[0..8].try_into().unwrap());
 
-    let [oracle_ai, ai_claim_ai, proposer_ai, market_ai, challenger_ai, question_ai, kass_vault_ai, usdc_vault_ai, pass_amm_ai, fail_amm_ai, stake_vault_ai, kass_vault_underlying_ai, pass_mint_ai, fail_mint_ai, oracle_pass_kass_ai, oracle_fail_kass_ai, cv_prog_ai, token_prog_ai, system_prog_ai, cv_event_auth_ai, ..] =
+    let [oracle_ai, ai_claim_ai, proposer_ai, market_ai, challenger_ai, question_ai, kass_vault_ai, usdc_vault_ai, pass_amm_ai, fail_amm_ai, stake_vault_ai, kass_vault_underlying_ai, pass_mint_ai, fail_mint_ai, oracle_pass_kass_ai, oracle_fail_kass_ai, cv_prog_ai, token_prog_ai, system_prog_ai, cv_event_auth_ai, protocol_ai, kass_dao_ai, usdc_mint_ai, challenger_usdc_src_ai, escrow_vault_ai, ..] =
         accounts
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
@@ -333,6 +351,64 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
         program_id,
     )?;
 
+    // --- size the challenger USDC escrow via kass_price (Task C1) -----------
+    // All MetaDAO market bindings are verified above; now price the escrow. The
+    // escrow vault's mint must be the oracle's canonical USDC mint. `kass_price`
+    // asserts `protocol` is the `[b"protocol"]` singleton (load_protocol's
+    // address pin), `kass_dao == protocol.kass_dao`, and the futarchy-program
+    // ownership of `kass_dao`. The returned TWAP is raw USDC per raw KASS ×
+    // KASS_PRICE_SCALE, so the cross-decimal (KASS 9dp / USDC 6dp) adjustment is
+    // folded in: required_usdc = bond × twap / KASS_PRICE_SCALE (u128 intermediate,
+    // overflow-checked back into u64).
+    assert_key(usdc_mint_ai, &oracle.usdc_mint)?;
+    let protocol = load_protocol(protocol_ai, program_id)?;
+    let twap = kass_price(&protocol, kass_dao_ai)?;
+    let required_usdc = u64::try_from(
+        (proposer.bond as u128)
+            .checked_mul(twap)
+            .ok_or(ProgramError::ArithmeticOverflow)?
+            / KASS_PRICE_SCALE,
+    )
+    .map_err(|_| ProgramError::ArithmeticOverflow)?;
+
+    // --- create + fund the challenger USDC escrow vault (market-owned) ------
+    // Bare SPL token account at PDA `[b"challenge_usdc", market]`, initialized
+    // on the USDC mint with the oracle PDA as token authority (mirrors how
+    // create_oracle stands up `stake_vault`), then funded by the challenger's
+    // signed Transfer. An under-funded challenger's source account makes the
+    // SPL Transfer fail, rejecting the whole instruction.
+    let (expected_escrow, escrow_bump) =
+        find_program_address(&[b"challenge_usdc", market_ai.key().as_ref()], program_id);
+    assert_key(escrow_vault_ai, &expected_escrow)?;
+    let escrow_rent = Rent::get()?.minimum_balance(SPL_TOKEN_ACCOUNT_LEN);
+    let escrow_bump_seed = [escrow_bump];
+    let escrow_seeds = [
+        Seed::from(b"challenge_usdc".as_ref()),
+        Seed::from(market_ai.key().as_ref()),
+        Seed::from(&escrow_bump_seed),
+    ];
+    create_pda(
+        challenger_ai,
+        escrow_vault_ai,
+        &escrow_seeds,
+        escrow_rent,
+        SPL_TOKEN_ACCOUNT_LEN,
+        &pinocchio_token::ID,
+    )?;
+    InitializeAccount3 {
+        account: escrow_vault_ai,
+        mint: usdc_mint_ai,
+        owner: oracle_ai.key(),
+    }
+    .invoke()?;
+    Transfer {
+        from: challenger_usdc_src_ai,
+        to: escrow_vault_ai,
+        authority: challenger_ai,
+        amount: required_usdc,
+    }
+    .invoke()?;
+
     let mut market = Market::zeroed();
     market.account_type = AccountType::Market.as_u8();
     market.oracle = *oracle_ai.key();
@@ -346,10 +422,11 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     market.fail_amm = *fail_amm_ai.key();
     market.oracle_pass_kass = *oracle_pass_kass_ai.key();
     market.oracle_fail_kass = *oracle_fail_kass_ai.key();
+    market.challenger_usdc_vault = *escrow_vault_ai.key();
     market.twap_end = now
         .checked_add(oracle.twap_window)
         .ok_or(ProgramError::ArithmeticOverflow)?;
-    market.challenger_usdc = challenger_usdc;
+    market.challenger_usdc = required_usdc;
     market.settled = 0;
     market.bump = market_bump;
     {

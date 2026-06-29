@@ -84,7 +84,7 @@ impl Phase {
     }
 }
 
-/// Top-level dispute account. `size_of == 328`.
+/// Top-level dispute account. `size_of == 360`.
 ///
 /// # Governable params snapshot (Task F2)
 /// The behavioral governable params (`threshold_*`, `market_threshold_*`,
@@ -155,6 +155,15 @@ pub struct Oracle {
     pub fact_vote_slash_den: u64,
     pub reward_proposer_weight: u64,
     pub reward_fact_weight: u64,
+    // ---- Challenge-fee config snapshot (Task C1) -----------------------------
+    // Directional challenge-market fees, snapshotted from `Protocol` at
+    // create_oracle (so an in-flight market keeps its rates if governance
+    // retunes). USDC fee on a FAILED challenge (→ proposer) and KASS fee on a
+    // SUCCESSFUL challenge (→ challenger); consumed by settle (Task C2).
+    pub challenge_fail_usdc_fee_num: u64,
+    pub challenge_fail_usdc_fee_den: u64,
+    pub challenge_success_kass_fee_num: u64,
+    pub challenge_success_kass_fee_den: u64,
 }
 
 impl Oracle {
@@ -299,7 +308,7 @@ impl AiClaim {
     }
 }
 
-/// A challenge decision-market binding for one [`AiClaim`]. `size_of == 384`.
+/// A challenge decision-market binding for one [`AiClaim`]. `size_of == 416`.
 ///
 /// Created lazily by `open_challenge` only when a claim is actually challenged
 /// — uncontested claims have NO `Market` account (markets are dormant by
@@ -339,10 +348,16 @@ pub struct Market {
     // from exactly these.
     pub oracle_pass_kass: Pubkey,
     pub oracle_fail_kass: Pubkey,
+    // Market-owned USDC escrow token account holding the challenger's staked
+    // USDC (Task C1). SPL token account on `oracle.usdc_mint`, token authority =
+    // the oracle PDA (mirrors `oracle.stake_vault`), at PDA
+    // `[b"challenge_usdc", market]`. `open_challenge` creates + funds it;
+    // settle (Task C2) returns it / carves the directional USDC fee.
+    pub challenger_usdc_vault: Pubkey,
     pub twap_end: i64, // now + oracle.twap_window; settle allowed only after
-    // DEFERRED-MUST-VERIFY-IN-TASK-11: recorded from the payload, NOT escrowed
-    // or verified at open_challenge; settle_challenge must treat it as untrusted
-    // until the challenger's USDC deposit/split is reconciled.
+    // Challenger's escrowed USDC (Task C1): computed on-chain at open_challenge
+    // as `bond × kass_price` (raw USDC base units) and actually transferred into
+    // `challenger_usdc_vault` — no longer an untrusted payload value.
     pub challenger_usdc: u64,
     pub settled: u8, // bool; set by settle_challenge (Task 11)
     pub bump: u8,
@@ -357,7 +372,7 @@ impl Market {
     }
 }
 
-/// Protocol singleton: the program's global configuration record. `size_of == 336`.
+/// Protocol singleton: the program's global configuration record. `size_of == 368`.
 ///
 /// Created once by `init_protocol` and never re-initialized. Pins the canonical
 /// KASS/USDC mints (so `create_oracle`'s fee-burn cannot be spoofed with a fake
@@ -440,6 +455,14 @@ pub struct Protocol {
     pub fact_vote_slash_den: u64,
     pub reward_proposer_weight: u64,
     pub reward_fact_weight: u64,
+    // ---- Challenge-fee config (Task C1; mutable source, snapshotted to Oracle)
+    // USDC fee on a FAILED challenge (→ proposer) and KASS fee on a SUCCESSFUL
+    // challenge (→ challenger), each a `num/den` fraction. Defaulted by
+    // `init_protocol` (1/100 each), retuned by `set_config` (den>0, num≤den).
+    pub challenge_fail_usdc_fee_num: u64,
+    pub challenge_fail_usdc_fee_den: u64,
+    pub challenge_success_kass_fee_num: u64,
+    pub challenge_success_kass_fee_den: u64,
 }
 
 impl Protocol {

@@ -110,6 +110,48 @@ pub const FEE_PER_EMA_UNIT: u64 = 1_000_000_000;
 const _: () = assert!(FEE_EMA_HALFLIFE_SECS > 0);
 const _: () = assert!(FEE_EMA_SCALE > 0);
 
+// ---------------------------------------------------------------------------
+// Challenge-market economics (Task C1) — challenger USDC escrow + directional
+// fee config.
+// ---------------------------------------------------------------------------
+
+/// Fixed-point scale of the futarchy spot-TWAP `kass_price` returns: the value
+/// is `quote_raw_units_per_base_raw_unit × KASS_PRICE_SCALE` (i.e. raw USDC per
+/// raw KASS, scaled by `1e12` — see [`crate::cpi::metadao_v06::futarchy_spot_twap`]).
+///
+/// The challenger's escrow is sized so its USDC value matches the proposer's
+/// bond KASS value at this price. Because the TWAP is already in RAW token units
+/// (USDC base units per KASS base unit), the cross-decimal (KASS 9dp / USDC 6dp)
+/// adjustment is folded into the price itself, so the conversion is simply:
+///
+/// ```text
+/// required_usdc (USDC base units) = bond_kass (KASS base units) × twap / KASS_PRICE_SCALE
+/// ```
+///
+/// computed in `u128` and checked back into `u64`. Worked example: KASS at
+/// $0.50 → twap `500_000_000`; a 1 KASS bond (`1e9` base units) escrows
+/// `1e9 × 5e8 / 1e12 = 500_000` USDC base units = $0.50. Sound dimensionally:
+/// `[KASS_raw] × [USDC_raw / KASS_raw] = [USDC_raw]`.
+pub const KASS_PRICE_SCALE: u128 = 1_000_000_000_000;
+
+/// USDC fee charged on a FAILED challenge (the claim survives), paid out of the
+/// challenger's escrow to the proposer, as the fraction
+/// `CHALLENGE_FAIL_USDC_FEE_NUM / CHALLENGE_FAIL_USDC_FEE_DEN`. Default 1/100
+/// (1%). Governable (snapshotted onto each `Oracle` at `create_oracle`, retuned
+/// by `set_config`). The settle-side routing of this fee is Task C2.
+pub const CHALLENGE_FAIL_USDC_FEE_NUM: u64 = 1;
+/// Denominator of [`CHALLENGE_FAIL_USDC_FEE_NUM`].
+pub const CHALLENGE_FAIL_USDC_FEE_DEN: u64 = 100;
+
+/// KASS fee carved out of a SUCCESSFULLY-challenged (disqualified) proposer's
+/// bond and routed to the challenger, as the fraction
+/// `CHALLENGE_SUCCESS_KASS_FEE_NUM / CHALLENGE_SUCCESS_KASS_FEE_DEN`. Default
+/// 1/100 (1%). Governable (snapshotted onto each `Oracle` at `create_oracle`,
+/// retuned by `set_config`). The settle-side routing of this fee is Task C2.
+pub const CHALLENGE_SUCCESS_KASS_FEE_NUM: u64 = 1;
+/// Denominator of [`CHALLENGE_SUCCESS_KASS_FEE_NUM`].
+pub const CHALLENGE_SUCCESS_KASS_FEE_DEN: u64 = 100;
+
 /// Fraction (numerator) of a proposer's bond slashed when they FLIP their value
 /// at AI-claim time (submitted a `claim_option != original_option`). A flip is
 /// penalized but not fatal: the proposer keeps a valid (flipped) claim that

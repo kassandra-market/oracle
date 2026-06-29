@@ -279,7 +279,10 @@ fn seed_ai_claim(ctx: &mut TestCtx, oracle: Pubkey, proposer: Pubkey, option: u8
     claim
 }
 
-/// Build the full `open_challenge` instruction.
+/// Build the full `open_challenge` instruction. The challenger USDC escrow size
+/// is computed on-chain (no payload amount); the caller passes the challenger's
+/// USDC source account + the blessed `kass_dao`, and the protocol/escrow-vault
+/// PDAs are derived here.
 #[allow(clippy::too_many_arguments)]
 fn open_challenge_ix(
     ctx: &TestCtx,
@@ -292,13 +295,15 @@ fn open_challenge_ix(
     stake_vault: Pubkey,
     oracle_pass_kass: Pubkey,
     oracle_fail_kass: Pubkey,
-    challenger_usdc: u64,
+    kass_dao: Pubkey,
+    challenger_usdc_src: Pubkey,
     nonce: u64,
 ) -> Instruction {
     let (cv_event_auth, _) =
         Pubkey::find_program_address(&metadao::event_authority_seeds(), &vault_id());
+    let (protocol, _) = TestCtx::protocol_pda(&ctx.program_id);
+    let (escrow_vault, _) = TestCtx::challenge_usdc_vault_pda(&ctx.program_id, &market);
     let mut data = vec![Ix::OpenChallenge as u8];
-    data.extend_from_slice(&challenger_usdc.to_le_bytes());
     data.extend_from_slice(&nonce.to_le_bytes());
     Instruction {
         program_id: ctx.program_id,
@@ -323,6 +328,11 @@ fn open_challenge_ix(
             AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
             AccountMeta::new_readonly(solana_sdk::system_program::ID, false),
             AccountMeta::new_readonly(cv_event_auth, false),
+            AccountMeta::new_readonly(protocol, false),
+            AccountMeta::new_readonly(kass_dao, false),
+            AccountMeta::new_readonly(ctx.usdc_mint, false),
+            AccountMeta::new(challenger_usdc_src, false),
+            AccountMeta::new(escrow_vault, false),
         ],
         data,
     }
@@ -342,12 +352,18 @@ struct Fixture {
     m: MarketAccounts,
     oracle_pass_kass: Pubkey,
     oracle_fail_kass: Pubkey,
+    kass_dao: Pubkey,
+    challenger_usdc_src: Pubkey,
 }
 
 fn fixture() -> (TestCtx, Fixture) {
     let mut ctx = TestCtx::new();
     ctx.svm.add_program(vault_id(), VAULT_SO);
     ctx.svm.add_program(amm_id(), AMM_SO);
+
+    // Protocol + governance handoff with a deterministic kass_price so the
+    // on-chain escrow sizing is computable.
+    let kass_dao = ctx.bless_kass_price();
 
     let oracle = ctx.seed_disputed_oracle(&[
         ProposerSpec {
@@ -377,6 +393,8 @@ fn fixture() -> (TestCtx, Fixture) {
     ctx.svm
         .airdrop(&challenger.pubkey(), 1_000_000_000)
         .unwrap();
+    // Fund the challenger's USDC source generously (escrow needs bond×price).
+    let challenger_usdc_src = ctx.fund_usdc(&challenger, 5_000_000);
 
     (
         ctx,
@@ -392,6 +410,8 @@ fn fixture() -> (TestCtx, Fixture) {
             m,
             oracle_pass_kass,
             oracle_fail_kass,
+            kass_dao,
+            challenger_usdc_src,
         },
     )
 }
@@ -402,7 +422,9 @@ fn open_challenge_happy_path() {
 
     let stake_before = ctx.token_balance(f.stake_vault);
     let now_before = ctx.now();
-    let challenger_usdc = 5_000_000u64;
+    let src_before = ctx.token_balance(f.challenger_usdc_src);
+    let expected_usdc = required_escrow_usdc(f.bond);
+    let (escrow_vault, _) = TestCtx::challenge_usdc_vault_pda(&ctx.program_id, &f.market);
 
     let ix = open_challenge_ix(
         &ctx,
@@ -415,7 +437,8 @@ fn open_challenge_happy_path() {
         f.stake_vault,
         f.oracle_pass_kass,
         f.oracle_fail_kass,
-        challenger_usdc,
+        f.kass_dao,
+        f.challenger_usdc_src,
         f.nonce,
     );
     ctx.send_many(&cu(ix), &[&f.challenger])
@@ -435,9 +458,33 @@ fn open_challenge_happy_path() {
     assert_eq!(market.fail_amm, f.m.fail_amm.to_bytes());
     assert_eq!(market.oracle_pass_kass, f.oracle_pass_kass.to_bytes());
     assert_eq!(market.oracle_fail_kass, f.oracle_fail_kass.to_bytes());
-    assert_eq!(market.challenger_usdc, challenger_usdc);
+    assert_eq!(market.challenger_usdc_vault, escrow_vault.to_bytes());
     assert_eq!(market.twap_end, now_before + TWAP_WINDOW);
     assert_eq!(market.settled, 0);
+
+    // Escrow: exactly bond × kass_price USDC moved challenger → market vault.
+    assert!(
+        expected_usdc > 0,
+        "sanity: nonzero escrow at the test price"
+    );
+    assert_eq!(
+        market.challenger_usdc, expected_usdc,
+        "Market records the on-chain-computed escrow size"
+    );
+    assert_eq!(
+        ctx.token_balance(escrow_vault),
+        expected_usdc,
+        "escrow vault holds exactly bond × kass_price USDC"
+    );
+    assert_eq!(
+        ctx.token_balance(f.challenger_usdc_src),
+        src_before - expected_usdc,
+        "challenger's USDC source debited by the escrow amount"
+    );
+    // Escrow vault is on the USDC mint, token authority == oracle PDA.
+    let (mint, owner, _amt) = ctx.token_account(escrow_vault);
+    assert_eq!(mint, ctx.usdc_mint.to_bytes());
+    assert_eq!(owner, f.oracle.to_bytes());
 
     // Claim flipped to challenged.
     assert_eq!(ctx.ai_claim(f.ai_claim).challenged, 1);
@@ -449,6 +496,45 @@ fn open_challenge_happy_path() {
     assert_eq!(ctx.token_balance(f.m.kass_vault_underlying), f.bond);
     assert_eq!(ctx.token_balance(f.oracle_pass_kass), f.bond);
     assert_eq!(ctx.token_balance(f.oracle_fail_kass), f.bond);
+}
+
+#[test]
+fn open_challenge_insufficient_usdc_fails() {
+    let (mut ctx, f) = fixture();
+
+    // A USDC source holding far less than the required escrow (bond × price).
+    // The escrow Transfer must fail, reverting the whole instruction — no Market
+    // and no challenged flip persist.
+    let expected_usdc = required_escrow_usdc(f.bond);
+    assert!(expected_usdc > 1, "test price requires a real escrow");
+    let poor_src = ctx.fund_usdc(&f.challenger, 1);
+
+    let ix = open_challenge_ix(
+        &ctx,
+        f.oracle,
+        f.ai_claim,
+        f.proposer,
+        f.market,
+        f.challenger.pubkey(),
+        &f.m,
+        f.stake_vault,
+        f.oracle_pass_kass,
+        f.oracle_fail_kass,
+        f.kass_dao,
+        poor_src,
+        f.nonce,
+    );
+    let res = ctx.send_many(&cu(ix), &[&f.challenger]);
+    assert!(
+        res.is_err(),
+        "an under-funded challenger must fail the escrow Transfer: {res:?}"
+    );
+    // Whole tx reverted: no Market account, claim not challenged.
+    assert!(
+        ctx.svm.get_account(&f.market).is_none(),
+        "failed escrow must not leave a Market account"
+    );
+    assert_eq!(ctx.ai_claim(f.ai_claim).challenged, 0);
 }
 
 #[test]
@@ -466,7 +552,8 @@ fn open_challenge_twice_is_already_challenged() {
         f.stake_vault,
         f.oracle_pass_kass,
         f.oracle_fail_kass,
-        1,
+        f.kass_dao,
+        f.challenger_usdc_src,
         f.nonce,
     );
     ctx.send_many(&cu(ix.clone()), &[&f.challenger])
@@ -499,7 +586,8 @@ fn open_challenge_against_disqualified_proposer_fails() {
         f.stake_vault,
         f.oracle_pass_kass,
         f.oracle_fail_kass,
-        1,
+        f.kass_dao,
+        f.challenger_usdc_src,
         f.nonce,
     );
     let err = ctx.send_many(&cu(ix), &[&f.challenger]).unwrap_err().err;
@@ -529,7 +617,8 @@ fn open_challenge_wrong_phase_fails() {
         f.stake_vault,
         f.oracle_pass_kass,
         f.oracle_fail_kass,
-        1,
+        f.kass_dao,
+        f.challenger_usdc_src,
         f.nonce,
     );
     let err = ctx.send_many(&cu(ix), &[&f.challenger]).unwrap_err().err;
@@ -558,7 +647,8 @@ fn open_challenge_after_window_fails() {
         f.stake_vault,
         f.oracle_pass_kass,
         f.oracle_fail_kass,
-        1,
+        f.kass_dao,
+        f.challenger_usdc_src,
         f.nonce,
     );
     let err = ctx.send_many(&cu(ix), &[&f.challenger]).unwrap_err().err;
@@ -617,7 +707,10 @@ fn open_challenge_question_not_bound_to_oracle_fails() {
         stake_vault,
         oracle_pass_kass,
         oracle_fail_kass,
-        1,
+        // The question.oracle binding fails before escrow pricing, so these
+        // escrow accounts are never read (placeholders).
+        Pubkey::new_unique(),
+        Pubkey::new_unique(),
         nonce,
     );
     let err = ctx.send_many(&cu(ix), &[&challenger]).unwrap_err().err;

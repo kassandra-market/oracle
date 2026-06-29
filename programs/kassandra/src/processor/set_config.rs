@@ -26,7 +26,11 @@
 //! These prevent a later divide-by-zero / nonsensical config on the
 //! create_oracle / fact-quorum / slash / settlement paths:
 //! * Denominators MUST be `> 0`: `threshold_den`, `market_threshold_den`,
-//!   `flip_slash_den`, `fact_vote_slash_den`, `emission_den`.
+//!   `flip_slash_den`, `fact_vote_slash_den`, `emission_den`,
+//!   `challenge_fail_usdc_fee_den`, `challenge_success_kass_fee_den`.
+//! * Challenge-fee fractions MUST be `<= 1` (`challenge_fail_usdc_fee`,
+//!   `challenge_success_kass_fee`): a fee above 100% of the escrow/bond is
+//!   nonsensical.
 //! * Fraction numerators MUST be `<= ` their denominator (the value is an
 //!   intended `<= 1` fraction): `threshold`, `flip_slash`, `fact_vote_slash`,
 //!   `emission`, and `market_threshold`.
@@ -51,15 +55,18 @@
 //! 0. protocol PDA  — writable; the `[b"protocol"]` singleton
 //! 1. dao_authority — signer; must equal `protocol.dao_authority`
 //!
-//! # Instruction payload (after the 1-byte discriminant), exactly 144 bytes
-//! 18 little-endian 8-byte fields, in this fixed order:
+//! # Instruction payload (after the 1-byte discriminant), exactly 176 bytes
+//! 22 little-endian 8-byte fields, in this fixed order:
 //! `emission_num u64` ++ `emission_den u64` ++ `total_supply_cap u64` ++
 //! `fee_ema_halflife i64` ++ `fee_per_ema_unit u64` ++ `fee_ema_increment u64`
 //! ++ `threshold_num u64` ++ `threshold_den u64` ++ `market_threshold_num u64`
 //! ++ `market_threshold_den u64` ++ `flip_slash_num u64` ++ `flip_slash_den u64`
 //! ++ `phase_window i64` ++ `proposal_window i64` ++ `fact_vote_slash_num u64`
 //! ++ `fact_vote_slash_den u64` ++ `reward_proposer_weight u64` ++
-//! `reward_fact_weight u64`.
+//! `reward_fact_weight u64` ++ `challenge_fail_usdc_fee_num u64` ++
+//! `challenge_fail_usdc_fee_den u64` ++ `challenge_success_kass_fee_num u64` ++
+//! `challenge_success_kass_fee_den u64` (the last 4 are the Task C1 challenge
+//! fees: each `den > 0`, `num <= den`).
 
 use pinocchio::{
     account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey, ProgramResult,
@@ -71,8 +78,8 @@ use crate::{
     state::Protocol,
 };
 
-/// Exact payload length: 18 × 8-byte fields.
-const PAYLOAD_LEN: usize = 18 * 8;
+/// Exact payload length: 22 × 8-byte fields.
+const PAYLOAD_LEN: usize = 22 * 8;
 
 /// Read the `i`-th 8-byte little-endian field as `u64`.
 #[inline]
@@ -115,6 +122,10 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     let fact_vote_slash_den = u64_at(payload, 15);
     let reward_proposer_weight = u64_at(payload, 16);
     let reward_fact_weight = u64_at(payload, 17);
+    let challenge_fail_usdc_fee_num = u64_at(payload, 18);
+    let challenge_fail_usdc_fee_den = u64_at(payload, 19);
+    let challenge_success_kass_fee_num = u64_at(payload, 20);
+    let challenge_success_kass_fee_den = u64_at(payload, 21);
 
     // --- gate: DAO authority signs (load_protocol pins the singleton) -------
     let mut protocol = load_protocol(protocol_ai, program_id)?;
@@ -127,6 +138,8 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
         || flip_slash_den == 0
         || fact_vote_slash_den == 0
         || emission_den == 0
+        || challenge_fail_usdc_fee_den == 0
+        || challenge_success_kass_fee_den == 0
     {
         return Err(KassandraError::InvalidConfig.into());
     }
@@ -136,6 +149,8 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
         || fact_vote_slash_num > fact_vote_slash_den
         || emission_num > emission_den
         || market_threshold_num > market_threshold_den
+        || challenge_fail_usdc_fee_num > challenge_fail_usdc_fee_den
+        || challenge_success_kass_fee_num > challenge_success_kass_fee_den
     {
         return Err(KassandraError::InvalidConfig.into());
     }
@@ -170,6 +185,10 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     protocol.fact_vote_slash_den = fact_vote_slash_den;
     protocol.reward_proposer_weight = reward_proposer_weight;
     protocol.reward_fact_weight = reward_fact_weight;
+    protocol.challenge_fail_usdc_fee_num = challenge_fail_usdc_fee_num;
+    protocol.challenge_fail_usdc_fee_den = challenge_fail_usdc_fee_den;
+    protocol.challenge_success_kass_fee_num = challenge_success_kass_fee_num;
+    protocol.challenge_success_kass_fee_den = challenge_success_kass_fee_den;
     {
         let mut data = protocol_ai.try_borrow_mut_data()?;
         data[..Protocol::LEN].copy_from_slice(bytemuck::bytes_of(&protocol));

@@ -418,13 +418,15 @@ fn open_challenge_ix(
     stake_vault: Pubkey,
     oracle_pass_kass: Pubkey,
     oracle_fail_kass: Pubkey,
-    challenger_usdc: u64,
+    kass_dao: Pubkey,
+    challenger_usdc_src: Pubkey,
     nonce: u64,
 ) -> Instruction {
     let (cv_event_auth, _) =
         Pubkey::find_program_address(&metadao::event_authority_seeds(), &vault_id());
+    let (protocol, _) = TestCtx::protocol_pda(&ctx.program_id);
+    let (escrow_vault, _) = TestCtx::challenge_usdc_vault_pda(&ctx.program_id, &market);
     let mut data = vec![Ix::OpenChallenge as u8];
-    data.extend_from_slice(&challenger_usdc.to_le_bytes());
     data.extend_from_slice(&nonce.to_le_bytes());
     Instruction {
         program_id: ctx.program_id,
@@ -449,6 +451,11 @@ fn open_challenge_ix(
             AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
             AccountMeta::new_readonly(solana_sdk::system_program::ID, false),
             AccountMeta::new_readonly(cv_event_auth, false),
+            AccountMeta::new_readonly(protocol, false),
+            AccountMeta::new_readonly(kass_dao, false),
+            AccountMeta::new_readonly(ctx.usdc_mint, false),
+            AccountMeta::new(challenger_usdc_src, false),
+            AccountMeta::new(escrow_vault, false),
         ],
         data,
     }
@@ -568,6 +575,10 @@ fn fixture_with_attack(pass_quote: u64, fail_quote: u64, attack: AmmAttack) -> (
     ctx.svm.add_program(vault_id(), VAULT_SO);
     ctx.svm.add_program(amm_id(), AMM_SO);
 
+    // Protocol + governance with a deterministic kass_price so open_challenge
+    // can size + escrow the challenger USDC.
+    let kass_dao = ctx.bless_kass_price();
+
     let oracle = ctx.seed_disputed_oracle(&[
         ProposerSpec {
             option: 0,
@@ -626,6 +637,7 @@ fn fixture_with_attack(pass_quote: u64, fail_quote: u64, attack: AmmAttack) -> (
     ctx.svm
         .airdrop(&challenger.pubkey(), 1_000_000_000)
         .unwrap();
+    let challenger_usdc_src = ctx.fund_usdc(&challenger, 5_000_000);
 
     let ix = open_challenge_ix(
         &ctx,
@@ -640,7 +652,8 @@ fn fixture_with_attack(pass_quote: u64, fail_quote: u64, attack: AmmAttack) -> (
         stake_vault,
         oracle_pass_kass,
         oracle_fail_kass,
-        5_000_000,
+        kass_dao,
+        challenger_usdc_src,
         nonce,
     );
     ctx.send_many(&cu(ix), &[&challenger])
