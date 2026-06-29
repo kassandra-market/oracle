@@ -34,6 +34,7 @@
 use std::collections::HashMap;
 
 use bytemuck::Zeroable;
+use kassandra_program::config::PROPOSAL_WINDOW;
 use kassandra_program::state::{AccountType, Oracle, Phase, Proposer, CLAIM_OPTION_NONE};
 use litesvm::{types::TransactionResult, LiteSVM};
 use solana_sdk::{
@@ -56,6 +57,10 @@ use spl_token::{
 pub const WINDOW: i64 = 3600;
 /// Default TWAP window (seconds) written into seeded oracles.
 pub const TWAP_WINDOW: i64 = 600;
+/// Seconds between a real oracle's creation `now` and its `deadline`, used by
+/// the real-flow builders ([`TestCtx::create_real_oracle`]). The builder warps
+/// this far to reach the deadline so the proposal window is open.
+pub const DEADLINE_DELTA: i64 = 1_000;
 
 /// KASS mint decimals.
 pub const KASS_DECIMALS: u8 = 9;
@@ -114,6 +119,11 @@ pub struct TestCtx {
     next_nonce: u64,
     /// Seeded oracles keyed by their Oracle PDA, for later retrieval.
     oracles: HashMap<Pubkey, SeededOracle>,
+    /// Whether the Protocol singleton has been initialized in this context.
+    /// The real-flow builders ([`TestCtx::ensure_protocol`]) call `init_protocol`
+    /// at most once per `TestCtx`; the singleton is then shared by every real
+    /// oracle created afterward.
+    protocol_initialized: bool,
 }
 
 impl TestCtx {
@@ -144,6 +154,7 @@ impl TestCtx {
             program_id,
             next_nonce: 0,
             oracles: HashMap::new(),
+            protocol_initialized: false,
         };
 
         let authority = ctx.payer.pubkey();
@@ -381,6 +392,119 @@ impl TestCtx {
             accounts,
             data: vec![kassandra_program::instruction::Ix::FinalizeProposals as u8],
         }
+    }
+
+    // ----- real-flow builders ------------------------------------------------
+
+    /// Ensure the Protocol singleton exists, calling `init_protocol` exactly
+    /// once per `TestCtx` (idempotent thereafter). Many real oracles share one
+    /// protocol, so this guards against a double-init `AlreadyInitialized`
+    /// failure when several `create_real_oracle` calls run in the same context.
+    /// Returns the Protocol PDA.
+    pub fn ensure_protocol(&mut self) -> Pubkey {
+        let (protocol_pda, _) = Self::protocol_pda(&self.program_id);
+        if !self.protocol_initialized {
+            let (_p, res) = self.init_protocol();
+            assert!(res.is_ok(), "init_protocol should succeed: {res:?}");
+            self.protocol_initialized = true;
+        }
+        protocol_pda
+    }
+
+    /// Real-flow oracle builder: `init_protocol` (once per ctx) + a real
+    /// `create_oracle` with a near `deadline`, then warps to the deadline so the
+    /// proposal window is open. Uses a fresh nonce from the internal counter and
+    /// records the oracle in the bookkeeping map so [`TestCtx::seeded`],
+    /// [`TestCtx::proposers`], and the stake-vault accessor work for it exactly
+    /// like a `seed_disputed_oracle` oracle. Returns the Oracle PDA.
+    pub fn create_real_oracle(&mut self, options_count: u8, twap_window: i64) -> Pubkey {
+        self.ensure_protocol();
+        let nonce = self.next_nonce;
+        self.next_nonce += 1;
+        let (oracle, bump) = Self::oracle_pda(&self.program_id, nonce);
+        let deadline = self.now() + DEADLINE_DELTA;
+        let (created, res) =
+            self.create_oracle(nonce, options_count, deadline, twap_window, [0x42; 32]);
+        assert!(res.is_ok(), "create_oracle should succeed: {res:?}");
+        debug_assert_eq!(created, oracle);
+        // Warp to the deadline: proposals open at `deadline`, window now open.
+        self.warp(DEADLINE_DELTA);
+
+        let (stake_vault, _) = Self::stake_vault_pda(&self.program_id, &oracle);
+        self.oracles.insert(
+            oracle,
+            SeededOracle {
+                pda: oracle,
+                bump,
+                nonce,
+                stake_vault,
+                proposers: Vec::new(),
+            },
+        );
+        oracle
+    }
+
+    /// Real-flow proposer registration: funds a fresh authority and sends a real
+    /// `propose` (`option` + KASS `bond`) against `oracle`. Records the proposer
+    /// in the oracle's bookkeeping (so [`TestCtx::proposers`] and
+    /// [`TestCtx::finalize_proposals_real`] see the full set) and returns the
+    /// authority keypair + Proposer PDA. Panics if the propose fails.
+    pub fn propose_real(&mut self, oracle: Pubkey, option: u8, bond: u64) -> (Keypair, Pubkey) {
+        let authority = Keypair::new();
+        let (pda, res) = self.propose(oracle, &authority, option, bond);
+        assert!(
+            res.is_ok(),
+            "propose(option={option}) should succeed: {res:?}"
+        );
+        if let Some(seeded) = self.oracles.get_mut(&oracle) {
+            seeded.proposers.push(SeededProposer {
+                authority: authority.insecure_clone(),
+                pda,
+                option,
+                bond,
+            });
+        }
+        (authority, pda)
+    }
+
+    /// Real-flow proposal finalization: warp past the proposal window, then send
+    /// a real `finalize_proposals` carrying the FULL tracked proposer set as the
+    /// read-only tail. Returns the transaction result so callers can assert the
+    /// resolve / open-dispute outcome (or a rejection).
+    #[allow(clippy::result_large_err)]
+    pub fn finalize_proposals_real(&mut self, oracle: Pubkey) -> TransactionResult {
+        self.warp(PROPOSAL_WINDOW + 1);
+        let proposers: Vec<Pubkey> = self.proposers(oracle).iter().map(|p| p.pda).collect();
+        let ix = self.finalize_proposals_ix(oracle, &proposers);
+        self.send(ix, &[])
+    }
+
+    /// Real-flow analogue of [`TestCtx::seed_disputed_oracle`]: drive
+    /// create_oracle → propose (one per spec) → finalize_proposals through the
+    /// genuine entry points, landing the oracle in [`Phase::FactProposal`] with
+    /// the proposers registered and `dispute_bond_total` set. The specs MUST
+    /// contain at least two DISTINCT options (otherwise finalize_proposals
+    /// resolves instead of opening a dispute); this is asserted post-finalize.
+    /// Returns the Oracle PDA.
+    pub fn dispute_via_real_flow(&mut self, specs: &[ProposerSpec]) -> Pubkey {
+        assert!(
+            specs.len() >= 2,
+            "a real-flow dispute needs at least two proposers"
+        );
+        let max_option = specs.iter().map(|s| s.option).max().unwrap();
+        let options_count = (max_option as u16 + 1).max(2) as u8;
+        let oracle = self.create_real_oracle(options_count, TWAP_WINDOW);
+        for spec in specs {
+            self.propose_real(oracle, spec.option, spec.bond);
+        }
+        let res = self.finalize_proposals_real(oracle);
+        assert!(res.is_ok(), "finalize_proposals should succeed: {res:?}");
+        assert_eq!(
+            self.oracle(oracle).phase,
+            Phase::FactProposal.as_u8(),
+            "dispute_via_real_flow needs >=2 distinct options to open a dispute"
+        );
+        oracle
     }
 
     // ----- seeding -----------------------------------------------------------
