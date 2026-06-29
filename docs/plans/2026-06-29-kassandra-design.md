@@ -120,9 +120,16 @@ rules are **not** facts — they are fixed at creation.
   honest pool; harder for a biased bloc to dominate).
 - **Duplicate handling:** facts whose **duplicate** votes dominate are **ignored**; their
   stakers are **not slashed** (no penalty for honest redundancy).
-- **Settlement:** stakers on approved facts earn rewards (bond pool + emissions); stakers
-  on rejected (non-duplicate) facts are partially slashed. This enforces "smallest set
-  necessary" — staking on marginal facts is costly.
+- **Settlement:** stakers on approved facts earn rewards (bond pool + emissions). A
+  **rejected** (non-duplicate) fact's **submitter forfeits 100% of their fact-submission
+  stake** to the bond pool — the penalty that enforces "smallest set necessary" (staking on
+  marginal facts is costly). Approve-voter stake settlement on rejected facts is a separate
+  deferred concern. (Slash fractions are governance-tunable; v1 uses full submitter slash.)
+  `finalize_facts` records the slash in the `bond_pool` *counter*; actual KASS stays
+  escrowed until per-staker claims (a later task). Finalization is **incremental** — facts
+  are settled in batches (tracked by `settled_count`); the phase advances to AI-claim only
+  once `settled_count == fact_count`, so an arbitrarily large fact set can never wedge the
+  oracle in a single oversized transaction.
 - **Empty set is impossible** unless *no proposer submitted any fact*; in that case all
   proposers are slashed and the oracle → **Invalid dead-end** (§7).
 
