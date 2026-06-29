@@ -17,6 +17,7 @@ bytemuck = { workspace = true }
 litesvm = "0.6"
 solana-sdk = "2"
 spl-token = { version = "6", features = ["no-entrypoint"] }
+proptest = "1"
 
 [features]
 no-entrypoint = []
