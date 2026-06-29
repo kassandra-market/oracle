@@ -25,6 +25,23 @@
 
 ---
 
+## Implementation deltas (live state — supersedes embedded draft snippets)
+
+The code snippets in tasks below are the original draft. As of Task 4, the live code differs in these ways (later tasks MUST follow the live state, not the draft):
+
+- **Pinocchio 0.8** (not 0.7). The workspace unifies on `pinocchio = "0.8"`; `pinocchio-pubkey` provides the `pubkey!` macro. `entrypoint!` is gated behind `#[cfg(not(feature = "no-entrypoint"))]`. `bytemuck` has `derive` + `min_const_generics`.
+- **Account-type discriminator:** every Pod account starts with an 8-byte header `account_type: u8` + `_pad_hdr: [u8;7]` (`AccountType { Uninitialized=0, Oracle=1, Proposer=2, Fact=3, FactVote=4, AiClaim=5 }`). Set on init; assert on load.
+- **Live struct sizes** (re-pinned in `tests/state_layout.rs`): Oracle **224**, Proposer **88**, Fact **336**, FactVote **88**, AiClaim **176**.
+- **`Oracle.proposer_count` / `surviving_count` are `u16`** (not `u8`) — affects slash/plurality math in Tasks 6/7/11/12.
+- **Program ID:** `KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY`.
+- **Shared guards** (`src/processor/guards.rs`): `assert_owned_by_program`, `assert_signer`, `assert_key(ai, &expected)`, `load_oracle(ai, program_id) -> Result<Oracle>` (owner + len + tag + `pod_read_unaligned`), `create_pda(...)`. Reuse these in every processor.
+- **Locked PDA seeds:** Oracle `[b"oracle", &nonce.to_le_bytes()]`; Proposer `[b"proposer", oracle, authority]`; Fact `[b"fact", oracle, content_hash]`.
+- **KassandraError discriminants (append-only):** NotImplemented=0, WrongPhase=1, WindowClosed=2, WindowNotElapsed=3, Unauthorized=4, InvalidAccount=5, DuplicateFact=6, ZeroStake=7.
+- **Harness** (`tests/common/mod.rs`): `seed_disputed_oracle`, `seed_program_account`, `fund_kass`, `set_phase`, `send` (rotates blockhash), `warp` (advances `unix_timestamp`, +1 slot only — a `warp_slots` variant is still needed for the TWAP tasks 11-12), accessors via `pod_read_unaligned`, public `oracle_pda`/`proposer_pda`.
+- **Known deferred:** pre-funded-PDA griefing on fact creation (Allocate+Assign is the future fix); `stake == 0` facts are rejected (`ZeroStake`).
+
+---
+
 ## Task 0: Workspace scaffolding + LiteSVM smoke test
 
 **Files:**
