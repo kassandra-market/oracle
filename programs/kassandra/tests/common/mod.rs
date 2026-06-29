@@ -421,6 +421,53 @@ impl TestCtx {
         }
     }
 
+    /// Send a real `ResolveDeadend` instruction signed by `authority`, setting
+    /// `option` as the final outcome of a dead-ended `oracle`. Returns the
+    /// Protocol PDA + result so tests can assert success / the `Unauthorized` /
+    /// `WrongPhase` / `InvalidOptionsCount` rejection paths. `set_governance`
+    /// must have recorded `authority` as the `dao_authority` first.
+    #[allow(clippy::result_large_err)]
+    pub fn resolve_deadend(
+        &mut self,
+        oracle: Pubkey,
+        authority: &Keypair,
+        option: u8,
+    ) -> (Pubkey, TransactionResult) {
+        let (protocol_pda, _) = Self::protocol_pda(&self.program_id);
+        let ix = self.resolve_deadend_ix(protocol_pda, oracle, authority.pubkey(), option);
+        let res = if authority.pubkey() == self.payer.pubkey() {
+            self.send(ix, &[])
+        } else {
+            self.send(ix, &[authority])
+        };
+        (protocol_pda, res)
+    }
+
+    /// Build a `ResolveDeadend` instruction. Exposes `protocol`/`oracle`/
+    /// `authority` so tests can pass a wrong signer or a substituted protocol.
+    /// Account order: `[0] protocol(ro)`, `[1] oracle(w)`, `[2] authority(signer)`.
+    /// Payload = the single `option` byte.
+    pub fn resolve_deadend_ix(
+        &self,
+        protocol: Pubkey,
+        oracle: Pubkey,
+        authority: Pubkey,
+        option: u8,
+    ) -> Instruction {
+        Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new_readonly(protocol, false),
+                AccountMeta::new(oracle, false),
+                AccountMeta::new_readonly(authority, true),
+            ],
+            data: vec![
+                kassandra_program::instruction::Ix::ResolveDeadend as u8,
+                option,
+            ],
+        }
+    }
+
     /// Send a real `CreateOracle` instruction with `creator == payer`, using the
     /// harness KASS/USDC mints and the protocol singleton. Returns the Oracle PDA
     /// derived from `nonce`. `init_protocol` must have been called first. The

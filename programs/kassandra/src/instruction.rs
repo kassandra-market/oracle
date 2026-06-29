@@ -55,6 +55,13 @@ pub enum Ix {
     /// (signer). Does NOT touch existing oracles (their snapshots are frozen);
     /// subsequently-created oracles snapshot the new values.
     SetConfig = 14,
+    /// DAO-gated resolution of a dead-ended oracle (Task F4): sets a final
+    /// `resolved_option` and advances an oracle from
+    /// [`crate::state::Phase::InvalidDeadend`] to
+    /// [`crate::state::Phase::Resolved`]. Gated to `Protocol.dao_authority`
+    /// (signer). Economic settlement of the dead-end is DEFERRED to the
+    /// settlement milestone; this only stamps the terminal outcome.
+    ResolveDeadend = 15,
     // Future variants are APPENDED here with the next discriminant; add a
     // matching arm to `from_u8` below.
 }
@@ -79,6 +86,7 @@ impl Ix {
             12 => Some(Ix::FinalizeProposals),
             13 => Some(Ix::SetGovernance),
             14 => Some(Ix::SetConfig),
+            15 => Some(Ix::ResolveDeadend),
             _ => None,
         }
     }

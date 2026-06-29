@@ -225,3 +225,25 @@ No layout change (Protocol/Oracle untouched; `state_layout.rs` unchanged). Whole
 **Tests (`tests/set_config.rs`, 7, all green):** (1) dao sets config → Protocol updated + new oracle snapshots new values; (2) non-dao signer → `Unauthorized`; (3) zero denominator (`threshold_den=0`, `flip_slash_den=0`) → `InvalidConfig`; (4) fraction >1 (`flip_slash_num>flip_slash_den`) → `InvalidConfig`; (5) zero window (`phase_window=0`) → `InvalidConfig`; (6) both reward weights zero → `InvalidConfig`; (7) in-flight oracle snapshot unchanged after `set_config`.
 
 Build: `just build` (SBF) clean. Tests: `cargo test -p kassandra-program` all pass. `cargo clippy --all-targets` clean; `cargo fmt` applied.
+
+### F4 — `resolve_deadend` (dao-gated `InvalidDeadend` → `Resolved`) (DONE 2026-06-29)
+
+No layout change (Protocol/Oracle untouched; `state_layout.rs` unchanged).
+
+**`Ix::ResolveDeadend = 15`** (appended; `from_u8` arm added; dispatched in `processor/mod.rs`). New processor `processor/resolve_deadend.rs`. No new error (reuses `Unauthorized=4`, `WrongPhase=1`, `InvalidOptionsCount=19`).
+
+**Accounts:** `[0] protocol(ro)` (read `dao_authority`), `[1] oracle(w)`, `[2] dao_authority(signer)`.
+
+**Payload — exactly 1 byte:** `option: u8` (the winning categorical index). Parsed via `let [option] = payload` (rejects any other length with `InvalidInstructionData`).
+
+**Gating + checks (in order):** `load_protocol` (pins the `[b"protocol"]` PDA — a substituted protocol account fails with `InvalidAccount`); `assert_dao_authority(&protocol, dao_authority_ai)` (shared F3 guard: signer AND key == `protocol.dao_authority`, else `Unauthorized`); `load_oracle`; `require_phase(InvalidDeadend)` (else `WrongPhase`); `option < oracle.options_count` (else `InvalidOptionsCount`).
+
+**Effect:** `oracle.resolved_option = option`; `oracle.set_phase(Resolved)`; write oracle back. **NO token movement.** Idempotent: the second call sees `phase == Resolved` and fails `require_phase(InvalidDeadend)` → `WrongPhase`.
+
+**Deferred-settlement note (documented in the module):** the economic settlement of a governance-resolved dead-end (stakes likely returned, no rewards — the market/AI did NOT decide it) is DEFERRED to the settlement milestone. This instruction only stamps the terminal outcome (`phase == Resolved` + `resolved_option`); the settlement processor moves funds later.
+
+**Harness (`tests/common/mod.rs`):** `resolve_deadend(oracle, authority, option)` + `resolve_deadend_ix(protocol, oracle, authority, option)` helpers (account order `[protocol(ro), oracle(w), authority(signer)]`, payload = the single option byte). Reuses the F1 `set_governance` handoff + `seed_disputed_oracle` + `set_phase(InvalidDeadend)` to stand up a dead-ended oracle.
+
+**Tests (`tests/resolve_deadend.rs`, 6, all green):** (1) dao resolves a dead-end → `phase==Resolved`, `resolved_option==option`; (2) non-dao signer → `Unauthorized`; (3) oracle in `Resolved` (non-`InvalidDeadend`) → `WrongPhase`; (4) `option >= options_count` → `InvalidOptionsCount`; (5) idempotency: second resolve → `WrongPhase`, first outcome stands; (6) substituted (non-canonical) protocol account → `InvalidAccount`.
+
+Build: `just build` (SBF) clean. Tests: `cargo test -p kassandra-program` all pass. `cargo clippy --all-targets` clean; `cargo fmt` applied.
