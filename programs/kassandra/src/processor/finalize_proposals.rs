@@ -55,7 +55,6 @@ use pinocchio::{
 
 use crate::{
     clock::{now, require_after_end, require_phase},
-    config::PHASE_WINDOW,
     error::KassandraError,
     processor::guards::{load_oracle, load_proposer},
     state::{Oracle, Phase},
@@ -142,7 +141,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
         oracle.dispute_bond_total = oracle.total_oracle_stake;
         oracle.set_phase(Phase::FactProposal);
         oracle.phase_ends_at = now_ts
-            .checked_add(PHASE_WINDOW)
+            .checked_add(oracle.phase_window)
             .ok_or(ProgramError::ArithmeticOverflow)?;
     }
 

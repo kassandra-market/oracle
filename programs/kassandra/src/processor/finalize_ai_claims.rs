@@ -42,7 +42,6 @@ use pinocchio::{
 
 use crate::{
     clock::{now, require_after_end, require_phase},
-    config::{FLIP_SLASH_DEN, FLIP_SLASH_NUM, PHASE_WINDOW},
     error::KassandraError,
     processor::guards::{load_oracle, load_proposer},
     state::{Oracle, Phase, Proposer, CLAIM_OPTION_NONE},
@@ -107,8 +106,8 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
             // Flip: partial slash, but the (flipped) claim still counts —
             // proposer remains surviving and is NOT disqualified. The SAME
             // value is recorded on the proposer and added to bond_pool.
-            let slash = ((proposer.bond as u128) * (FLIP_SLASH_NUM as u128)
-                / (FLIP_SLASH_DEN as u128)) as u64;
+            let slash = ((proposer.bond as u128) * (oracle.flip_slash_num as u128)
+                / (oracle.flip_slash_den as u128)) as u64;
             proposer.slashed = 1;
             proposer.slashed_amount = slash;
             oracle.bond_pool = oracle
@@ -132,7 +131,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
     if oracle.ai_finalized_count == oracle.proposer_count {
         oracle.set_phase(Phase::Challenge);
         oracle.phase_ends_at = now
-            .checked_add(PHASE_WINDOW)
+            .checked_add(oracle.phase_window)
             .ok_or(ProgramError::ArithmeticOverflow)?;
     }
 

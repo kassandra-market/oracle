@@ -84,7 +84,17 @@ impl Phase {
     }
 }
 
-/// Top-level dispute account. `size_of == 232`.
+/// Top-level dispute account. `size_of == 328`.
+///
+/// # Governable params snapshot (Task F2)
+/// The behavioral governable params (`threshold_*`, `market_threshold_*`,
+/// `flip_slash_*`, `phase_window`, `proposal_window`, plus the settlement-era
+/// reserved `fact_vote_slash_*` / reward weights) are SNAPSHOTTED from the
+/// [`Protocol`] at `create_oracle` and read by the downstream processors from
+/// the `Oracle` they already load. New oracles pick up the current `Protocol`
+/// config; in-flight oracles keep their snapshot, so a mid-dispute governance
+/// change can never move the goalposts. F2 defaults them (via `init_protocol`)
+/// to the current `config.rs` consts, so behavior is unchanged.
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct Oracle {
@@ -129,6 +139,22 @@ pub struct Oracle {
     // counted as surviving. Fits in the former `_pad1` — Oracle::LEN stays 232.
     pub open_challenge_count: u16,
     pub prompt_hash: [u8; 32], // hash of fixed prompt + interpretation
+    // ---- Governable params snapshotted from `Protocol` at create_oracle (F2) -
+    // Read by the downstream processors instead of the `config.rs` consts; equal
+    // to the consts by default so behavior is unchanged.
+    pub threshold_num: u64, // fact-quorum supermajority (finalize_facts)
+    pub threshold_den: u64, // fact-quorum supermajority (finalize_facts)
+    pub market_threshold_num: u64, // slash-trigger margin (settle_challenge; widened to u128 on use)
+    pub market_threshold_den: u64, // slash-trigger margin (settle_challenge; widened to u128 on use)
+    pub flip_slash_num: u64,       // flip-slash fraction (finalize_ai_claims)
+    pub flip_slash_den: u64,       // flip-slash fraction (finalize_ai_claims)
+    pub phase_window: i64,         // dispute phase window seconds
+    pub proposal_window: i64,      // proposal-registration window seconds
+    // ---- Reserved (settlement-era; snapshotted but no on-chain reader yet) ---
+    pub fact_vote_slash_num: u64,
+    pub fact_vote_slash_den: u64,
+    pub reward_proposer_weight: u64,
+    pub reward_fact_weight: u64,
 }
 
 impl Oracle {
@@ -331,7 +357,7 @@ impl Market {
     }
 }
 
-/// Protocol singleton: the program's global configuration record. `size_of == 240`.
+/// Protocol singleton: the program's global configuration record. `size_of == 336`.
 ///
 /// Created once by `init_protocol` and never re-initialized. Pins the canonical
 /// KASS/USDC mints (so `create_oracle`'s fee-burn cannot be spoofed with a fake
@@ -396,6 +422,24 @@ pub struct Protocol {
     pub fee_ema_halflife: i64,
     pub fee_per_ema_unit: u64,
     pub fee_ema_increment: u64,
+    // ---- Governable behavioral params (F2 — mutable source, set_config edits) -
+    // Snapshotted onto each `Oracle` at `create_oracle`. `init_protocol` defaults
+    // them to the current `config.rs` consts so behavior is unchanged. The
+    // active ones are read by the downstream processors via the per-oracle
+    // snapshot, never from `Protocol` directly.
+    pub threshold_num: u64,        // fact-quorum supermajority (THRESHOLD_NUM)
+    pub threshold_den: u64,        // fact-quorum supermajority (THRESHOLD_DEN)
+    pub market_threshold_num: u64, // slash-trigger margin (MARKET_THRESHOLD_NUM; u128 on use)
+    pub market_threshold_den: u64, // slash-trigger margin (MARKET_THRESHOLD_DEN; u128 on use)
+    pub flip_slash_num: u64,       // flip-slash fraction (FLIP_SLASH_NUM)
+    pub flip_slash_den: u64,       // flip-slash fraction (FLIP_SLASH_DEN)
+    pub phase_window: i64,         // dispute phase window seconds (PHASE_WINDOW)
+    pub proposal_window: i64,      // proposal-registration window seconds (PROPOSAL_WINDOW)
+    // ---- Reserved (settlement-era; defaulted, no reader yet) -----------------
+    pub fact_vote_slash_num: u64,
+    pub fact_vote_slash_den: u64,
+    pub reward_proposer_weight: u64,
+    pub reward_fact_weight: u64,
 }
 
 impl Protocol {

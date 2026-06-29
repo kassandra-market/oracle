@@ -151,3 +151,50 @@ Build: `just build` (SBF) clean. Tests: `cargo test -p kassandra-program` all pa
 **Tests** (`tests/governance_setup.rs`, 4, all green): admin handoff records linkage + monetary defaults; non-admin → `Unauthorized`; one-shot (post-handoff admin → `GovernanceAlreadySet`, dao_authority rotates OK); zero dao_authority/kass_dao → `InvalidAccount`. Harness (`tests/common/mod.rs`): `stand_in_governance(tag)`, `set_governance`/`set_governance_ix` helpers; the existing `protocol` accessor exposes the new fields. All prior tests (incl. 4 init_protocol, layout pin) still pass.
 
 Build: `just build` (SBF) clean. Tests: `cargo test -p kassandra-program` all pass. `cargo clippy --all-targets` clean; `cargo fmt` applied.
+
+### F2 — Config-as-state refactor (DONE 2026-06-29)
+
+Behavior-preserving: the snapshot defaults == the current `config.rs` consts, so the full suite passes UNCHANGED. The consts stay in `config.rs` as the DEFAULT source (`init_protocol` reads them); `MAX_PROPOSERS` + layout-size consts stay `const`.
+
+**`Protocol` re-pinned — LEN 240 → 336** (`state.rs`, re-pinned in `tests/state_layout.rs`). Appended 12 governable behavioral params after `fee_ema_increment@232` (all u64/i64, align 8, no padding). New offsets:
+
+| field | off | field | off |
+|---|---|---|---|
+| threshold_num (u64) | 240 | phase_window (i64) | 288 |
+| threshold_den (u64) | 248 | proposal_window (i64) | 296 |
+| market_threshold_num (u64) | 256 | fact_vote_slash_num (u64) RES | 304 |
+| market_threshold_den (u64) | 264 | fact_vote_slash_den (u64) RES | 312 |
+| flip_slash_num (u64) | 272 | reward_proposer_weight (u64) RES | 320 |
+| flip_slash_den (u64) | 280 | reward_fact_weight (u64) RES | 328 |
+
+**`Oracle` re-pinned — LEN 232 → 328** (`state.rs`, re-pinned in `tests/state_layout.rs`). Same 12 fields appended after `prompt_hash@200` (which ends at 232). New offsets:
+
+| field | off | field | off |
+|---|---|---|---|
+| threshold_num (u64) | 232 | phase_window (i64) | 280 |
+| threshold_den (u64) | 240 | proposal_window (i64) | 288 |
+| market_threshold_num (u64) | 248 | fact_vote_slash_num (u64) RES | 296 |
+| market_threshold_den (u64) | 256 | fact_vote_slash_den (u64) RES | 304 |
+| flip_slash_num (u64) | 264 | reward_proposer_weight (u64) RES | 312 |
+| flip_slash_den (u64) | 272 | reward_fact_weight (u64) RES | 320 |
+
+`MARKET_THRESHOLD_*` are `u128` consts but stored as `u64` on both structs (values fit; widened back to u128 on read in `settle_challenge`). Both structs stay Pod-valid (no implicit padding).
+
+**`init_protocol` defaults** all 12 Protocol fields to the consts: `threshold_num/den = THRESHOLD_NUM/DEN`, `market_threshold_num/den = MARKET_THRESHOLD_NUM/DEN as u64`, `flip_slash_num/den = FLIP_SLASH_NUM/DEN`, `phase_window = PHASE_WINDOW`, `proposal_window = PROPOSAL_WINDOW`. Reserved fields: `fact_vote_slash_num=0, fact_vote_slash_den=1` (divisor never zero), `reward_proposer_weight=0, reward_fact_weight=0`.
+
+**`create_oracle` snapshots** all 12 params from the loaded `Protocol` into the new `Oracle` fields at init, and now seeds `phase_ends_at = deadline + protocol.proposal_window` (was `+ PROPOSAL_WINDOW`).
+
+**Processor migrations (`config::X` → `oracle.x`):**
+- `finalize_facts`: `is_agreed` takes `oracle.threshold_num/den` (fact quorum); AiClaim window `now + oracle.phase_window`.
+- `advance_phase`: FactVoting window `now + oracle.phase_window`.
+- `settle_challenge`: slash-trigger margin `oracle.market_threshold_num/den` (widened to u128).
+- `finalize_ai_claims`: flip slash `oracle.flip_slash_num/den`; Challenge window `now + oracle.phase_window`.
+- `finalize_proposals`: dispute-handoff window `now + oracle.phase_window`.
+- `propose`: empty-window seeding `now + oracle.proposal_window`.
+- `create_oracle`: `deadline + protocol.proposal_window` (snapshot source).
+
+**Reserved-only (NO active reader, settlement-era):** `fact_vote_slash_num/den`, `reward_proposer_weight/fact_weight` on both structs — snapshotted by `create_oracle` but not wired.
+
+**Test harness:** `tests/common/mod.rs::seed_disputed_oracle` (which fabricates oracles directly, bypassing `create_oracle`) now sets the 8 active snapshot fields to the config consts, so a fabricated oracle behaves identically to a real one (else zeroed denominators would divide-by-zero / change behavior). Grep confirms no remaining `config::{THRESHOLD,MARKET_THRESHOLD,FLIP_SLASH,PHASE_WINDOW,PROPOSAL_WINDOW}` reads in processor active paths (only doc-comments + the `init_protocol` default source remain).
+
+Build: `just build` (SBF) clean. Tests: `cargo test -p kassandra-program` all pass UNCHANGED. `cargo clippy --all-targets` clean; `cargo fmt` applied.

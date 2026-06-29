@@ -135,6 +135,24 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
     protocol.fee_ema_halflife = crate::config::FEE_EMA_HALFLIFE_SECS;
     protocol.fee_per_ema_unit = crate::config::FEE_PER_EMA_UNIT;
     protocol.fee_ema_increment = crate::config::FEE_EMA_INCREMENT;
+    // Governable behavioral params (F2): default to the current `config.rs`
+    // consts so the snapshot onto each Oracle reproduces today's behavior
+    // exactly. MARKET_THRESHOLD_* are `u128` consts stored as u64 (their values
+    // fit; widened back to u128 on use in settle_challenge).
+    protocol.threshold_num = crate::config::THRESHOLD_NUM;
+    protocol.threshold_den = crate::config::THRESHOLD_DEN;
+    protocol.market_threshold_num = crate::config::MARKET_THRESHOLD_NUM as u64;
+    protocol.market_threshold_den = crate::config::MARKET_THRESHOLD_DEN as u64;
+    protocol.flip_slash_num = crate::config::FLIP_SLASH_NUM;
+    protocol.flip_slash_den = crate::config::FLIP_SLASH_DEN;
+    protocol.phase_window = crate::config::PHASE_WINDOW;
+    protocol.proposal_window = crate::config::PROPOSAL_WINDOW;
+    // Reserved (settlement-era; no const yet): denominators default to 1 so a
+    // future divisor is never zero, numerators/weights to 0.
+    protocol.fact_vote_slash_num = 0;
+    protocol.fact_vote_slash_den = 1;
+    protocol.reward_proposer_weight = 0;
+    protocol.reward_fact_weight = 0;
     {
         let mut data = protocol_ai.try_borrow_mut_data()?;
         data.copy_from_slice(bytemuck::bytes_of(&protocol));

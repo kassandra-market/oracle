@@ -34,7 +34,10 @@
 use std::collections::HashMap;
 
 use bytemuck::Zeroable;
-use kassandra_program::config::PROPOSAL_WINDOW;
+use kassandra_program::config::{
+    FLIP_SLASH_DEN, FLIP_SLASH_NUM, MARKET_THRESHOLD_DEN, MARKET_THRESHOLD_NUM, PHASE_WINDOW,
+    PROPOSAL_WINDOW, THRESHOLD_DEN, THRESHOLD_NUM,
+};
 use kassandra_program::state::{AccountType, Oracle, Phase, Proposer, CLAIM_OPTION_NONE};
 use litesvm::{types::TransactionResult, LiteSVM};
 use solana_sdk::{
@@ -611,6 +614,17 @@ impl TestCtx {
         oracle.settled_count = 0;
         oracle.bump = bump;
         oracle.prompt_hash = [0x11; 32];
+        // F2: snapshot the governable behavioral params from the config consts,
+        // exactly as `create_oracle` would (Protocol defaults == these consts),
+        // so a fabricated oracle behaves identically to a real one.
+        oracle.threshold_num = THRESHOLD_NUM;
+        oracle.threshold_den = THRESHOLD_DEN;
+        oracle.market_threshold_num = MARKET_THRESHOLD_NUM as u64;
+        oracle.market_threshold_den = MARKET_THRESHOLD_DEN as u64;
+        oracle.flip_slash_num = FLIP_SLASH_NUM;
+        oracle.flip_slash_den = FLIP_SLASH_DEN;
+        oracle.phase_window = PHASE_WINDOW;
+        oracle.proposal_window = PROPOSAL_WINDOW;
         self.set_program_account(oracle_pda, bytemuck::bytes_of(&oracle).to_vec());
 
         // Build and write each Proposer account.

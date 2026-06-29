@@ -21,7 +21,6 @@ use pinocchio::{
 
 use crate::{
     clock::{now, require_after_end, require_phase},
-    config::PHASE_WINDOW,
     state::{Oracle, Phase},
 };
 
@@ -43,7 +42,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
     // Freeze the fact set and open a fresh voting window.
     oracle.set_phase(Phase::FactVoting);
     oracle.phase_ends_at = now
-        .checked_add(PHASE_WINDOW)
+        .checked_add(oracle.phase_window)
         .ok_or(ProgramError::ArithmeticOverflow)?;
 
     {

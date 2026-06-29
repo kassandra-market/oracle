@@ -56,19 +56,25 @@ use pinocchio::{
 
 use crate::{
     clock::{now, require_after_end, require_phase},
-    config::{PHASE_WINDOW, THRESHOLD_DEN, THRESHOLD_NUM},
     error::KassandraError,
     processor::guards::{load_fact, load_oracle, load_proposer},
     state::{Fact, Oracle, Phase, Proposer},
 };
 
 /// A fact is agreed iff approve strictly beats duplicate AND clears the
-/// protocol supermajority of the fixed `dispute_bond_total`. u128 intermediates
-/// avoid overflow on the cross-multiplication.
-fn is_agreed(approve_stake: u64, duplicate_stake: u64, dispute_bond_total: u64) -> bool {
+/// supermajority threshold (snapshotted on the oracle at create_oracle) of the
+/// fixed `dispute_bond_total`. u128 intermediates avoid overflow on the
+/// cross-multiplication.
+fn is_agreed(
+    approve_stake: u64,
+    duplicate_stake: u64,
+    dispute_bond_total: u64,
+    threshold_num: u64,
+    threshold_den: u64,
+) -> bool {
     approve_stake > duplicate_stake
-        && (approve_stake as u128) * (THRESHOLD_DEN as u128)
-            >= (dispute_bond_total as u128) * (THRESHOLD_NUM as u128)
+        && (approve_stake as u128) * (threshold_den as u128)
+            >= (dispute_bond_total as u128) * (threshold_num as u128)
 }
 
 /// Reject if `key` appears in `prior` (distinctness within the call).
@@ -201,6 +207,8 @@ fn finalize_with_facts(
             fact.approve_stake,
             fact.duplicate_stake,
             oracle.dispute_bond_total,
+            oracle.threshold_num,
+            oracle.threshold_den,
         ) {
             // Agreed: reward is a later claim, no bond_pool change here.
             fact.agreed = 1;
@@ -226,7 +234,7 @@ fn finalize_with_facts(
     if oracle.settled_count == oracle.fact_count {
         oracle.set_phase(Phase::AiClaim);
         oracle.phase_ends_at = now
-            .checked_add(PHASE_WINDOW)
+            .checked_add(oracle.phase_window)
             .ok_or(ProgramError::ArithmeticOverflow)?;
     }
     write_oracle(oracle_ai, oracle)

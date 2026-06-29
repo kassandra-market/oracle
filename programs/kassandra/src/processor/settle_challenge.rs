@@ -84,7 +84,6 @@ use pinocchio::{
 
 use crate::{
     clock::{now, require_phase},
-    config::{MARKET_THRESHOLD_DEN, MARKET_THRESHOLD_NUM},
     cpi::metadao,
     error::KassandraError,
     processor::guards::{
@@ -227,14 +226,18 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     // could crank ONLY the fail pool (leaving pass un-cranked at 0) and cheaply
     // flip `fail_twap*DEN > 0` true to disqualify an honest proposer. So a
     // disqualification requires a real, non-zero pass price to beat.
+    // Margin params are snapshotted on the oracle (== MARKET_THRESHOLD_* by
+    // default); stored as u64, widened back to u128 for the overflow-safe math.
+    let market_threshold_num = oracle.market_threshold_num as u128;
+    let market_threshold_den = oracle.market_threshold_den as u128;
     let disqualify = if pass_twap == 0 {
         false
     } else {
         let lhs = fail_twap
-            .checked_mul(MARKET_THRESHOLD_DEN)
+            .checked_mul(market_threshold_den)
             .ok_or(ProgramError::ArithmeticOverflow)?;
         let rhs = pass_twap
-            .checked_mul(MARKET_THRESHOLD_DEN + MARKET_THRESHOLD_NUM)
+            .checked_mul(market_threshold_den + market_threshold_num)
             .ok_or(ProgramError::ArithmeticOverflow)?;
         lhs > rhs
     };

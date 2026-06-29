@@ -49,7 +49,6 @@ use pinocchio_token::instructions::{Burn, InitializeAccount3};
 
 use crate::{
     clock::now,
-    config::PROPOSAL_WINDOW,
     error::KassandraError,
     fee::{bumped_fee_ema, decay_fee_ema, fee_for_ema},
     processor::guards::{assert_key, assert_signer, create_pda, load_protocol},
@@ -197,8 +196,10 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
         program_id,
     )?;
 
+    // Use the snapshotted proposal window (== PROPOSAL_WINDOW by default) so the
+    // window and the per-oracle snapshot below stay consistent.
     let phase_ends_at = deadline
-        .checked_add(PROPOSAL_WINDOW)
+        .checked_add(protocol.proposal_window)
         .ok_or(ProgramError::ArithmeticOverflow)?;
 
     let mut oracle = Oracle::zeroed();
@@ -224,6 +225,21 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     oracle.open_challenge_count = 0;
     oracle.prompt_hash = prompt_hash;
     oracle.bump = oracle_bump;
+    // Snapshot the governable behavioral params from the Protocol (F2). The
+    // downstream processors read these from the Oracle, so an in-flight oracle
+    // keeps its snapshot even if governance retunes the Protocol mid-dispute.
+    oracle.threshold_num = protocol.threshold_num;
+    oracle.threshold_den = protocol.threshold_den;
+    oracle.market_threshold_num = protocol.market_threshold_num;
+    oracle.market_threshold_den = protocol.market_threshold_den;
+    oracle.flip_slash_num = protocol.flip_slash_num;
+    oracle.flip_slash_den = protocol.flip_slash_den;
+    oracle.phase_window = protocol.phase_window;
+    oracle.proposal_window = protocol.proposal_window;
+    oracle.fact_vote_slash_num = protocol.fact_vote_slash_num;
+    oracle.fact_vote_slash_den = protocol.fact_vote_slash_den;
+    oracle.reward_proposer_weight = protocol.reward_proposer_weight;
+    oracle.reward_fact_weight = protocol.reward_fact_weight;
     {
         let mut data = oracle_ai.try_borrow_mut_data()?;
         data.copy_from_slice(bytemuck::bytes_of(&oracle));

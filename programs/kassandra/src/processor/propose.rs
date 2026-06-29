@@ -45,7 +45,7 @@ use pinocchio_token::instructions::Transfer;
 
 use crate::{
     clock::{now, require_phase},
-    config::{MAX_PROPOSERS, PROPOSAL_WINDOW},
+    config::MAX_PROPOSERS,
     error::KassandraError,
     processor::guards::{assert_key, assert_signer, create_pda, load_oracle},
     state::{AccountType, Oracle, Phase, Proposer, CLAIM_OPTION_NONE},
@@ -96,7 +96,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     if now_ts >= oracle.phase_ends_at {
         if oracle.proposer_count == 0 {
             oracle.phase_ends_at = now_ts
-                .checked_add(PROPOSAL_WINDOW)
+                .checked_add(oracle.proposal_window)
                 .ok_or(ProgramError::ArithmeticOverflow)?;
         } else {
             return Err(KassandraError::ProposalWindowClosed.into());

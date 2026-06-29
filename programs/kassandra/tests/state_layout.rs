@@ -15,13 +15,13 @@ fn account_sizes_are_stable() {
     // Absolute pinned on-chain ABI sizes. Changing a struct's layout must
     // be a deliberate, visible break of these constants. Each carries an
     // 8-byte header (account_type: u8 + _pad_hdr: [u8;7]) at offset 0.
-    assert_eq!(Oracle::LEN, 232);
+    assert_eq!(Oracle::LEN, 328);
     assert_eq!(Proposer::LEN, 96);
     assert_eq!(Fact::LEN, 336);
     assert_eq!(FactVote::LEN, 88);
     assert_eq!(AiClaim::LEN, 176);
     assert_eq!(Market::LEN, 384);
-    assert_eq!(Protocol::LEN, 240);
+    assert_eq!(Protocol::LEN, 336);
 }
 
 #[test]
@@ -47,6 +47,19 @@ fn field_offsets_are_pinned() {
     assert_eq!(offset_of!(Oracle, resolved_option), 197);
     assert_eq!(offset_of!(Oracle, open_challenge_count), 198);
     assert_eq!(offset_of!(Oracle, prompt_hash), 200);
+    // F2 governable-param snapshot block (8-byte aligned, packed after prompt_hash).
+    assert_eq!(offset_of!(Oracle, threshold_num), 232);
+    assert_eq!(offset_of!(Oracle, threshold_den), 240);
+    assert_eq!(offset_of!(Oracle, market_threshold_num), 248);
+    assert_eq!(offset_of!(Oracle, market_threshold_den), 256);
+    assert_eq!(offset_of!(Oracle, flip_slash_num), 264);
+    assert_eq!(offset_of!(Oracle, flip_slash_den), 272);
+    assert_eq!(offset_of!(Oracle, phase_window), 280);
+    assert_eq!(offset_of!(Oracle, proposal_window), 288);
+    assert_eq!(offset_of!(Oracle, fact_vote_slash_num), 296);
+    assert_eq!(offset_of!(Oracle, fact_vote_slash_den), 304);
+    assert_eq!(offset_of!(Oracle, reward_proposer_weight), 312);
+    assert_eq!(offset_of!(Oracle, reward_fact_weight), 320);
 
     assert_eq!(offset_of!(Proposer, bond), 72);
     assert_eq!(offset_of!(Proposer, ai_finalized), 86);
@@ -91,6 +104,19 @@ fn field_offsets_are_pinned() {
     assert_eq!(offset_of!(Protocol, fee_ema_halflife), 216);
     assert_eq!(offset_of!(Protocol, fee_per_ema_unit), 224);
     assert_eq!(offset_of!(Protocol, fee_ema_increment), 232);
+    // F2 governable behavioral params (mutable source; snapshotted onto Oracle).
+    assert_eq!(offset_of!(Protocol, threshold_num), 240);
+    assert_eq!(offset_of!(Protocol, threshold_den), 248);
+    assert_eq!(offset_of!(Protocol, market_threshold_num), 256);
+    assert_eq!(offset_of!(Protocol, market_threshold_den), 264);
+    assert_eq!(offset_of!(Protocol, flip_slash_num), 272);
+    assert_eq!(offset_of!(Protocol, flip_slash_den), 280);
+    assert_eq!(offset_of!(Protocol, phase_window), 288);
+    assert_eq!(offset_of!(Protocol, proposal_window), 296);
+    assert_eq!(offset_of!(Protocol, fact_vote_slash_num), 304);
+    assert_eq!(offset_of!(Protocol, fact_vote_slash_den), 312);
+    assert_eq!(offset_of!(Protocol, reward_proposer_weight), 320);
+    assert_eq!(offset_of!(Protocol, reward_fact_weight), 328);
 }
 
 #[test]
