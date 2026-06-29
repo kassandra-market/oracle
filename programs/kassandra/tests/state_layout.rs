@@ -10,6 +10,7 @@ fn account_sizes_are_stable() {
     assert_eq!(size_of::<FactVote>(), FactVote::LEN);
     assert_eq!(size_of::<AiClaim>(), AiClaim::LEN);
     assert_eq!(size_of::<Market>(), Market::LEN);
+    assert_eq!(size_of::<Protocol>(), Protocol::LEN);
 
     // Absolute pinned on-chain ABI sizes. Changing a struct's layout must
     // be a deliberate, visible break of these constants. Each carries an
@@ -20,6 +21,7 @@ fn account_sizes_are_stable() {
     assert_eq!(FactVote::LEN, 88);
     assert_eq!(AiClaim::LEN, 176);
     assert_eq!(Market::LEN, 384);
+    assert_eq!(Protocol::LEN, 128);
 }
 
 #[test]
@@ -69,6 +71,15 @@ fn field_offsets_are_pinned() {
     assert_eq!(offset_of!(Market, twap_end), 360);
     assert_eq!(offset_of!(Market, challenger_usdc), 368);
     assert_eq!(offset_of!(Market, settled), 376);
+
+    // Protocol: 3 pubkeys packed after the 8-byte header, then the fee-EMA tail.
+    assert_eq!(offset_of!(Protocol, account_type), 0);
+    assert_eq!(offset_of!(Protocol, admin), 8);
+    assert_eq!(offset_of!(Protocol, kass_mint), 40);
+    assert_eq!(offset_of!(Protocol, usdc_mint), 72);
+    assert_eq!(offset_of!(Protocol, fee_ema), 104);
+    assert_eq!(offset_of!(Protocol, last_creation_unix), 112);
+    assert_eq!(offset_of!(Protocol, bump), 120);
 }
 
 #[test]

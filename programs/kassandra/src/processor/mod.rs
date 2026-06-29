@@ -17,6 +17,7 @@ pub mod finalize_ai_claims;
 pub mod finalize_facts;
 pub mod finalize_oracle;
 pub mod guards;
+pub mod init_protocol;
 pub mod open_challenge;
 pub mod settle_challenge;
 pub mod submit_ai_claim;
@@ -40,5 +41,6 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> Pr
         Ix::OpenChallenge => open_challenge::process(program_id, accounts, payload),
         Ix::SettleChallenge => settle_challenge::process(program_id, accounts, payload),
         Ix::FinalizeOracle => finalize_oracle::process(program_id, accounts, payload),
+        Ix::InitProtocol => init_protocol::process(program_id, accounts, payload),
     }
 }

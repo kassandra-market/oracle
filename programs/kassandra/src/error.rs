@@ -62,6 +62,10 @@ pub enum KassandraError {
     /// recompute must not run until every challenged claim has been settled, or a
     /// not-yet-disqualified challenged proposer would be miscounted as surviving.
     ChallengesOutstanding = 16,
+    /// `init_protocol` was called on a protocol PDA that is already initialized
+    /// (non-zero lamports or non-empty data): the protocol singleton is created
+    /// exactly once.
+    AlreadyInitialized = 17,
 }
 
 impl From<KassandraError> for ProgramError {

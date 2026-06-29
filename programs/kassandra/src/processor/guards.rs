@@ -13,7 +13,7 @@ use pinocchio_system::instructions::CreateAccount;
 
 use crate::{
     error::KassandraError,
-    state::{AccountType, AiClaim, Fact, Oracle, Proposer},
+    state::{AccountType, AiClaim, Fact, Oracle, Proposer, Protocol},
 };
 
 /// Require that `account` is owned by `program_id`, else
@@ -116,6 +116,25 @@ pub fn load_ai_claim(account: &AccountInfo, program_id: &Pubkey) -> Result<AiCla
         return Err(KassandraError::InvalidAccount.into());
     }
     Ok(claim)
+}
+
+/// Load and validate the [`Protocol`] singleton: owned by `program_id`, large
+/// enough, and tagged [`AccountType::Protocol`] (the type-confusion guard,
+/// mirroring [`load_oracle`]). Returns an owned, alignment-safe copy. Reused by
+/// H1/H2 to pin the canonical mints and read the fee-EMA state.
+pub fn load_protocol(account: &AccountInfo, program_id: &Pubkey) -> Result<Protocol, ProgramError> {
+    assert_owned_by_program(account, program_id)?;
+    if account.data_len() < Protocol::LEN {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    let protocol: Protocol = {
+        let data = account.try_borrow_data()?;
+        bytemuck::pod_read_unaligned::<Protocol>(&data[..Protocol::LEN])
+    };
+    if protocol.account_type != AccountType::Protocol.as_u8() {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    Ok(protocol)
 }
 
 /// Create a fresh, rent-exempt, program-owned PDA account, signing with the

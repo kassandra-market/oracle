@@ -46,6 +46,8 @@
 
 Steps: write failing test → red → implement → green → commit `feat(protocol): protocol state account + init_protocol`.
 
+**H0 DELTA (live state, done):** `AccountType::Protocol=7`; `Ix::InitProtocol=9`; `KassandraError::AlreadyInitialized=17`. New `Protocol` Pod (`Protocol::LEN=128`, pinned in `tests/state_layout.rs`): `account_type`@0, `_pad_hdr[7]`, `admin`@8, `kass_mint`@40, `usdc_mint`@72, `fee_ema:u64`@104 (0 at genesis, used by H2), `last_creation_unix:i64`@112 (EMA decay, H2), `bump`@120, `_pad[7]`. Protocol PDA seeds `[b"protocol"]` (singleton). Guard `load_protocol(ai, program_id)` added to `guards.rs` (owner+len+tag) for H1/H2. `init_protocol` (`src/processor/init_protocol.rs`): accounts `[0]protocol PDA(w,uninit),[1]admin(signer,w,pays rent),[2]kass_mint,[3]usdc_mint,[4]system`; verifies PDA `[b"protocol"]`, admin signer, system id, mints owned by token program; rejects re-init (`lamports!=0 || !data_is_empty()` → `AlreadyInitialized`); stamps fields with `fee_ema=0`/`last_creation_unix=0` (NO fee logic yet — that's H2). Harness: `TestCtx::protocol_pda()`, `init_protocol()`/`init_protocol_ix(protocol)`, `protocol(key)` accessor. Tests `tests/init_protocol.rs` (3, green): init-once, double-init→AlreadyInitialized, wrong-PDA→InvalidAccount.
+
 ---
 
 ## Task H1: `create_oracle` (no fee yet)

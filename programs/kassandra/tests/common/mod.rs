@@ -39,9 +39,10 @@ use litesvm::{types::TransactionResult, LiteSVM};
 use solana_sdk::{
     account::Account,
     clock::Clock,
-    instruction::Instruction,
+    instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
     signature::{Keypair, Signer},
+    system_program,
     transaction::Transaction,
 };
 use spl_token::{
@@ -153,6 +154,11 @@ impl TestCtx {
         Pubkey::find_program_address(&[b"oracle", &nonce.to_le_bytes()], program_id)
     }
 
+    /// Derive the Protocol singleton PDA: seeds `[b"protocol"]`.
+    pub fn protocol_pda(program_id: &Pubkey) -> (Pubkey, u8) {
+        Pubkey::find_program_address(&[b"protocol"], program_id)
+    }
+
     /// Derive the Proposer PDA: seeds `[b"proposer", oracle, authority]`.
     pub fn proposer_pda(program_id: &Pubkey, oracle: &Pubkey, authority: &Pubkey) -> (Pubkey, u8) {
         Pubkey::find_program_address(
@@ -172,6 +178,36 @@ impl TestCtx {
     /// Derive the FactVote PDA: seeds `[b"vote", fact, voter]`.
     pub fn vote_pda(program_id: &Pubkey, fact: &Pubkey, voter: &Pubkey) -> (Pubkey, u8) {
         Pubkey::find_program_address(&[b"vote", fact.as_ref(), voter.as_ref()], program_id)
+    }
+
+    // ----- real instruction helpers -----------------------------------------
+
+    /// Send a real `InitProtocol` instruction with `admin == payer`, recording
+    /// the harness KASS/USDC mints. Returns the Protocol singleton PDA. The
+    /// returned [`TransactionResult`] lets tests assert success or the
+    /// double-init / wrong-PDA failure paths.
+    #[allow(clippy::result_large_err)]
+    pub fn init_protocol(&mut self) -> (Pubkey, TransactionResult) {
+        let (protocol_pda, _) = Self::protocol_pda(&self.program_id);
+        let ix = self.init_protocol_ix(protocol_pda);
+        let res = self.send(ix, &[]);
+        (protocol_pda, res)
+    }
+
+    /// Build an `InitProtocol` instruction targeting `protocol` (so tests can
+    /// pass a deliberately wrong PDA). Admin = payer (fee payer signs).
+    pub fn init_protocol_ix(&self, protocol: Pubkey) -> Instruction {
+        Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new(protocol, false),
+                AccountMeta::new(self.payer.pubkey(), true),
+                AccountMeta::new_readonly(self.kass_mint, false),
+                AccountMeta::new_readonly(self.usdc_mint, false),
+                AccountMeta::new_readonly(system_program::ID, false),
+            ],
+            data: vec![kassandra_program::instruction::Ix::InitProtocol as u8],
+        }
     }
 
     // ----- seeding -----------------------------------------------------------
@@ -376,6 +412,11 @@ impl TestCtx {
 
     /// Read and decode an `AiClaim` account.
     pub fn ai_claim(&self, key: Pubkey) -> kassandra_program::state::AiClaim {
+        self.read_pod(key)
+    }
+
+    /// Read and decode the `Protocol` singleton account.
+    pub fn protocol(&self, key: Pubkey) -> kassandra_program::state::Protocol {
         self.read_pod(key)
     }
 

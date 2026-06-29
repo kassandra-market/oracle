@@ -25,6 +25,9 @@ pub enum Ix {
     /// Incremental settlement of the AI-claim round once its window has elapsed
     /// (slash no-shows fully, flippers partially), advancing to `Challenge`.
     FinalizeAiClaims = 8,
+    /// One-time protocol initializer: creates the `[b"protocol"]` singleton
+    /// recording the admin + canonical KASS/USDC mints. Stable contract.
+    InitProtocol = 9,
     // Future variants are APPENDED here with the next discriminant; add a
     // matching arm to `from_u8` below.
 }
@@ -43,6 +46,7 @@ impl Ix {
             6 => Some(Ix::FinalizeOracle),
             7 => Some(Ix::AdvancePhase),
             8 => Some(Ix::FinalizeAiClaims),
+            9 => Some(Ix::InitProtocol),
             _ => None,
         }
     }

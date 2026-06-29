@@ -32,6 +32,7 @@ pub enum AccountType {
     FactVote = 4,
     AiClaim = 5,
     Market = 6,
+    Protocol = 7,
 }
 
 impl AccountType {
@@ -325,4 +326,36 @@ impl Market {
     pub fn is_settled(&self) -> bool {
         self.settled != 0
     }
+}
+
+/// Protocol singleton: the program's global configuration record. `size_of == 128`.
+///
+/// Created once by `init_protocol` and never re-initialized. Pins the canonical
+/// KASS/USDC mints (so `create_oracle`'s fee-burn cannot be spoofed with a fake
+/// KASS mint) and carries the dynamic creation-fee EMA state used by Task H2.
+///
+/// # Protocol PDA seeds (CONTRACT)
+/// `[b"protocol"]` (singleton), program = [`crate::ID`].
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+pub struct Protocol {
+    pub account_type: u8, // AccountType::Protocol
+    pub _pad_hdr: [u8; 7],
+    pub admin: Pubkey,     // the initializer; reserved for later governance
+    pub kass_mint: Pubkey, // canonical KASS mint; oracles must match this
+    pub usdc_mint: Pubkey, // canonical USDC mint; oracles must match this
+    // Fixed-point EMA accumulator of recent oracle-creation activity. 0 at
+    // genesis (first creation is free); rises with creation frequency and decays
+    // when idle. Drives the dynamic creation fee in Task H2. Unused (always 0)
+    // until then.
+    pub fee_ema: u64,
+    // Unix timestamp of the most recent oracle creation, for the EMA decay in
+    // Task H2. 0 at genesis.
+    pub last_creation_unix: i64,
+    pub bump: u8,
+    pub _pad: [u8; 7],
+}
+
+impl Protocol {
+    pub const LEN: usize = core::mem::size_of::<Protocol>();
 }
