@@ -1594,9 +1594,14 @@ impl TestCtx {
             acct.slashed_amount = p.slashed_amount;
             let account = self.seed_program_account(bytemuck::bytes_of(&acct).to_vec());
 
-            // Uniform: base `bond − slashed_amount` (+ reward iff Resolved +
-            // surviving + correct). Mirrors the on-chain `claim_proposer`.
-            let base = p.bond.saturating_sub(p.slashed_amount);
+            // Mirrors on-chain `claim_proposer`: disqualified forfeits the whole
+            // bond (base 0); survivor gets `bond − slashed_amount`; +reward iff
+            // Resolved + surviving + correct.
+            let base = if p.disqualified {
+                0
+            } else {
+                p.bond.saturating_sub(p.slashed_amount)
+            };
             let reward = if resolved && !p.disqualified && p.claim_option == resolved_option {
                 reward::proposer_reward(p.bond, proposer_bucket, total_correct)
             } else {
@@ -1679,8 +1684,12 @@ impl TestCtx {
                     // Approve-voter on an agreed fact earns the fact rate.
                     v.stake + reward::fact_reward(v.stake, fact_bucket, total_approved)
                 } else if approve && !f.duplicate {
-                    // Approve-voter on a rejected fact is slashed (floor num/den).
-                    v.stake - ((v.stake as u128) * (slash_num as u128) / (slash_den as u128)) as u64
+                    // Approve-voter on a rejected fact is slashed CEIL(stake·num/den)
+                    // (mirrors on-chain: ceil keeps the vault from running short
+                    // against the floor-aggregate bond_pool credit).
+                    let ceil = ((v.stake as u128) * (slash_num as u128) + (slash_den as u128 - 1))
+                        / (slash_den as u128);
+                    v.stake - ceil as u64
                 } else {
                     // InvalidDeadend, duplicate-voter, or approve-on-duplicate: full stake.
                     v.stake

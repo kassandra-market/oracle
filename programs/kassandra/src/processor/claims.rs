@@ -142,6 +142,15 @@ fn assert_token_account(
 /// Decode the terminal phase, rejecting any non-terminal oracle with
 /// [`KassandraError::WrongPhase`]. Returns `true` iff the oracle is
 /// [`Phase::Resolved`] (so the caller knows whether rewards apply).
+///
+/// # M1 — `resolve_deadend` (F4) oracles
+/// An oracle force-resolved from `InvalidDeadend` → `Resolved` by the DAO
+/// (`resolve_deadend`, F4) carries `reward_pool == 0` and zero cohort totals
+/// (`finalize_oracle` only stamps those on the organic Resolved branch; F4 just
+/// flips the phase + sets `resolved_option`). So `resolved == true` here but
+/// every reward term is 0 → claims pay stakes-back only, no rewards. That
+/// matches the deferred dead-end-settlement intent (no distribution out of a
+/// dead-end) — no special-casing needed.
 fn require_terminal(oracle: &Oracle) -> Result<bool, ProgramError> {
     match oracle.phase().ok_or(KassandraError::InvalidAccount)? {
         Phase::Resolved => Ok(true),
@@ -212,14 +221,25 @@ fn payout_and_close(
     claimant.close()
 }
 
-/// `value · num / den` (u128, floor). `den == 0` (defended; the snapshot keeps
-/// it positive) yields 0 so the entitlement degrades to the full stake rather
-/// than dividing by zero.
+/// Per-voter rejected-fact slash: `ceil(value · num / den)` in u128. `den == 0`
+/// (defended; the snapshot keeps it positive) yields 0 so the entitlement
+/// degrades to the full stake rather than dividing by zero.
+///
+/// # Why CEIL (conservation, not just rounding)
+/// `finalize_facts` credits `bond_pool` with the AGGREGATE
+/// `floor(Σ approve_stake · num/den)` for the rejected fact, and that whole
+/// credit is later paid out as rewards. If each voter were slashed
+/// `floor(stakeᵢ · num/den)`, then `Σ floor(stakeᵢ·r) ≤ floor(Σ stakeᵢ · r)` —
+/// the vault could physically retain LESS than the bond_pool credit, shorting
+/// the last reward claimant. Slashing each voter `ceil(stakeᵢ·r)` instead gives
+/// `Σ ceil(stakeᵢ·r) ≥ (Σ stakeᵢ)·r ≥ floor(Σ·r)`, so the vault is never short;
+/// any excess is conservation-safe sub-unit dust. `ceil = (v·num + den − 1)/den`.
 fn slash_amount(value: u64, num: u64, den: u64) -> u64 {
     if den == 0 {
         return 0;
     }
-    ((value as u128) * (num as u128) / (den as u128)) as u64
+    let scaled = (value as u128) * (num as u128) + (den as u128 - 1);
+    (scaled / den as u128) as u64
 }
 
 // ---------------------------------------------------------------------------
@@ -253,21 +273,29 @@ pub fn claim_proposer(
     assert_token_account(dest_kass_ai, &oracle.kass_mint, &proposer.authority)?;
     assert_key(rent_recipient_ai, &proposer.authority)?;
 
-    // UNIFORM base = `bond − slashed_amount` for EVERY proposer, on BOTH terminal
-    // phases. Any `slashed_amount` (no-show / flip / challenge-fail / no-facts
-    // dead-end) was already moved into `bond_pool`, so returning the full bond
-    // would double-count it (it is both paid out as rewards AND returned). This
-    // is correct for all rows:
-    //  * disqualified  → slashed_amount is the (net) full slash → `bond − slashed`.
-    //  * honest survivor → slashed_amount == 0 → full `bond`.
-    //  * FLIP-slashed survivor → slashed_amount == bond·flip → `bond − slashed`
-    //    (the over-pay this fixes; a flipped proposer is NOT disqualified and can
-    //    survive to Resolved OR tie into InvalidDeadend, so the deduction must
-    //    apply on both branches — InvalidDeadend is not special-cased to `bond`).
+    // Base return per proposer:
+    //  * DISQUALIFIED → 0: a disqualified proposer FORFEITS the whole bond. It has
+    //    been fully distributed already — into `bond_pool` (`slashed_amount`) AND,
+    //    on a CHALLENGE disqualify, a `kass_fee = bond − slashed_amount` was paid
+    //    out of `stake_vault` to the challenger by `settle_challenge`. So
+    //    `bond − slashed_amount` would over-pay the fraudster exactly that
+    //    already-gone `kass_fee` → vault shortfall for the last claimant. Forfeit
+    //    everything. (No-show / no-facts dead-end set `slashed_amount == bond`, so
+    //    this is a no-op there; it corrects only the challenge-disqualify row.)
+    //  * SURVIVOR → `bond − slashed_amount`. Any survivor slash (flip) already
+    //    funded `bond_pool`, so deducting it prevents the flip-survivor double-pay
+    //    (full bond returned AND the slash paid out as rewards). Honest survivor →
+    //    `slashed_amount == 0` → full `bond`; flip-slashed survivor → `bond − flip`
+    //    (applies on BOTH terminal phases — a flipped proposer is NOT disqualified
+    //    and can survive to Resolved OR tie into InvalidDeadend).
     // The reward (Resolved + surviving + correct only) keeps `bond` as its
     // pro-rata weight, matching S1's `total_correct_proposer_stake = Σ bond`, so
     // `Σ(bond − slashed) + reward_pool = Σbond − bond_pool + bond_pool = Σbond`.
-    let base = proposer.bond.saturating_sub(proposer.slashed_amount);
+    let base = if proposer.is_disqualified() {
+        0
+    } else {
+        proposer.bond.saturating_sub(proposer.slashed_amount)
+    };
     let reward = if resolved
         && !proposer.is_disqualified()
         && proposer.claim_option == oracle.resolved_option

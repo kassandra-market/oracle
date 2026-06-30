@@ -245,10 +245,48 @@ row the test asserts the exact dest KASS delta, the account closed (rent reclaim
 to its authority), and the vault decremented by exactly the entitlement. Full
 suite: 207 passed / 0 failed; clippy + fmt clean.
 
-> FOLLOW-UP (FIXED): the flip-slashed-but-surviving over-pay flagged here is now
-> closed — `claim_proposer` deducts `slashed_amount` for ALL proposers (uniform
-> base above), and the builder's `reward_pool` sums `slashed_amount` over every
-> proposer (not just disqualified). New test `flipped_survivor_not_overpaid`:
+> FOLLOW-UP 1 (FIXED): the flip-slashed-but-surviving over-pay flagged here is now
+> closed — `claim_proposer` deducts `slashed_amount` for surviving proposers
+> (uniform base), and the builder's `reward_pool` sums `slashed_amount` over every
+> proposer (not just disqualified). Test `flipped_survivor_not_overpaid`:
 > honest-correct 1500, flipped-correct 1000 (= 1000 − 500 + 500, NOT 1500),
 > flipped-wrong 500 (= 1000 − 500, no reward); Σ + dust == vault with the flipped
-> survivors present. Full suite 208 passed / 0 failed; clippy + fmt clean.
+> survivors present.
+
+### S2 review fixes — disqualified forfeit + ceil voter slash (DONE)
+
+**C1 (Critical, fund-safety) — disqualified base is 0, NOT `bond − slashed_amount`.**
+FOLLOW-UP 1 over-corrected: for a CHALLENGE-disqualified proposer `settle_challenge`
+sets `slashed_amount = bond − kass_fee` (the bond_pool contribution) AND separately
+sent `kass_fee` OUT of `stake_vault` to the challenger. So `bond − slashed_amount =
+kass_fee` would re-pay the fraudster KASS that already left the vault → shortfall.
+Fix (`claims.rs`): `base = is_disqualified() ? 0 : bond − slashed_amount`. No-op for
+no-show / no-facts dead-end (`slashed_amount == bond`); corrects only the
+challenge-disqualify row to 0. A disqualified proposer FORFEITS the whole bond.
+Test `disqualified_forfeits_full_bond` (seeded `slashed_amount = 900 < bond 1000`,
+kass_fee 100): claim pays **0**, the 100 stays as conservation-safe dust. (The real
+`settle_challenge → finalize_oracle → claim` chain is MetaDAO-CPI-heavy; the seeded
+minimum the review authorized is used.)
+
+**I1 (Important, rounding/conservation) — CEIL the per-voter rejected-fact slash.**
+`finalize_facts` credits `bond_pool` with the AGGREGATE `floor(Σ approve_stake·r)`,
+but each approve-voter is slashed per-voter. With `floor` per voter, `Σ floor ≤
+floor(Σ)`, so the vault could retain LESS than the bond_pool credit → last reward
+claimant short. Fix (`claims.rs::slash_amount`): slash each rejected-fact
+approve-voter `ceil(stake·num/den) = (stake·num + den − 1)/den` (u128), so `Σ ceil ≥
+(Σ stake)·r ≥ floor(Σ·r)` — vault never short, excess is sub-unit dust. Test
+`ceil_voter_slash_no_shortfall` (odd stakes 401/601, r=1/2): bond_pool credit 501,
+floor-per-voter would retain 500 (proposer reward claimed LAST would fail by 1);
+ceil retains 502, every claim succeeds, 1 dust.
+
+**M1 (doc):** `require_terminal` now documents that an oracle force-resolved via
+`resolve_deadend` (F4) carries `reward_pool == 0` + zero totals, so claims pay
+stakes-back / no rewards (matches the deferred dead-end-settlement intent; no
+behavior change).
+
+**M2 (doc + test):** `flipped_survivor_invalid_deadend_strands_to_dust` — a
+flip-slashed SURVIVING proposer that ties into `InvalidDeadend` gets `bond −
+slashed_amount` (reward_pool 0); the flip-slash portion stays as conservation-safe
+vault dust (under-pay, never over-pay).
+
+Full suite **211 passed / 0 failed**; clippy + fmt clean.
