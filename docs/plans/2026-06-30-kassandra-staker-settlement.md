@@ -463,3 +463,117 @@ implied the ordering was merely a convention.
   account list.
 
 Full suite **228 passed / 0 failed**; clippy `--all-targets` clean; fmt applied.
+
+### S5 — End-to-end settlement + conservation fuzz (DONE; test-only, no production change)
+
+**No production change.** S5 is pure TEST work — no genuine settlement bug
+surfaced. The full real-instruction claim/close/emission path drains a resolved
+oracle, the matrix + conservation hold, and the independent-reference fuzz found
+no conservation violation.
+
+**E2E lifecycle (`tests/settlement_e2e.rs`, 5 tests).** Each drives a lifecycle
+to a terminal state then runs EVERY real claim + close, asserting the per-actor
+matrix, all accounts closed, the vault drained to dust, and KASS conservation
+sourced ONLY from `stake_vault`:
+- `e2e_resolved_full_settlement_real_dispute` — the gold standard: the WHOLE
+  chain is real (`create_oracle → propose×2 conflict → finalize_proposals →
+  submit_fact → advance_phase → vote_fact → finalize_facts → submit_ai_claim×2 →
+  finalize_ai_claims → finalize_oracle Resolved`), then real `claim_fact_vote` /
+  `claim_fact` / `claim_proposer` + `close_ai_claim`. Exercises the correct
+  survivor (bond+reward), the flip-slashed-but-correct survivor
+  (`bond−slash+reward`), an agreed-fact submitter + approve-voter (stake+reward).
+  `Σ claims + dust == vault_initial` (3 base units of floor dust).
+- `e2e_invalid_deadend_full_returns_real_dispute` — same real chain, AI claims
+  0/1 → plurality tie → InvalidDeadend; every staker reclaims full stake, vault
+  drains to 0.
+- `e2e_resolved_with_emission_real_finalize_and_claims` — emission placed in the
+  vault, REAL `finalize_oracle` folds it into `reward_pool`, a correct proposer's
+  claim reflects the emission-boosted reward, `Σ claims + dust == Σ stakes +
+  emission`.
+- `e2e_invalid_deadend_emission_burned_full_returns` — REAL `finalize_oracle`
+  BURNS the emission back (supply returns), full-stake returns, vault drains to 0.
+- `e2e_deadend_after_settled_challenge_with_emission` — **the S3-flagged combo**:
+  a settled-challenge disqualify (`kass_fee` out, bond_pool credit), survivors
+  tie → InvalidDeadend, REAL emission burn-back, the disqualified proposer
+  forfeits (0), survivors reclaim full bonds, + REAL `close_ai_claim` /
+  `close_market` (escrow `CloseAccount`). Full accounting: `payouts + dust +
+  kass_fee_out + emission_burned == Σ bonds + emission`.
+
+**Real vs seeded (e2e):** tests 1-2 are fully real (no `set_phase`; only `warp`).
+Tests 3-5 SEED the disputed oracle (dispute mechanics covered by
+`lifecycle_e2e` / `invariants` Arm A) but keep the emission MOVEMENT
+(`finalize_oracle` fold/burn) + all claims/closes REAL. The mint-AT-CREATION half
+of emission is covered by `tests/emissions.rs` (real `create_oracle`).
+
+**Conservation fuzz (`tests/invariants.rs`, Arms D + E, 48 cases each).** A
+PHYSICAL-settlement fuzz with emission enabled, asserted against an INDEPENDENT
+reference that REIMPLEMENTS the bucket / pro-rata / ceil-slash math (`ref_buckets`
+/ `ref_share` / `ref_ceil_slash` — it never calls `kassandra_program::reward`):
+- **Arm D `resolved_settlement_conservation`** — fuzzes proposers (bond ×
+  correct/wrong × disqualified × slash%), facts (agreed/rejected/duplicate × votes
+  approve/duplicate), and emission (0..2000). Seeds the terminal oracle, folds the
+  emission, then runs every real claim (+ `close_ai_claim`). Asserts each payout
+  == the independent reference, that NO claim runs the vault short (reward
+  receivers claimed last would expose a shortfall), and `Σ payouts + dust == Σ
+  stakes + reward_emission`. The dust bound allows the conservation-SAFE surpluses
+  (floor reward remainder + disqualified-forfeit `bond−slashed_amount` + the S2
+  per-voter ceil-slash margin).
+- **Arm E `deadend_settlement_conservation`** — fuzzes bonds + emission; a
+  2-proposer disputed oracle whose survivors tie, REAL `finalize_oracle` burns the
+  emission back, full-stake returns: `Σ payouts == Σ stakes`, vault → 0, supply
+  returns by the burned emission.
+
+**invariants.rs arm split (documented in the module header + an in-file banner):**
+Arms **A/B/C** are LEFT as the original counter-only / pre-settlement fuzz
+(emission disabled, no claims, asserting the dispute-core ledger at the terminal
+counter state) — unchanged and still green. Arms **D/E** are ADDED for the
+post-settlement physical sweep. The split is explicit so each arm's contract is
+clear.
+
+**Harness additions (`tests/common/mod.rs`):** `fold_reward_emission` (mirrors
+the create-mint + finalize-fold: adds emission to vault+supply, stamps
+`reward_emission`, folds into `reward_pool` — for the Resolved fuzz seed),
+`seed_challenge_disqualify` (the post-settle state: disqualify + slashed_amount +
+bond_pool credit + surviving_count-- + remove `kass_fee` from the vault), and a
+private `sub_token_balance`.
+
+**Two seeded-model dust quirks surfaced + understood (NOT bugs):** (1) a seeded
+disqualified proposer with `slashed_amount < bond` strands the un-credited
+remainder (the `kass_fee` that, in the real flow, already left the vault) as dust;
+(2) the rejected-fact CEIL voter slash retains up to 1 unit per voter over the
+FLOOR bond_pool credit. Both are conservation-SAFE under-pays, modelled in the
+Arm D dust bound. The exact-accounting equation `Σ payouts + dust == vault_initial`
+holds in every case.
+
+Full suite **235 passed / 0 failed** (228 baseline + 5 e2e + 2 new fuzz arms);
+`cargo clippy --all-targets` clean; `cargo fmt` applied.
+
+---
+
+## Staker settlement: covered vs deferred (final)
+
+**Covered (real instructions, end to end):**
+- Per-staker pull claims — `claim_proposer` / `claim_fact` / `claim_fact_vote`:
+  every matrix row (correct/wrong/disqualified/flipped proposer; agreed/rejected/
+  duplicate fact submitter; approve-agreed / approve-rejected ceil-slash /
+  duplicate / approve-on-duplicate voter), on both terminal phases.
+- Reward distribution from `bond_pool` (cohort buckets + pro-rata) and emission
+  folded into `reward_pool` on Resolved / burned back on InvalidDeadend.
+- Emission minted at creation from the reservoir (fee-burn boost, mint-authority
+  guard, disabled-at-genesis) — `tests/emissions.rs`.
+- Account closure — `close_ai_claim` (order-independent) + `close_market` (escrow
+  `CloseAccount` + Market close).
+- KASS conservation sourced from `stake_vault` / `slashed_amount` / resolution
+  stamps (NEVER `total_oracle_stake`), proven by the e2e sweeps + the
+  independent-reference fuzz (Resolved + InvalidDeadend + deadend-after-settled-
+  challenge, all with emission).
+
+**Deferred (known, documented):**
+- **Dust sweeping** — floor-division remainders (bucket split + pro-rata) and the
+  conservation-safe surpluses (disqualified forfeit remainder, ceil-slash margin)
+  remain in `stake_vault`, claimable by no one this milestone. A future
+  governance sweep can reclaim the residual (noted in `reward.rs` + "Out of
+  scope"). Always an under-pay — never an over-pay, so no claimant is ever short.
+- KASS bootstrapping presale-avoidance beyond the emission curve; the runner/SDK/
+  app; MetaDAO proposal-lifecycle on a real validator; v0.6 market migration
+  (all per the original Out-of-scope).

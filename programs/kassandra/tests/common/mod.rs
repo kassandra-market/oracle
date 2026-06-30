@@ -1161,6 +1161,32 @@ impl TestCtx {
             .unwrap();
     }
 
+    /// Remove `delta` base units from an existing SPL token account's balance
+    /// (saturating), rewriting its account data in place. Used to model KASS that
+    /// physically left a vault (e.g. the `settle_challenge` `kass_fee` payout).
+    fn sub_token_balance(&mut self, addr: Pubkey, delta: u64) {
+        let acc = self
+            .svm
+            .get_account(&addr)
+            .unwrap_or_else(|| panic!("token account {addr} not found"));
+        let mut state = TokenAccount::unpack(&acc.data).expect("not a token account");
+        state.amount = state.amount.saturating_sub(delta);
+        let mut data = vec![0u8; TokenAccount::LEN];
+        state.pack_into_slice(&mut data);
+        self.svm
+            .set_account(
+                addr,
+                Account {
+                    lamports: acc.lamports,
+                    data,
+                    owner: TOKEN_PROGRAM_ID,
+                    executable: false,
+                    rent_epoch: 0,
+                },
+            )
+            .unwrap();
+    }
+
     /// Build a `FinalizeOracle` instruction (Ix 6). Account order:
     /// `[0] oracle(w) [1] kass_mint(w) [2] stake_vault(w) [3] token program`
     /// followed by the read-only proposer tail. Payload = `oracle_nonce` LE
@@ -1847,6 +1873,49 @@ impl TestCtx {
             proposers: seeded_proposers,
             facts: seeded_facts,
         }
+    }
+
+    /// Fold a creation-time `reward_emission` into an already-seeded TERMINAL
+    /// `Resolved` oracle, mirroring the `create_oracle` mint + `finalize_oracle`
+    /// fold the real flow would produce: physically add `amount` KASS to the
+    /// stake vault (backed by mint supply), stamp `reward_emission`, AND add it to
+    /// the distributable `reward_pool` (the S3 `reward_pool = bond_pool +
+    /// reward_emission`). The S2 claims then read the emission-boosted pool, so a
+    /// correct proposer / approved fact staker's reward reflects the emission.
+    /// (Use ONLY on a `Resolved` seed; on `InvalidDeadend` the emission would have
+    /// been burned back, so it must not sit in the vault.)
+    pub fn fold_reward_emission(&mut self, oracle: Pubkey, amount: u64) {
+        let mut o = self.oracle(oracle);
+        o.reward_emission = amount;
+        o.reward_pool += amount;
+        let vault = Pubkey::new_from_array(o.stake_vault);
+        self.set_program_account(oracle, bytemuck::bytes_of(&o).to_vec());
+        self.add_token_balance(vault, amount);
+        self.add_mint_supply(self.kass_mint, amount);
+    }
+
+    /// Seed a SETTLED-challenge disqualification on a proposer of an oracle seeded
+    /// via [`TestCtx::seed_disputed_oracle`]: mark it disqualified + slashed with
+    /// `slashed_amount = bond − kass_fee` (the bond_pool contribution), credit
+    /// `bond_pool += slashed_amount`, decrement `surviving_count`, and remove the
+    /// `kass_fee` KASS from the stake vault (modelling `settle_challenge`'s payout
+    /// of `kass_fee` to the challenger). Mirrors the on-chain post-settle state so
+    /// the deadend-after-settled-challenge conservation test starts from reality.
+    pub fn seed_challenge_disqualify(&mut self, oracle: Pubkey, proposer: Pubkey, kass_fee: u64) {
+        let mut p = self.proposer(proposer);
+        let slashed_amount = p.bond - kass_fee;
+        p.disqualified = 1;
+        p.slashed = 1;
+        p.slashed_amount = slashed_amount;
+        self.set_program_account(proposer, bytemuck::bytes_of(&p).to_vec());
+
+        let mut o = self.oracle(oracle);
+        o.bond_pool += slashed_amount;
+        o.surviving_count -= 1;
+        let vault = Pubkey::new_from_array(o.stake_vault);
+        self.set_program_account(oracle, bytemuck::bytes_of(&o).to_vec());
+        // The kass_fee physically left the vault to the challenger at settle time.
+        self.sub_token_balance(vault, kass_fee);
     }
 
     /// Build a `ClaimProposer` instruction (Ix 17). Account order:
