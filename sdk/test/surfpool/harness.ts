@@ -79,6 +79,14 @@ export interface HarnessOptions {
   port?: number;
   /** Readiness timeout in ms (default 30000). */
   readyTimeoutMs?: number;
+  /**
+   * Fork a live cluster so its DEPLOYED programs/accounts are lazily fetchable
+   * (T4: the MetaDAO conditional-vault / AMM / futarchy programs). Passes
+   * `--network <fork>` to surfpool (e.g. `"mainnet"`). When unset the simnet
+   * still boots against surfpool's default datasource but the core path stays
+   * local (T1-T3). Forking needs network reachable + is slower (RPC fetches).
+   */
+  fork?: "mainnet" | "devnet";
 }
 
 export class SurfpoolHarness {
@@ -107,6 +115,7 @@ export class SurfpoolHarness {
         "--block-production-mode",
         "transaction",
         "--no-deploy",
+        ...(opts.fork ? ["--network", opts.fork] : []),
         "--port",
         String(port),
       ],

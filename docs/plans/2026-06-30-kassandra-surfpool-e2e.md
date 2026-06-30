@@ -158,5 +158,60 @@
   **72** offline (verified). `KASSANDRA_E2E=1 pnpm test:e2e` = **77** (72 + smoke +
   2 runner↔mock + 2 lifecycle); both lifecycle arms green. typecheck clean.
 
+### T4 — DONE (2026-06-30)
+- **Mainnet fork PROVEN.** `SurfpoolHarness.start({ fork: "mainnet" })` (additive
+  `--network mainnet`) boots a forked simnet on this machine; all five MetaDAO
+  program ids fetch over RPC as `executable` BPF-upgradeable programs:
+  conditional-vault `VLTX1ish…`, AMM v0.4 `AMMyu265…`, futarchy v0.6 `FUTARELBf…`,
+  Meteora DAMM v2 `cpamdpZC…`, Squads v4 `SQDS4ep6…`. They don't just LOAD — the
+  conditional-vault **EXECUTES**: a real `initialize_question` CPI over RPC
+  creates the on-chain `Question` (decoded oracle/num_outcomes match).
+- **T3 foot-gun re-verified on the fork.** `surfnet_timeTravel({absoluteSlot})`
+  still advances the Clock `unix_timestamp` at ~0.4 s/slot on the fork, and
+  `getSlot` returns the (monotonic) absolute slot — exactly the two values
+  `advanceToUnix` uses (it never reads the Clock's `slot` field, which surfpool
+  rewrites to a within-epoch index after a jump). So the phase-window mechanism
+  works unchanged in fork mode.
+- **A challenge market is OPENED on the fork.** `challenge-market-e2e.test.ts`
+  drives the FULL dispute core to `Challenge` over RPC (real instructions, clock
+  via timeTravel), COMPOSES the MetaDAO market with real CPIs (`initialize_
+  question` + KASS/USDC `initialize_conditional_vault`), and calls the Kassandra
+  `openChallenge`. Its **program-signed `split_tokens` CPI executes against the
+  forked conditional-vault**, physically splitting the proposer's 1-KASS bond into
+  pass/fail conditional KASS (each == bond, underlying in the vault). Asserted:
+  `Market` PDA created + bound, `ai_claim.challenged` flipped, USDC escrow funded
+  with the on-chain-computed amount (`bond×twap/scale`), `open_challenge_count==1`.
+  `kass_price` is fed a fabricated futarchy-owned `Dao` blob (mirrors the Rust
+  `bless_kass_price`); the pass/fail AMMs are placeholder AMM-owned accounts
+  (`open_challenge` checks only AMM ownership).
+- **Stopping point (deferred, documented).** `settle_challenge` is NOT driven on
+  the fork: it reads a **swap-driven AMM TWAP**, which needs two live MetaDAO AMM
+  pools built + cranked over RPC (delayed-twap, ≥150-slot windows) — substantial
+  and non-deterministic on a forked validator. The full real-AMM settle (redeem +
+  directional fees + KASS/USDC conservation) is already covered in the LiteSVM
+  Rust suite (`tests/challenge_e2e.rs`). Live-cluster submission + full futarchy
+  governance also deferred. See `sdk/test/surfpool/README.md` for the full
+  covered-vs-deferred.
+- No program/runner edits (T1's env override sufficed; the harness gained only an
+  additive `fork` option). Default `pnpm test` = **72** offline (verified).
+  `KASSANDRA_E2E=1 pnpm test:e2e` = **80** (72 + smoke + 2 runner↔mock + 2
+  lifecycle + 3 challenge-market), all green. typecheck clean.
+
+### Final — surfpool E2E: covered vs deferred
+- **Covered (real, over RPC):** the full core oracle lifecycle on a standalone
+  simnet — uncontested resolve AND dispute→AI-claim with the REAL off-chain runner
+  (genuine `AnthropicProvider`) in the loop against a controllable mock Anthropic
+  server, every phase driven by real instructions (only SPL mints/token-accounts
+  fabricated), asserted by decoding on-chain state; the runner's real
+  HTTP+parse path (success + refusal); and on a MAINNET FORK, the MetaDAO programs
+  loading + the conditional-vault executing + a challenge market being OPENED via
+  the Kassandra `openChallenge` (real program-signed `split_tokens` CPI into the
+  forked vault).
+- **Deferred (documented, not faked):** `settle_challenge` on the fork (real
+  swap-driven AMM TWAP — covered in the LiteSVM Rust suite instead); `kass_price`
+  from a genuine live futarchy DAO (a fabricated DAO blob is used); live
+  devnet/mainnet submission with real funds; a real (non-mock) Anthropic call;
+  full futarchy-governance E2E.
+
 ## Execution note
 After each task: the relevant build/test green; the GATED suite must not break the default offline `pnpm test` (72) or the runner's `cargo test` (71). T1 (can we drive surfpool headless + deploy the .so + SDK-over-RPC) is the make-or-break — stop-and-report if not. The runner edit is additive (base-URL override) only. Prefer a standalone simnet for the core path (hermetic) and fork only for T4. Append a T1–T4 delta log here.
