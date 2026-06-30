@@ -81,5 +81,34 @@
   surfpool spawn (verified). `pnpm test:e2e` = 73 incl. the real surfpool smoke;
   teardown leaves port 8899 free.
 
+### T2 — DONE (2026-06-30)
+- **Mock Anthropic server** (`sdk/test/surfpool/mock-anthropic.ts`,
+  `MockAnthropic`): a `node:http` server on an ephemeral localhost port serving
+  `POST /v1/messages` (the runner appends `/v1/messages` to `ANTHROPIC_BASE_URL`
+  per T1, so the base is `http://127.0.0.1:<port>`). Returns the EXACT shape
+  `parse_messages_response` consumes:
+  - success → `{ id, type:"message", role:"assistant", model:<echoed request
+    model>, content:[{ type:"text", text:"{\"option_index\":N}" }],
+    stop_reason:"end_turn", usage }` — the single `text` block IS the
+    structured-output JSON the runner captures verbatim → `parse_option_index`.
+  - refusal → `{ ..., content:[], stop_reason:"refusal",
+    stop_details:{ type:"refusal", category, explanation } }` — the runner
+    checks `stop_reason=="refusal"` first and bails.
+  - Configurable per scenario: `setOption(N, model?)` / `setRefusal(cat, expl)`;
+    captures request bodies for assertions. Clean `stop()`.
+- **Integration test** (`sdk/test/surfpool/runner-mock-anthropic.test.ts`,
+  gated by `KASSANDRA_E2E=1`; skips if the debug binary is missing — does NOT
+  need surfpool): spawns `target/debug/kassandra-runner run --config <tmp>`
+  (NOT `--mock`) with `ANTHROPIC_BASE_URL=<mock>` + dummy `ANTHROPIC_API_KEY` +
+  a 2-option ZERO-fact config (no real fact-fetch HTTP). Asserts the mock's
+  chosen `option_index` flowed through the REAL provider, the three hashes are
+  32-byte hex, and `submit_ai_claim_payload_hex` is 97 bytes (= model_id ++
+  params_hash ++ io_hash ++ option). Refusal arm: mock refuses → runner exits
+  non-zero, emits no claim, stderr contains "refusal".
+- No runner/program edits (T1's env override was sufficient). Default
+  `pnpm test` = **72** offline (verified, never imports the mock/test); typecheck
+  clean; `cargo test -p kassandra-runner` green. `pnpm test:e2e` now also runs
+  the runner↔mock integration (2 tests, no surfpool spawn needed for them).
+
 ## Execution note
 After each task: the relevant build/test green; the GATED suite must not break the default offline `pnpm test` (72) or the runner's `cargo test` (71). T1 (can we drive surfpool headless + deploy the .so + SDK-over-RPC) is the make-or-break — stop-and-report if not. The runner edit is additive (base-URL override) only. Prefer a standalone simnet for the core path (hermetic) and fork only for T4. Append a T1–T4 delta log here.
