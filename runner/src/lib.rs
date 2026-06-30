@@ -14,12 +14,10 @@
 
 pub mod constants;
 pub mod hashing;
+pub mod prompt;
 pub mod provider;
 
 // --- stubs for later tasks --------------------------------------------------
-
-/// R2: deterministic prompt assembly + categorical answer parsing.
-pub mod prompt {}
 
 /// R3: agreed-fact fetching + `content_hash` verification.
 pub mod fetch {}
