@@ -195,7 +195,11 @@ pub struct VerifyOutput {
     /// See [`Self::model_id_check`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub params_hash_check: Option<HashCheck>,
-    /// See [`Self::model_id_check`].
+    /// See [`Self::model_id_check`]. NOTE: against the live Anthropic provider an
+    /// `io_hash` mismatch is EXPECTED and not grounds to challenge — the model's
+    /// raw response text varies run-to-run, so `io_hash` (a commitment to the exact
+    /// (input, output) the submitter used) rarely reproduces. Base the
+    /// challenge/no-challenge decision on `option_matches`, not this field.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub io_hash_check: Option<HashCheck>,
 }
