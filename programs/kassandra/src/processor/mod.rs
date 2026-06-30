@@ -13,6 +13,7 @@ use pinocchio::{
 use crate::instruction::Ix;
 
 pub mod advance_phase;
+pub mod claims;
 pub mod create_oracle;
 pub mod finalize_ai_claims;
 pub mod finalize_facts;
@@ -56,5 +57,8 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> Pr
         Ix::SetConfig => set_config::process(program_id, accounts, payload),
         Ix::ResolveDeadend => resolve_deadend::process(program_id, accounts, payload),
         Ix::KassPrice => kass_price::process(program_id, accounts, payload),
+        Ix::ClaimProposer => claims::claim_proposer(program_id, accounts, payload),
+        Ix::ClaimFact => claims::claim_fact(program_id, accounts, payload),
+        Ix::ClaimFactVote => claims::claim_fact_vote(program_id, accounts, payload),
     }
 }

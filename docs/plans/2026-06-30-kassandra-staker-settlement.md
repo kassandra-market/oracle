@@ -156,3 +156,89 @@ InvalidDeadend leaves 0/0. Full suite: 199 passed / 0 failed; clippy + fmt clean
 > (pure-counter) deliberately, so `invariants.rs` Arm A was NOT touched. When S5
 > makes settlement physical, fold the approve-voter slash into that reference
 > model (and consider flipping the harness default to the real 1/2).
+
+### S2 — claim_proposer / claim_fact / claim_fact_vote (DONE; first physical payouts)
+
+**Ix discriminants appended** (`instruction.rs`, stable contract): `ClaimProposer
+= 17`, `ClaimFact = 18`, `ClaimFactVote = 19` (+ `from_u8` arms). Dispatched in
+`processor/mod.rs` to `claims::claim_proposer/claim_fact/claim_fact_vote`. NO
+layout change (no new account fields) — `state_layout.rs` untouched.
+
+**New processor** `src/processor/claims.rs` — three permissionless claim-and-close
+instructions. Each: `require_terminal` (Resolved/InvalidDeadend, else `WrongPhase`;
+returns a `resolved: bool` so rewards apply ONLY on Resolved); re-derive +
+verify the oracle PDA from the payload nonce (same scheme as `settle_challenge`);
+`assert_key(stake_vault == oracle.stake_vault)`; load + type-check the claimant +
+bind it to this oracle; `assert_token_account(dest, oracle.kass_mint,
+claimant.authority)` + `assert_key(rent_recipient == claimant.authority)`; compute
+the entitlement; `payout_and_close` — program-signed `Transfer` from `stake_vault`
+(oracle-PDA signer `[b"oracle", nonce_le, [bump]]`; skipped when amount==0) then
+CLOSE the claimant account.
+
+**Account orders / payload** (payload = `oracle_nonce` u64 LE for every claim):
+- `claim_proposer` (17): `[0] oracle(ro) [1] proposer(w, closed) [2] dest_kass(w)
+  [3] stake_vault(w) [4] rent_recipient(w == proposer.authority) [5] token prog`.
+- `claim_fact` (18): same shape with `[1] fact(w, closed)`, dest/rent bound to
+  `fact.proposer` (the SUBMITTER authority).
+- `claim_fact_vote` (19): `[0] oracle(ro) [1] fact_vote(w, closed) [2] fact(w —
+  decremented, NOT closed) [3] dest_kass(w) [4] stake_vault(w) [5] rent_recipient
+  (w == fact_vote.voter) [6] token prog`. FactVote carries no `oracle` field, so
+  it is bound through the fact: `vote.fact == fact_ai` AND `fact.oracle == oracle`.
+  Oracle is READ-ONLY everywhere (claims never mutate it — they only read the
+  resolution stamps + sign as the PDA).
+
+**Matrix impl** (reward buckets via `reward::reward_buckets(reward_pool, pw, fw,
+total_correct, total_approved)`, then `proposer_reward`/`fact_reward`; u128 floor):
+- proposer: InvalidDeadend→`bond`; Resolved+disqualified→`bond − slashed_amount`;
+  Resolved+survivor+correct→`bond + proposer_reward`; Resolved+survivor+wrong→`bond`.
+- fact (submitter): InvalidDeadend→`stake`; agreed→`stake + fact_reward`;
+  duplicate→`stake`; rejected→`0` (still close + reclaim rent).
+- fact vote: InvalidDeadend→`stake`; `VOTE_DUPLICATE`→`stake`; approve+agreed→
+  `stake + fact_reward`; approve+duplicate-fact→`stake`; approve+rejected→
+  `stake − floor(stake·fact_vote_slash_num/den)`.
+
+**Close pattern** (pinocchio 0.8 `AccountInfo::close`): drain the claimant's
+lamports into the rent recipient (`*to += *from; *from = 0` in a scoped lamports
+borrow), then `claimant.close()` (zeros owner/lamports/data_len). Idempotent BY
+CLOSURE — a second claim finds the account reaped (0 lamports → owner no longer
+the program) and fails the load guard with `InvalidAccount`.
+
+**Fact-close ordering hazard + fix** (the genuinely new bit): `claim_fact` closes
+the `Fact`, but `claim_fact_vote` must READ the Fact's disposition. A submitter
+claiming first would strand every voter. Fix: each `claim_fact_vote` decrements
+the Fact's running `approve_stake`/`duplicate_stake` (its own stake), and
+`claim_fact` refuses to close while either is non-zero → new error
+`VotersOutstanding = 27` (`error.rs`). So the submitter's claim runs LAST,
+permissionlessly safe (no one can close the Fact early). Vote rewards read the
+oracle-level `total_approved_fact_stake` (immutable stamp), so decrementing the
+per-fact total never perturbs an entitlement.
+
+**Conservation**: every payout sourced from `stake_vault` (+ the per-account
+`slashed_amount` ledger + the oracle stamps); `total_oracle_stake` is NEVER read.
+`reward_pool` (stamped) == the physically-slashed KASS, so Σ entitlements + floor
+dust == vault on Resolved, and Σ == Σ stakes (vault drained to 0) on InvalidDeadend.
+
+**Harness** (`tests/common/mod.rs`): `seed_terminal_oracle(phase, resolved_option,
+&[ClaimProposerSpec], &[ClaimFactSpec{votes:[ClaimVoteSpec]}], slash_num,
+slash_den) -> TerminalSeed` fabricates a terminal oracle with a vault funded to
+EXACTLY Σ bonds+stakes and self-consistent stamps (computes `reward_pool`,
+`total_correct_proposer_stake`, `total_approved_fact_stake`, and each claimant's
+expected entitlement via the program's own `reward` helpers). Plus
+`claim_proposer_ix`/`claim_fact_ix`/`claim_fact_vote_ix`, `lamports`, `is_closed`.
+
+**Tests** (`tests/claims.rs`, 8): `resolved_proposer_matrix` (2666/1000/0),
+`resolved_fact_and_vote_matrix` (submitters 1416/0/1000; votes 708·708 / 200·300 /
+500·300), `resolved_conservation_sweep` (Σ + 2 dust == 8800 vault; dust ≤
+reward_pool), `invalid_deadend_full_returns` (full stakes, vault drained to 0,
+Σ == vault), `double_claim_fails_account_gone` (`InvalidAccount`),
+`submitter_before_voters_rejected` (`VotersOutstanding`), `dest_owner_mismatch_rejected`
+(`InvalidAccount`), `non_terminal_oracle_rejected` (`WrongPhase`). For each matrix
+row the test asserts the exact dest KASS delta, the account closed (rent reclaimed
+to its authority), and the vault decremented by exactly the entitlement. Full
+suite: 207 passed / 0 failed; clippy + fmt clean.
+
+> NOTE (out of S2 scope): a FLIP-slashed but SURVIVING proposer (`slashed_amount >
+> 0`, not disqualified) would be over-paid `bond` by the literal matrix. S2 seeds
+> only set `slashed_amount` on disqualified proposers (per the matrix as written).
+> S5's conservation fuzz should either subtract `slashed_amount` for survivors too
+> or assert the survivors-unslashed precondition.

@@ -69,6 +69,25 @@ pub enum Ix {
     /// wrapper over [`crate::price::kass_price`]; no on-chain consumer yet (the
     /// challenge-market rework consumes it next milestone).
     KassPrice = 16,
+    /// Permissionless claim-and-close for ONE proposer after the oracle is
+    /// terminal (Task S2): transfers the proposer's KASS entitlement (bond
+    /// return ± slash, plus the cohort reward on a correct claim) from the
+    /// stake vault to the proposer-authority's KASS account, then CLOSES the
+    /// `Proposer` account (rent → its authority). Idempotent by closure.
+    ClaimProposer = 17,
+    /// Permissionless claim-and-close for ONE fact submitter (Task S2): transfers
+    /// the submitter's KASS entitlement (full stake return + fact reward when
+    /// agreed; stake when duplicate; 0 when rejected) from the stake vault to the
+    /// submitter's KASS account, then CLOSES the `Fact` account (rent → the
+    /// submitter). Idempotent by closure.
+    ClaimFact = 18,
+    /// Permissionless claim-and-close for ONE fact vote (Task S2): transfers the
+    /// voter's KASS entitlement (stake + reward for an approve vote on an agreed
+    /// fact; the un-slashed remainder for an approve vote on a rejected fact;
+    /// full stake for a duplicate vote or on `InvalidDeadend`) from the stake
+    /// vault to the voter's KASS account, then CLOSES the `FactVote` account
+    /// (rent → the voter). Idempotent by closure.
+    ClaimFactVote = 19,
     // Future variants are APPENDED here with the next discriminant; add a
     // matching arm to `from_u8` below.
 }
@@ -95,6 +114,9 @@ impl Ix {
             14 => Some(Ix::SetConfig),
             15 => Some(Ix::ResolveDeadend),
             16 => Some(Ix::KassPrice),
+            17 => Some(Ix::ClaimProposer),
+            18 => Some(Ix::ClaimFact),
+            19 => Some(Ix::ClaimFactVote),
             _ => None,
         }
     }

@@ -1,0 +1,546 @@
+//! Task S2 — the three claim-and-close instructions (`claim_proposer`,
+//! `claim_fact`, `claim_fact_vote`): the first PHYSICAL settlement payouts.
+//!
+//! Each test drives a TERMINAL oracle seeded by
+//! [`TestCtx::seed_terminal_oracle`] (which stamps self-consistent resolution
+//! totals + a `reward_pool` equal to the physically-slashed KASS), claims an
+//! account, and asserts: the exact KASS delta to the owner's account, the
+//! claimant account closed (rent reclaimed to its authority), and the stake
+//! vault decremented by exactly the entitlement. Conservation arms prove the
+//! whole sweep drains the vault to floor dust (Resolved) or returns every stake
+//! (InvalidDeadend), sourced ONLY from the stake vault.
+
+mod common;
+use common::*;
+
+use kassandra_program::{
+    error::KassandraError,
+    state::{Phase, VOTE_APPROVE, VOTE_DUPLICATE},
+};
+use solana_sdk::{instruction::InstructionError, signature::Signer, transaction::TransactionError};
+
+/// A rich Resolved oracle exercising every matrix row at once. `resolved_option
+/// == 1`. Returns the seed; `slash = 1/2`.
+fn resolved_full(ctx: &mut TestCtx) -> TerminalSeed {
+    let proposers = vec![
+        // correct survivor
+        ClaimProposerSpec {
+            bond: 1_000,
+            claim_option: 1,
+            disqualified: false,
+            slashed_amount: 0,
+        },
+        // wrong-but-survived
+        ClaimProposerSpec {
+            bond: 1_000,
+            claim_option: 0,
+            disqualified: false,
+            slashed_amount: 0,
+        },
+        // disqualified (full slash to bond_pool)
+        ClaimProposerSpec {
+            bond: 1_000,
+            claim_option: 0,
+            disqualified: true,
+            slashed_amount: 1_000,
+        },
+    ];
+    let facts = vec![
+        // agreed: submitter + two approve voters earn the fact rate
+        ClaimFactSpec {
+            stake: 1_000,
+            agreed: true,
+            duplicate: false,
+            votes: vec![
+                ClaimVoteSpec {
+                    stake: 500,
+                    kind: VOTE_APPROVE,
+                },
+                ClaimVoteSpec {
+                    stake: 500,
+                    kind: VOTE_APPROVE,
+                },
+            ],
+        },
+        // rejected: submitter forfeits 100%, approve voters slashed 1/2 (even stakes)
+        ClaimFactSpec {
+            stake: 1_000,
+            agreed: false,
+            duplicate: false,
+            votes: vec![
+                ClaimVoteSpec {
+                    stake: 400,
+                    kind: VOTE_APPROVE,
+                },
+                ClaimVoteSpec {
+                    stake: 600,
+                    kind: VOTE_APPROVE,
+                },
+            ],
+        },
+        // duplicate-dominant: submitter + dup voter get stake; an approve voter
+        // on it gets stake too (no reward, no slash)
+        ClaimFactSpec {
+            stake: 1_000,
+            agreed: false,
+            duplicate: true,
+            votes: vec![
+                ClaimVoteSpec {
+                    stake: 500,
+                    kind: VOTE_DUPLICATE,
+                },
+                ClaimVoteSpec {
+                    stake: 300,
+                    kind: VOTE_APPROVE,
+                },
+            ],
+        },
+    ];
+    ctx.seed_terminal_oracle(Phase::Resolved, 1, &proposers, &facts, 1, 2)
+}
+
+/// Claim a proposer and assert: dest credited exactly `expected`, account
+/// closed, vault decremented by exactly `expected`, rent reclaimed to authority.
+fn assert_claim(
+    ctx: &mut TestCtx,
+    ix: solana_sdk::instruction::Instruction,
+    account: solana_sdk::pubkey::Pubkey,
+    dest: solana_sdk::pubkey::Pubkey,
+    stake_vault: solana_sdk::pubkey::Pubkey,
+    recipient: solana_sdk::pubkey::Pubkey,
+    expected: u64,
+) {
+    let vault_before = ctx.token_balance(stake_vault);
+    let dest_before = ctx.token_balance(dest);
+    let recip_before = ctx.lamports(recipient);
+    let rent = ctx.lamports(account);
+
+    let res = ctx.send(ix, &[]);
+    assert!(res.is_ok(), "claim should succeed: {res:?}");
+
+    assert_eq!(
+        ctx.token_balance(dest) - dest_before,
+        expected,
+        "dest credited exactly the entitlement"
+    );
+    assert_eq!(
+        vault_before - ctx.token_balance(stake_vault),
+        expected,
+        "stake vault decremented by exactly the entitlement"
+    );
+    assert!(ctx.is_closed(account), "claimant account closed");
+    assert_eq!(
+        ctx.lamports(recipient) - recip_before,
+        rent,
+        "rent reclaimed to the account authority"
+    );
+}
+
+#[test]
+fn resolved_proposer_matrix() {
+    let mut ctx = TestCtx::new();
+    let seed = resolved_full(&mut ctx);
+
+    // correct → bond + reward; wrong → bond; disqualified → bond − slashed.
+    let expects: Vec<u64> = seed.proposers.iter().map(|p| p.expected).collect();
+    assert_eq!(expects, vec![2_666, 1_000, 0]);
+
+    for i in 0..seed.proposers.len() {
+        let p = &seed.proposers[i];
+        let ix = ctx.claim_proposer_ix(
+            seed.oracle,
+            seed.nonce,
+            p.account,
+            p.dest_kass,
+            seed.stake_vault,
+            p.authority.pubkey(),
+        );
+        let (account, dest, recip, expected) =
+            (p.account, p.dest_kass, p.authority.pubkey(), p.expected);
+        assert_claim(
+            &mut ctx,
+            ix,
+            account,
+            dest,
+            seed.stake_vault,
+            recip,
+            expected,
+        );
+    }
+}
+
+#[test]
+fn resolved_fact_and_vote_matrix() {
+    let mut ctx = TestCtx::new();
+    let seed = resolved_full(&mut ctx);
+
+    // agreed submitter 1416, rejected submitter 0, duplicate submitter 1000.
+    let sub_expects: Vec<u64> = seed.facts.iter().map(|f| f.submitter.expected).collect();
+    assert_eq!(sub_expects, vec![1_416, 0, 1_000]);
+    // votes: agreed approve 708/708, rejected approve 200/300, dup 500 / approve 300.
+    let vote_expects: Vec<Vec<u64>> = seed
+        .facts
+        .iter()
+        .map(|f| f.votes.iter().map(|v| v.expected).collect())
+        .collect();
+    assert_eq!(
+        vote_expects,
+        vec![vec![708, 708], vec![200, 300], vec![500, 300]]
+    );
+
+    for fi in 0..seed.facts.len() {
+        let fact_account = seed.facts[fi].submitter.account;
+        // Votes FIRST (each keeps the Fact alive but decrements its voter total),
+        // then the submitter (which closes the Fact).
+        for vi in 0..seed.facts[fi].votes.len() {
+            let v = &seed.facts[fi].votes[vi];
+            let ix = ctx.claim_fact_vote_ix(
+                seed.oracle,
+                seed.nonce,
+                v.account,
+                fact_account,
+                v.dest_kass,
+                seed.stake_vault,
+                v.authority.pubkey(),
+            );
+            let (account, dest, recip, expected) =
+                (v.account, v.dest_kass, v.authority.pubkey(), v.expected);
+            assert_claim(
+                &mut ctx,
+                ix,
+                account,
+                dest,
+                seed.stake_vault,
+                recip,
+                expected,
+            );
+        }
+
+        let s = &seed.facts[fi].submitter;
+        let ix = ctx.claim_fact_ix(
+            seed.oracle,
+            seed.nonce,
+            s.account,
+            s.dest_kass,
+            seed.stake_vault,
+            s.authority.pubkey(),
+        );
+        let (account, dest, recip, expected) =
+            (s.account, s.dest_kass, s.authority.pubkey(), s.expected);
+        assert_claim(
+            &mut ctx,
+            ix,
+            account,
+            dest,
+            seed.stake_vault,
+            recip,
+            expected,
+        );
+    }
+}
+
+#[test]
+fn resolved_conservation_sweep() {
+    let mut ctx = TestCtx::new();
+    let seed = resolved_full(&mut ctx);
+
+    let mut sum: u64 = 0;
+    // proposers
+    for i in 0..seed.proposers.len() {
+        let p = &seed.proposers[i];
+        sum += p.expected;
+        let ix = ctx.claim_proposer_ix(
+            seed.oracle,
+            seed.nonce,
+            p.account,
+            p.dest_kass,
+            seed.stake_vault,
+            p.authority.pubkey(),
+        );
+        assert!(ctx.send(ix, &[]).is_ok());
+    }
+    // facts + votes (votes first so the submitter can close the fact last)
+    for fi in 0..seed.facts.len() {
+        let fact_account = seed.facts[fi].submitter.account;
+        for vi in 0..seed.facts[fi].votes.len() {
+            let v = &seed.facts[fi].votes[vi];
+            sum += v.expected;
+            let ix = ctx.claim_fact_vote_ix(
+                seed.oracle,
+                seed.nonce,
+                v.account,
+                fact_account,
+                v.dest_kass,
+                seed.stake_vault,
+                v.authority.pubkey(),
+            );
+            assert!(ctx.send(ix, &[]).is_ok());
+        }
+        {
+            let s = &seed.facts[fi].submitter;
+            sum += s.expected;
+            let ix = ctx.claim_fact_ix(
+                seed.oracle,
+                seed.nonce,
+                s.account,
+                s.dest_kass,
+                seed.stake_vault,
+                s.authority.pubkey(),
+            );
+            assert!(ctx.send(ix, &[]).is_ok());
+        }
+    }
+
+    let dust = ctx.token_balance(seed.stake_vault);
+    // CONSERVATION: Σ claims + dust == vault_initial; nothing reads total_oracle_stake.
+    assert_eq!(sum + dust, seed.vault_initial, "Σ claims + dust == vault");
+    // Floor-division dust only (bucket + pro-rata floors); never over-paid.
+    assert!(
+        dust <= seed.reward_pool,
+        "dust is just reward floor remainder"
+    );
+    assert_eq!(dust, 2, "expected 2 base units of floor dust");
+}
+
+#[test]
+fn invalid_deadend_full_returns() {
+    let mut ctx = TestCtx::new();
+    // Disposition flags are irrelevant on InvalidDeadend — everyone gets full
+    // stake back; reward_pool is 0.
+    let proposers = vec![
+        ClaimProposerSpec {
+            bond: 1_000,
+            claim_option: 0,
+            disqualified: false,
+            slashed_amount: 0,
+        },
+        ClaimProposerSpec {
+            bond: 2_000,
+            claim_option: 1,
+            disqualified: false,
+            slashed_amount: 0,
+        },
+    ];
+    let facts = vec![ClaimFactSpec {
+        stake: 1_500,
+        agreed: false,
+        duplicate: false,
+        votes: vec![
+            ClaimVoteSpec {
+                stake: 700,
+                kind: VOTE_APPROVE,
+            },
+            ClaimVoteSpec {
+                stake: 300,
+                kind: VOTE_DUPLICATE,
+            },
+        ],
+    }];
+    let seed = ctx.seed_terminal_oracle(Phase::InvalidDeadend, 0xFF, &proposers, &facts, 1, 2);
+    assert_eq!(seed.reward_pool, 0);
+
+    let mut sum: u64 = 0;
+    for i in 0..seed.proposers.len() {
+        let p = &seed.proposers[i];
+        sum += p.expected;
+        let ix = ctx.claim_proposer_ix(
+            seed.oracle,
+            seed.nonce,
+            p.account,
+            p.dest_kass,
+            seed.stake_vault,
+            p.authority.pubkey(),
+        );
+        let (account, dest, recip, expected) =
+            (p.account, p.dest_kass, p.authority.pubkey(), p.expected);
+        assert_claim(
+            &mut ctx,
+            ix,
+            account,
+            dest,
+            seed.stake_vault,
+            recip,
+            expected,
+        );
+    }
+    for fi in 0..seed.facts.len() {
+        let fact_account = seed.facts[fi].submitter.account;
+        for vi in 0..seed.facts[fi].votes.len() {
+            let v = &seed.facts[fi].votes[vi];
+            sum += v.expected;
+            let ix = ctx.claim_fact_vote_ix(
+                seed.oracle,
+                seed.nonce,
+                v.account,
+                fact_account,
+                v.dest_kass,
+                seed.stake_vault,
+                v.authority.pubkey(),
+            );
+            let (account, dest, recip, expected) =
+                (v.account, v.dest_kass, v.authority.pubkey(), v.expected);
+            assert_claim(
+                &mut ctx,
+                ix,
+                account,
+                dest,
+                seed.stake_vault,
+                recip,
+                expected,
+            );
+        }
+
+        let s = &seed.facts[fi].submitter;
+        sum += s.expected;
+        let ix = ctx.claim_fact_ix(
+            seed.oracle,
+            seed.nonce,
+            s.account,
+            s.dest_kass,
+            seed.stake_vault,
+            s.authority.pubkey(),
+        );
+        let (account, dest, recip, expected) =
+            (s.account, s.dest_kass, s.authority.pubkey(), s.expected);
+        assert_claim(
+            &mut ctx,
+            ix,
+            account,
+            dest,
+            seed.stake_vault,
+            recip,
+            expected,
+        );
+    }
+    // On InvalidDeadend Σ == Σ stakes exactly (no rewards, no slash retained).
+    assert_eq!(
+        sum, seed.vault_initial,
+        "full returns drain the vault exactly"
+    );
+    assert_eq!(
+        ctx.token_balance(seed.stake_vault),
+        0,
+        "vault fully drained"
+    );
+}
+
+#[test]
+fn double_claim_fails_account_gone() {
+    let mut ctx = TestCtx::new();
+    let seed = resolved_full(&mut ctx);
+    let p = &seed.proposers[0];
+    let recip = p.authority.pubkey();
+
+    let ix = ctx.claim_proposer_ix(
+        seed.oracle,
+        seed.nonce,
+        p.account,
+        p.dest_kass,
+        seed.stake_vault,
+        recip,
+    );
+    assert!(ctx.send(ix, &[]).is_ok());
+    assert!(ctx.is_closed(p.account));
+
+    // Second claim: the account is gone (zeroed/reaped) → owner/type guard fails.
+    let ix = ctx.claim_proposer_ix(
+        seed.oracle,
+        seed.nonce,
+        p.account,
+        p.dest_kass,
+        seed.stake_vault,
+        recip,
+    );
+    let err = ctx.send(ix, &[]).unwrap_err().err;
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(
+            0,
+            InstructionError::Custom(KassandraError::InvalidAccount as u32),
+        ),
+    );
+}
+
+#[test]
+fn dest_owner_mismatch_rejected() {
+    let mut ctx = TestCtx::new();
+    let seed = resolved_full(&mut ctx);
+    let p = &seed.proposers[0];
+
+    // A KASS account owned by a DIFFERENT party cannot receive the payout.
+    let attacker = solana_sdk::signature::Keypair::new();
+    let bad_dest = ctx.fund_kass(&attacker, 0);
+
+    let ix = ctx.claim_proposer_ix(
+        seed.oracle,
+        seed.nonce,
+        p.account,
+        bad_dest,
+        seed.stake_vault,
+        p.authority.pubkey(),
+    );
+    let err = ctx.send(ix, &[]).unwrap_err().err;
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(
+            0,
+            InstructionError::Custom(KassandraError::InvalidAccount as u32),
+        ),
+    );
+}
+
+#[test]
+fn submitter_before_voters_rejected() {
+    let mut ctx = TestCtx::new();
+    let seed = resolved_full(&mut ctx);
+    // Fact 0 (agreed) still has two unclaimed approve voters; the submitter's
+    // claim must run last (it closes the Fact every voter still reads).
+    let s = &seed.facts[0].submitter;
+    let ix = ctx.claim_fact_ix(
+        seed.oracle,
+        seed.nonce,
+        s.account,
+        s.dest_kass,
+        seed.stake_vault,
+        s.authority.pubkey(),
+    );
+    let err = ctx.send(ix, &[]).unwrap_err().err;
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(
+            0,
+            InstructionError::Custom(KassandraError::VotersOutstanding as u32),
+        ),
+    );
+}
+
+#[test]
+fn non_terminal_oracle_rejected() {
+    let mut ctx = TestCtx::new();
+    // A disputed (FactProposal) oracle is NOT terminal.
+    let oracle = ctx.seed_disputed_oracle(&[
+        ProposerSpec {
+            option: 0,
+            bond: 1_000,
+        },
+        ProposerSpec {
+            option: 1,
+            bond: 1_000,
+        },
+    ]);
+    let nonce = ctx.seeded(oracle).nonce;
+    let stake_vault = ctx.seeded(oracle).stake_vault;
+    let pda = ctx.proposers(oracle)[0].pda;
+    let authority = ctx.proposers(oracle)[0].authority.insecure_clone();
+    let dest = ctx.fund_kass(&authority, 0);
+
+    let ix = ctx.claim_proposer_ix(oracle, nonce, pda, dest, stake_vault, authority.pubkey());
+    let err = ctx.send(ix, &[]).unwrap_err().err;
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(
+            0,
+            InstructionError::Custom(KassandraError::WrongPhase as u32),
+        ),
+    );
+}

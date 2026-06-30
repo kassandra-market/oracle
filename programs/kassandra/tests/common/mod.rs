@@ -40,7 +40,11 @@ use kassandra_program::config::{
     MARKET_THRESHOLD_NUM, PHASE_WINDOW, PROPOSAL_WINDOW, THRESHOLD_DEN, THRESHOLD_NUM,
 };
 use kassandra_program::cpi::metadao_v06 as md6;
-use kassandra_program::state::{AccountType, Oracle, Phase, Proposer, CLAIM_OPTION_NONE};
+use kassandra_program::reward;
+use kassandra_program::state::{
+    AccountType, Fact, FactVote, Oracle, Phase, Proposer, CLAIM_OPTION_NONE, VOTE_APPROVE,
+    VOTE_DUPLICATE,
+};
 use litesvm::{types::TransactionResult, LiteSVM};
 use solana_sdk::{
     account::Account,
@@ -1379,6 +1383,446 @@ impl TestCtx {
             )
             .unwrap();
         addr
+    }
+}
+
+// ===========================================================================
+// Terminal-oracle seeding for the S2 claim-and-close tests.
+// ===========================================================================
+
+/// One proposer to seed into a TERMINAL oracle (Task S2 claims).
+#[derive(Clone, Copy, Debug)]
+pub struct ClaimProposerSpec {
+    pub bond: u64,
+    /// Post-AI-claim vote; compared to `resolved_option` for the correct/wrong split.
+    pub claim_option: u8,
+    pub disqualified: bool,
+    /// KASS already forfeited to `bond_pool` (only meaningful when disqualified).
+    pub slashed_amount: u64,
+}
+
+/// One fact vote to seed under a fact.
+#[derive(Clone, Copy, Debug)]
+pub struct ClaimVoteSpec {
+    pub stake: u64,
+    pub kind: u8, // VOTE_APPROVE / VOTE_DUPLICATE
+}
+
+/// One fact (submitter + its votes) to seed into a TERMINAL oracle.
+#[derive(Clone, Debug)]
+pub struct ClaimFactSpec {
+    pub stake: u64, // submitter stake
+    pub agreed: bool,
+    pub duplicate: bool,
+    pub votes: Vec<ClaimVoteSpec>,
+}
+
+/// A seeded claimant account: the program-owned account to be closed, its
+/// signing authority, the authority-owned KASS destination (starts at 0), and
+/// the expected KASS entitlement per the matrix.
+pub struct SeededClaim {
+    pub account: Pubkey,
+    pub authority: Keypair,
+    pub dest_kass: Pubkey,
+    pub expected: u64,
+    pub kind: u8, // for votes; ignored otherwise
+}
+
+/// A seeded fact: its submitter claim plus the per-vote claims.
+pub struct SeededFactClaim {
+    pub submitter: SeededClaim,
+    pub votes: Vec<SeededClaim>,
+}
+
+/// A fully-seeded terminal oracle and everything the claim tests need.
+pub struct TerminalSeed {
+    pub oracle: Pubkey,
+    pub nonce: u64,
+    pub bump: u8,
+    pub stake_vault: Pubkey,
+    pub vault_initial: u64,
+    pub reward_pool: u64,
+    pub total_correct_proposer_stake: u64,
+    pub total_approved_fact_stake: u64,
+    pub resolved_option: u8,
+    pub proposers: Vec<SeededClaim>,
+    pub facts: Vec<SeededFactClaim>,
+}
+
+/// Reward cohort weights the terminal seeder stamps (mirrors the real defaults).
+const SEED_PW: u64 = kassandra_program::config::REWARD_PROPOSER_WEIGHT;
+const SEED_FW: u64 = kassandra_program::config::REWARD_FACT_WEIGHT;
+
+impl TestCtx {
+    /// Fabricate an oracle in a TERMINAL phase (`Resolved` or `InvalidDeadend`)
+    /// with the given proposers/facts/votes, a stake vault funded with EXACTLY
+    /// the sum of all bonds + stakes, and self-consistent resolution stamps
+    /// (`reward_pool`, `total_correct_proposer_stake`, `total_approved_fact_stake`).
+    ///
+    /// `reward_pool` is computed as the physically-slashed KASS — Σ disqualified
+    /// `slashed_amount` + Σ rejected fact submitter stake + Σ rejected-fact
+    /// approve-voter slash (floor `num/den`) — so a complete sweep of every
+    /// claim drains the vault to floor-division dust (the conservation contract).
+    /// Each claimant's `expected` entitlement is precomputed via the program's
+    /// own [`reward`] helpers.
+    ///
+    /// `slash_num/slash_den` is the approve-voter slash fraction stamped on the
+    /// oracle (`1/2` matches the real default). To keep the aggregate
+    /// `bond_pool` counter equal to the per-voter physical slash (no dust gap),
+    /// callers should give rejected-fact approve votes EVEN stakes when
+    /// `slash_den == 2`.
+    pub fn seed_terminal_oracle(
+        &mut self,
+        phase: Phase,
+        resolved_option: u8,
+        proposers: &[ClaimProposerSpec],
+        facts: &[ClaimFactSpec],
+        slash_num: u64,
+        slash_den: u64,
+    ) -> TerminalSeed {
+        let resolved = phase == Phase::Resolved;
+
+        let nonce = self.next_nonce;
+        self.next_nonce += 1;
+        let (oracle_pda, bump) = Self::oracle_pda(&self.program_id, nonce);
+
+        // ----- totals + reward_pool (the resolution stamps) -----------------
+        let mut total_correct: u64 = 0;
+        for p in proposers {
+            if resolved && !p.disqualified && p.claim_option == resolved_option {
+                total_correct += p.bond;
+            }
+        }
+        let mut total_approved: u64 = 0;
+        for f in facts {
+            if resolved && f.agreed {
+                let approve: u64 = f
+                    .votes
+                    .iter()
+                    .filter(|v| v.kind == VOTE_APPROVE)
+                    .map(|v| v.stake)
+                    .sum();
+                total_approved += f.stake + approve;
+            }
+        }
+        let mut reward_pool: u64 = 0;
+        if resolved {
+            for p in proposers {
+                if p.disqualified {
+                    reward_pool += p.slashed_amount;
+                }
+            }
+            for f in facts {
+                if !f.agreed && !f.duplicate {
+                    // Rejected: submitter full forfeit + approve-voter slash.
+                    let approve: u64 = f
+                        .votes
+                        .iter()
+                        .filter(|v| v.kind == VOTE_APPROVE)
+                        .map(|v| v.stake)
+                        .sum();
+                    reward_pool += f.stake;
+                    reward_pool +=
+                        ((approve as u128) * (slash_num as u128) / (slash_den as u128)) as u64;
+                }
+            }
+        }
+
+        let (proposer_bucket, fact_bucket) =
+            reward::reward_buckets(reward_pool, SEED_PW, SEED_FW, total_correct, total_approved);
+
+        // ----- vault balance = Σ all bonds + stakes -------------------------
+        let mut vault_initial: u64 = proposers.iter().map(|p| p.bond).sum();
+        for f in facts {
+            vault_initial += f.stake;
+            vault_initial += f.votes.iter().map(|v| v.stake).sum::<u64>();
+        }
+        let stake_vault = self.create_token_account(self.kass_mint, oracle_pda, vault_initial);
+
+        // ----- the Oracle account -------------------------------------------
+        let now = self.now();
+        let mut oracle = Oracle::zeroed();
+        oracle.account_type = AccountType::Oracle.as_u8();
+        oracle.creator = self.payer.pubkey().to_bytes();
+        oracle.kass_mint = self.kass_mint.to_bytes();
+        oracle.usdc_mint = self.usdc_mint.to_bytes();
+        oracle.stake_vault = stake_vault.to_bytes();
+        oracle.deadline = now;
+        oracle.phase_ends_at = now;
+        oracle.twap_window = TWAP_WINDOW;
+        oracle.options_count = (resolved_option as u16 + 1).max(2) as u8;
+        oracle.set_phase(phase);
+        oracle.proposer_count = proposers.len() as u16;
+        oracle.surviving_count = proposers.iter().filter(|p| !p.disqualified).count() as u16;
+        oracle.total_oracle_stake = vault_initial;
+        oracle.dispute_bond_total = proposers.iter().map(|p| p.bond).sum();
+        oracle.bump = bump;
+        oracle.resolved_option = if resolved {
+            resolved_option
+        } else {
+            CLAIM_OPTION_NONE
+        };
+        // Reward config snapshot (the real defaults) + the chosen slash fraction.
+        oracle.reward_proposer_weight = SEED_PW;
+        oracle.reward_fact_weight = SEED_FW;
+        oracle.fact_vote_slash_num = slash_num;
+        oracle.fact_vote_slash_den = slash_den;
+        // The resolution stamps the claims read.
+        oracle.total_correct_proposer_stake = total_correct;
+        oracle.total_approved_fact_stake = total_approved;
+        oracle.reward_pool = reward_pool;
+        self.set_program_account(oracle_pda, bytemuck::bytes_of(&oracle).to_vec());
+
+        // ----- the Proposer accounts ----------------------------------------
+        let mut seeded_proposers = Vec::with_capacity(proposers.len());
+        for p in proposers {
+            let authority = Keypair::new();
+            self.svm
+                .airdrop(&authority.pubkey(), 1_000_000_000)
+                .unwrap();
+            let dest_kass = self.create_token_account(self.kass_mint, authority.pubkey(), 0);
+
+            let mut acct = Proposer::zeroed();
+            acct.account_type = AccountType::Proposer.as_u8();
+            acct.oracle = oracle_pda.to_bytes();
+            acct.authority = authority.pubkey().to_bytes();
+            acct.bond = p.bond;
+            acct.original_option = p.claim_option;
+            acct.claim_option = p.claim_option;
+            acct.disqualified = p.disqualified as u8;
+            acct.slashed = (p.slashed_amount > 0) as u8;
+            acct.slashed_amount = p.slashed_amount;
+            let account = self.seed_program_account(bytemuck::bytes_of(&acct).to_vec());
+
+            let expected = if !resolved {
+                p.bond
+            } else if p.disqualified {
+                p.bond.saturating_sub(p.slashed_amount)
+            } else if p.claim_option == resolved_option {
+                p.bond + reward::proposer_reward(p.bond, proposer_bucket, total_correct)
+            } else {
+                p.bond
+            };
+
+            seeded_proposers.push(SeededClaim {
+                account,
+                authority,
+                dest_kass,
+                expected,
+                kind: 0,
+            });
+        }
+
+        // ----- the Fact + FactVote accounts ---------------------------------
+        let mut seeded_facts = Vec::with_capacity(facts.len());
+        for f in facts {
+            let approve_stake: u64 = f
+                .votes
+                .iter()
+                .filter(|v| v.kind == VOTE_APPROVE)
+                .map(|v| v.stake)
+                .sum();
+            let duplicate_stake: u64 = f
+                .votes
+                .iter()
+                .filter(|v| v.kind == VOTE_DUPLICATE)
+                .map(|v| v.stake)
+                .sum();
+
+            // Submitter.
+            let submitter_auth = Keypair::new();
+            self.svm
+                .airdrop(&submitter_auth.pubkey(), 1_000_000_000)
+                .unwrap();
+            let submitter_dest =
+                self.create_token_account(self.kass_mint, submitter_auth.pubkey(), 0);
+
+            let mut fact = Fact::zeroed();
+            fact.account_type = AccountType::Fact.as_u8();
+            fact.oracle = oracle_pda.to_bytes();
+            fact.proposer = submitter_auth.pubkey().to_bytes();
+            fact.stake = f.stake;
+            fact.approve_stake = approve_stake;
+            fact.duplicate_stake = duplicate_stake;
+            fact.agreed = f.agreed as u8;
+            fact.duplicate = f.duplicate as u8;
+            fact.settled = 1;
+            let fact_account = self.seed_program_account(bytemuck::bytes_of(&fact).to_vec());
+
+            let submitter_expected = if !resolved {
+                f.stake
+            } else if f.agreed {
+                f.stake + reward::fact_reward(f.stake, fact_bucket, total_approved)
+            } else if f.duplicate {
+                f.stake
+            } else {
+                0
+            };
+
+            // Votes.
+            let mut seeded_votes = Vec::with_capacity(f.votes.len());
+            for v in &f.votes {
+                let voter = Keypair::new();
+                self.svm.airdrop(&voter.pubkey(), 1_000_000_000).unwrap();
+                let voter_dest = self.create_token_account(self.kass_mint, voter.pubkey(), 0);
+
+                let mut vote = FactVote::zeroed();
+                vote.account_type = AccountType::FactVote.as_u8();
+                vote.fact = fact_account.to_bytes();
+                vote.voter = voter.pubkey().to_bytes();
+                vote.stake = v.stake;
+                vote.kind = v.kind;
+                let vote_account = self.seed_program_account(bytemuck::bytes_of(&vote).to_vec());
+
+                let approve = resolved && v.kind == VOTE_APPROVE;
+                let expected = if approve && f.agreed {
+                    // Approve-voter on an agreed fact earns the fact rate.
+                    v.stake + reward::fact_reward(v.stake, fact_bucket, total_approved)
+                } else if approve && !f.duplicate {
+                    // Approve-voter on a rejected fact is slashed (floor num/den).
+                    v.stake - ((v.stake as u128) * (slash_num as u128) / (slash_den as u128)) as u64
+                } else {
+                    // InvalidDeadend, duplicate-voter, or approve-on-duplicate: full stake.
+                    v.stake
+                };
+
+                seeded_votes.push(SeededClaim {
+                    account: vote_account,
+                    authority: voter,
+                    dest_kass: voter_dest,
+                    expected,
+                    kind: v.kind,
+                });
+            }
+
+            seeded_facts.push(SeededFactClaim {
+                submitter: SeededClaim {
+                    account: fact_account,
+                    authority: submitter_auth,
+                    dest_kass: submitter_dest,
+                    expected: submitter_expected,
+                    kind: 0,
+                },
+                votes: seeded_votes,
+            });
+        }
+
+        TerminalSeed {
+            oracle: oracle_pda,
+            nonce,
+            bump,
+            stake_vault,
+            vault_initial,
+            reward_pool,
+            total_correct_proposer_stake: total_correct,
+            total_approved_fact_stake: total_approved,
+            resolved_option,
+            proposers: seeded_proposers,
+            facts: seeded_facts,
+        }
+    }
+
+    /// Build a `ClaimProposer` instruction (Ix 17). Account order:
+    /// `[0] oracle(ro) [1] proposer(w) [2] dest_kass(w) [3] stake_vault(w)
+    /// [4] rent_recipient(w) [5] token program`. Payload = `oracle_nonce` LE.
+    pub fn claim_proposer_ix(
+        &self,
+        oracle: Pubkey,
+        nonce: u64,
+        proposer: Pubkey,
+        dest_kass: Pubkey,
+        stake_vault: Pubkey,
+        rent_recipient: Pubkey,
+    ) -> Instruction {
+        let mut data = Vec::with_capacity(1 + 8);
+        data.push(kassandra_program::instruction::Ix::ClaimProposer as u8);
+        data.extend_from_slice(&nonce.to_le_bytes());
+        Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new_readonly(oracle, false),
+                AccountMeta::new(proposer, false),
+                AccountMeta::new(dest_kass, false),
+                AccountMeta::new(stake_vault, false),
+                AccountMeta::new(rent_recipient, false),
+                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+            ],
+            data,
+        }
+    }
+
+    /// Build a `ClaimFact` instruction (Ix 18). Same account order as
+    /// `claim_proposer_ix` with the `Fact` account at index 1.
+    pub fn claim_fact_ix(
+        &self,
+        oracle: Pubkey,
+        nonce: u64,
+        fact: Pubkey,
+        dest_kass: Pubkey,
+        stake_vault: Pubkey,
+        rent_recipient: Pubkey,
+    ) -> Instruction {
+        let mut data = Vec::with_capacity(1 + 8);
+        data.push(kassandra_program::instruction::Ix::ClaimFact as u8);
+        data.extend_from_slice(&nonce.to_le_bytes());
+        Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new_readonly(oracle, false),
+                AccountMeta::new(fact, false),
+                AccountMeta::new(dest_kass, false),
+                AccountMeta::new(stake_vault, false),
+                AccountMeta::new(rent_recipient, false),
+                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+            ],
+            data,
+        }
+    }
+
+    /// Build a `ClaimFactVote` instruction (Ix 19). Account order:
+    /// `[0] oracle(ro) [1] fact_vote(w) [2] fact(ro) [3] dest_kass(w)
+    /// [4] stake_vault(w) [5] rent_recipient(w) [6] token program`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn claim_fact_vote_ix(
+        &self,
+        oracle: Pubkey,
+        nonce: u64,
+        fact_vote: Pubkey,
+        fact: Pubkey,
+        dest_kass: Pubkey,
+        stake_vault: Pubkey,
+        rent_recipient: Pubkey,
+    ) -> Instruction {
+        let mut data = Vec::with_capacity(1 + 8);
+        data.push(kassandra_program::instruction::Ix::ClaimFactVote as u8);
+        data.extend_from_slice(&nonce.to_le_bytes());
+        Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new_readonly(oracle, false),
+                AccountMeta::new(fact_vote, false),
+                AccountMeta::new(fact, false),
+                AccountMeta::new(dest_kass, false),
+                AccountMeta::new(stake_vault, false),
+                AccountMeta::new(rent_recipient, false),
+                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+            ],
+            data,
+        }
+    }
+
+    /// Lamports balance of any account (0 if it does not exist), for asserting
+    /// rent reclamation.
+    pub fn lamports(&self, key: Pubkey) -> u64 {
+        self.svm.get_account(&key).map(|a| a.lamports).unwrap_or(0)
+    }
+
+    /// Whether an account is closed (gone / zero-lamports / zero-length data).
+    pub fn is_closed(&self, key: Pubkey) -> bool {
+        match self.svm.get_account(&key) {
+            None => true,
+            Some(a) => a.lamports == 0 || a.data.is_empty(),
+        }
     }
 }
 

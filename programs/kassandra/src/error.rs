@@ -109,6 +109,13 @@ pub enum KassandraError {
     /// divide-by-zero / nonsensical config on the create_oracle / settlement
     /// paths.
     InvalidConfig = 26,
+    /// `claim_fact` (the submitter claim, which CLOSES the `Fact` account) was
+    /// called while the fact still has unclaimed voter stake
+    /// (`approve_stake != 0` or `duplicate_stake != 0`). Each `claim_fact_vote`
+    /// decrements the relevant running total as a voter claims; the submitter's
+    /// claim must run LAST so the `Fact` it closes stays alive for every voter's
+    /// disposition read. Retry after the voters have claimed.
+    VotersOutstanding = 27,
 }
 
 impl From<KassandraError> for ProgramError {
