@@ -13,13 +13,10 @@
 //! the constants recon. Later tasks fill in the stub modules below.
 
 pub mod constants;
+pub mod hashing;
 pub mod provider;
 
 // --- stubs for later tasks --------------------------------------------------
-
-/// R1: the canonical `model_id` / `params_hash` / `io_hash` scheme (the
-/// protocol's off-chain hashing contract). Not yet implemented.
-pub mod hashing {}
 
 /// R2: deterministic prompt assembly + categorical answer parsing.
 pub mod prompt {}
