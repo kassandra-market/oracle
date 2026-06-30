@@ -42,3 +42,6 @@ export * from "./runner-bridge.js";
 
 // Futarchy v0.6 + Squads v4 builders + governance bootstrap (under `futarchy.*`).
 export * as futarchy from "./futarchy/index.js";
+
+// MetaDAO v0.4 standalone AMM builders + PDA derivers (under `ammV04.*`).
+export * as ammV04 from "./amm-v04/index.js";

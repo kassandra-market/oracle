@@ -36,3 +36,18 @@
 
 ## Execution note
 After each task: default `pnpm test` stays offline + green; the gated suite spawns surfpool (fork, network). CS1 (the v0.4 AMM builders) is the prerequisite; CS2 is the real-crank settle E2E (genuine attempt; stop-and-report a real blocker, the v0.4 wire formats are known so it should be tractable per G3's precedent). No program change. Append a CS1/CS2 delta log here.
+
+## Delta log
+
+### CS1 — v0.4 standalone AMM SDK builders (DONE)
+
+New module `sdk/src/amm-v04/` (`constants.ts`, `pda.ts`, `instructions.ts`, `index.ts`), re-exported from the barrel as `ammV04.*` (`sdk/src/index.ts`). Byte-layout tests in `sdk/test/amm-v04.test.ts` (13 tests, offline). Default `pnpm test` green: 101 passed (after `cargo build-sbf` for the litesvm acceptance tests' `.so`). `pnpm typecheck` clean. Program/runner untouched.
+
+All layouts derived from the binary-validated `cpi/metadao.rs:82-94` (discriminators + arg layouts) and the real-`metadao_amm.so`-proven `challenge_e2e.rs:641-769` (account orderings + PDA seeds) — nothing guessed. Verified layouts:
+
+- **`createAmm`** — disc `f25b15aa05447d40` (`metadao.rs:82`). Args (Borsh, 40 B): `twap_initial_observation:u128 ++ twap_max_observation_change_per_update:u128 ++ twap_start_delay_slots:u64` (`metadao.rs:78-82`). Accounts `[payer(ws), amm(w), lp_mint(w), base_mint, quote_mint, vault_ata_base(w), vault_ata_quote(w), ata_program, token_program, system_program, event_authority, amm_program]` (`challenge_e2e.rs:676-689`).
+- **`addLiquidity`** — disc `b59d59438fb63448` (`metadao.rs:85`). Args: `quote_amount:u64 ++ max_base_amount:u64 ++ min_lp_tokens:u64` (`metadao.rs:83-85`). Accounts `[payer(ws), amm(w), lp_mint(w), user_lp(w), user_base(w), user_quote(w), vault_ata_base(w), vault_ata_quote(w), token_program, event_authority, amm_program]` (`challenge_e2e.rs:703-714`). user_* are payer ATAs.
+- **`swap`** — disc `f8c69e91e17587c8` (`metadao.rs:90`). Args: `swap_type:u8 (Buy=0/Sell=1) ++ input_amount:u64 ++ output_amount_min:u64` (`metadao.rs:88-90`). Accounts `[payer(ws), amm(w), user_base(w), user_quote(w), vault_ata_base(w), vault_ata_quote(w), token_program, event_authority, amm_program]` (`challenge_e2e.rs:736-749`).
+- **`crankThatTwap`** — disc `dc6419f9005cc3c1` (`metadao.rs:94`), NO args. Accounts `[amm(w), event_authority, amm_program]` (`challenge_e2e.rs:760-769`).
+
+PDA/ATA derivers (`amm-v04/pda.ts`): `amm = [b"amm__", base, quote]`, `lpMint = [b"amm_lp_mint", amm]`, `eventAuthority = [b"__event_authority"]` (all under `AMMyu265…`), and `ata(owner, mint)` = SPL ATA `[owner, TOKEN_PROGRAM, mint]`; the AMM vaults are `ata(amm, base/quote)` (`challenge_e2e.rs:641-650`). Nothing undeterminable — no stop-report.
