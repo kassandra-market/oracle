@@ -188,6 +188,42 @@ pub const FACT_VOTE_SLASH_NUM: u64 = 1;
 /// Denominator of [`FACT_VOTE_SLASH_NUM`].
 pub const FACT_VOTE_SLASH_DEN: u64 = 2;
 
+// ---------------------------------------------------------------------------
+// Emission — KASS minted at oracle creation from the supply reservoir (Task S3).
+// ---------------------------------------------------------------------------
+//
+// On every `create_oracle`, AFTER the EMA fee burn, the program mints
+//
+//   reward_emission = (TOTAL_SUPPLY_CAP − kass_supply) · EMISSION_NUM / EMISSION_DEN
+//
+// KASS into the new oracle's `stake_vault` (program-signed by the mint-authority
+// PDA). The "reservoir" `TOTAL_SUPPLY_CAP − kass_supply` is the un-minted
+// headroom: emission is a small fraction of it per oracle, so issuance tapers as
+// supply approaches the cap (no epochs — live supply IS the schedule). The fee
+// burn shrinks supply first, so burning boosts the SAME-tx reservoir.
+//
+// # Genesis / disabled is harmless
+// These consts are the RECOMMENDED governance values (set via `set_config`), NOT
+// the `init_protocol` defaults: a freshly-initialized `Protocol` carries
+// `total_supply_cap == 0` + `emission_num == 0`, which makes `reward_emission ==
+// 0` (no mint). Emission is a DELIBERATE governance switch — a supply cap below
+// the live supply is meaningless, so the cap is left 0 (disabled) at genesis and
+// enabled once governance picks the curve. With emission disabled every oracle's
+// `stake_vault` holds exactly `Σ stakes` (the pre-S3 conservation invariant).
+
+/// Recommended hard cap on circulating KASS supply (base units): 1e9 KASS at 9
+/// decimals = `1e18`. The emission reservoir is `TOTAL_SUPPLY_CAP − supply`.
+/// Governance-set via `set_config` (`init_protocol` leaves the cap 0 = disabled).
+pub const TOTAL_SUPPLY_CAP: u64 = 1_000_000_000 * 1_000_000_000;
+
+/// Recommended emission rate NUMERATOR. With [`EMISSION_DEN`] = `1_000_000` this
+/// mints `1 / 1_000_000` of the remaining reservoir per oracle creation — small
+/// and self-tapering. `num ≤ den` (a fraction); governance-set via `set_config`.
+pub const EMISSION_NUM: u64 = 1;
+/// Recommended emission rate DENOMINATOR (`1_000_000`). See [`EMISSION_NUM`].
+/// `set_config` requires `emission_den > 0`.
+pub const EMISSION_DEN: u64 = 1_000_000;
+
 /// Seed of the program-controlled **KASS mint-authority PDA**:
 /// `[b"mint_authority"]`, program = [`crate::ID`]. Emission mints KASS signed by
 /// this PDA (the DAO governs the emission *rate*, not direct minting — design

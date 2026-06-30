@@ -116,6 +116,13 @@ pub enum KassandraError {
     /// claim must run LAST so the `Fact` it closes stays alive for every voter's
     /// disposition read. Retry after the voters have claimed.
     VotersOutstanding = 27,
+    /// `create_oracle` was about to mint `reward_emission` KASS (Task S3) but the
+    /// canonical `kass_mint`'s SPL mint authority is NOT the program's
+    /// mint-authority PDA (`[b"mint_authority"]`). Emission can only be trusted
+    /// when the program PDA is the sole minter, so a mint whose authority was not
+    /// handed to the PDA (or is `None`) is rejected here rather than silently
+    /// minting against an attacker-controlled authority.
+    BadMintAuthority = 28,
 }
 
 impl From<KassandraError> for ProgramError {

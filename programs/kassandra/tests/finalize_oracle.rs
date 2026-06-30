@@ -16,29 +16,22 @@ use common::*;
 
 use kassandra_program::{
     error::KassandraError,
-    instruction::Ix,
     state::{Phase, CLAIM_OPTION_NONE},
 };
 use solana_sdk::{
-    instruction::{AccountMeta, Instruction, InstructionError},
+    instruction::{Instruction, InstructionError},
     pubkey::Pubkey,
     transaction::TransactionError,
 };
 
 // ----- instruction builder --------------------------------------------------
 
+/// Delegates to the shared harness builder (S3 account order: oracle, kass_mint,
+/// stake_vault, token program, then the read-only proposer tail; payload =
+/// oracle nonce). The proposers are READ-ONLY (finalize only reads
+/// claim_option / disqualified).
 fn finalize_oracle_ix(ctx: &TestCtx, oracle: Pubkey, tail: &[Pubkey]) -> Instruction {
-    let mut accounts = Vec::with_capacity(1 + tail.len());
-    accounts.push(AccountMeta::new(oracle, false));
-    // Proposers are READ-ONLY: finalize only reads claim_option / disqualified.
-    for k in tail {
-        accounts.push(AccountMeta::new_readonly(*k, false));
-    }
-    Instruction {
-        program_id: ctx.program_id,
-        accounts,
-        data: vec![Ix::FinalizeOracle as u8],
-    }
+    ctx.finalize_oracle_ix(oracle, tail)
 }
 
 // ----- fixture --------------------------------------------------------------

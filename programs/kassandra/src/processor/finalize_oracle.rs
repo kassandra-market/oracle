@@ -61,13 +61,14 @@
 //! a second call fails `require_phase(Challenge)` with
 //! [`KassandraError::WrongPhase`].
 //!
-//! # No token CPI / deferred settlement (design §7)
-//! Like every instruction in this milestone, finalize_oracle performs NO token
-//! CPI: it records the terminal phase + result only. On the Resolved branch it
-//! ALSO stamps the resolution totals the S2 pull-claims read —
-//! `total_correct_proposer_stake` (Σ surviving-correct bonds) and `reward_pool`
-//! (= `bond_pool` for now; S3 folds emission in) — but these are pure
-//! stamps/counters, still NO token movement. Physical settlement —
+//! # Token CPI (Task S3): InvalidDeadend emission burn-back only
+//! On the Resolved branch finalize_oracle stamps the resolution totals the S2
+//! pull-claims read — `total_correct_proposer_stake` (Σ surviving-correct bonds)
+//! and `reward_pool = bond_pool + reward_emission` (S3 folds the creation-time
+//! emission in) — with NO token movement. On the InvalidDeadend branch it BURNS
+//! `reward_emission` back from `stake_vault` (program-signed by the oracle PDA)
+//! to the supply reservoir, so a dead-end leaks no emission; the remaining
+//! `Σ stakes` is then reclaimable in full by the S2 claims. Physical settlement —
 //! returning surviving bonds, returning all bonds/stakes on InvalidDeadend,
 //! reward distribution from `bond_pool`, and AiClaim-account rent reclamation
 //! (the design's "close AiClaim accounts on resolution") — is a DEFERRED later
@@ -78,27 +79,44 @@
 //! into this recompute, and finalize must not block on it.
 //!
 //! # Accounts
-//! 0. oracle — writable, owned by this program (the ONLY account mutated).
-//! 1. onward — the FULL proposer set: exactly `proposer_count` accounts, each
+//! 0. oracle        — writable, owned by this program (mutated; signs the burn-back).
+//! 1. kass_mint     — writable; `== oracle.kass_mint` (the InvalidDeadend burn-back target).
+//! 2. stake_vault   — writable; `== oracle.stake_vault` (emission burned from here).
+//! 3. token program — `pinocchio_token::ID`.
+//! 4. onward        — the FULL proposer set: exactly `proposer_count` accounts, each
 //!    READ-ONLY (finalize only reads `claim_option` / `disqualified`), owned by
 //!    this program, tagged Proposer, belonging to this oracle, distinct within
 //!    the call. Read-only avoids write-lock contention and raises the practical
 //!    per-tx account ceiling for the one-shot finalize.
 //!
-//! # Instruction payload
-//! Empty (after the 1-byte discriminant).
+//! NOTE: the fixed burn accounts (1-3) are required on BOTH terminal branches
+//! even though only InvalidDeadend with `reward_emission > 0` actually burns —
+//! the account layout is fixed, and validating the canonical mint/vault is cheap.
+//!
+//! # Instruction payload (after the 1-byte discriminant), exactly 8 bytes
+//! `oracle_nonce: u64 LE` — re-derives + verifies the oracle PDA, whose seeds
+//! `[b"oracle", nonce_le, bump]` program-sign the InvalidDeadend emission burn.
 
 use pinocchio::{
-    account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey, ProgramResult,
+    account_info::AccountInfo,
+    instruction::{Seed, Signer},
+    program_error::ProgramError,
+    pubkey::{find_program_address, Pubkey},
+    ProgramResult,
 };
+use pinocchio_token::instructions::Burn;
 
 use crate::{
     clock::{now, require_after_end, require_phase},
     error::KassandraError,
     plurality::{plurality, Plurality},
-    processor::guards::{load_oracle, load_proposer},
+    processor::guards::{assert_key, load_oracle, load_proposer},
     state::{Oracle, Phase, CLAIM_OPTION_NONE},
 };
+
+/// Exact payload length: `oracle_nonce[8]` (re-derives the oracle PDA signer for
+/// the InvalidDeadend emission burn-back).
+const PAYLOAD_LEN: usize = 8;
 
 /// Upper bound on the proposer set finalize_oracle will gather votes for. Lives
 /// in [`crate::config::MAX_PROPOSERS`] so `propose` (the registration cap, the
@@ -117,12 +135,14 @@ fn require_distinct(prior: &[AccountInfo], key: &Pubkey) -> ProgramResult {
     Ok(())
 }
 
-pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -> ProgramResult {
-    let [oracle_ai, tail @ ..] = accounts else {
+pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) -> ProgramResult {
+    let [oracle_ai, rest @ ..] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
-    // Owner + size + account_type check, then an owned copy for mutation.
+    // Owner + size + account_type check, then an owned copy for mutation. Done
+    // BEFORE the payload/fixed-account parse so a bad-owner oracle still fails
+    // with `InvalidAccount` (dispatch-routing contract).
     let mut oracle: Oracle = load_oracle(oracle_ai, program_id)?;
 
     require_phase(&oracle, Phase::Challenge)?;
@@ -134,6 +154,26 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
     if oracle.open_challenge_count != 0 {
         return Err(KassandraError::ChallengesOutstanding.into());
     }
+
+    // Payload nonce → re-derive + verify the oracle PDA (its seeds sign the
+    // InvalidDeadend emission burn-back), exactly like the S2 claims.
+    if payload.len() != PAYLOAD_LEN {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+    let nonce = u64::from_le_bytes(payload[0..8].try_into().unwrap());
+    let (derived, _bump) = find_program_address(&[b"oracle", &nonce.to_le_bytes()], program_id);
+    if &derived != oracle_ai.key() || _bump != oracle.bump {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+
+    // Fixed burn accounts (canonical mint + vault + token program), then the
+    // FULL proposer set as the read-only tail.
+    let [kass_mint_ai, stake_vault_ai, token_prog_ai, tail @ ..] = rest else {
+        return Err(ProgramError::NotEnoughAccountKeys);
+    };
+    assert_key(token_prog_ai, &pinocchio_token::ID)?;
+    assert_key(kass_mint_ai, &oracle.kass_mint)?;
+    assert_key(stake_vault_ai, &oracle.stake_vault)?;
 
     // One-shot: the FULL proposer set must be supplied in this single call.
     if tail.len() != oracle.proposer_count as usize {
@@ -194,11 +234,15 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
                 }
             }
             oracle.total_correct_proposer_stake = total_correct;
-            // Finalize the distributable reward pool. For now `reward_pool ==
-            // bond_pool`; S3 folds emission in here (`reward_pool = bond_pool +
-            // reward_emission`). `total_approved_fact_stake` was already
-            // accumulated incrementally by finalize_facts.
-            oracle.reward_pool = oracle.bond_pool;
+            // Finalize the distributable reward pool (S3): `reward_pool =
+            // bond_pool + reward_emission`. The creation-time emission is already
+            // physically in `stake_vault`, so it joins the reward pool here.
+            // `total_approved_fact_stake` was already accumulated incrementally by
+            // finalize_facts.
+            oracle.reward_pool = oracle
+                .bond_pool
+                .checked_add(oracle.reward_emission)
+                .ok_or(ProgramError::ArithmeticOverflow)?;
             oracle.resolved_option = opt;
             oracle.set_phase(Phase::Resolved);
         }
@@ -212,6 +256,26 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
         Plurality::Tie | Plurality::NoSurvivors => {
             oracle.resolved_option = CLAIM_OPTION_NONE;
             oracle.set_phase(Phase::InvalidDeadend);
+            // S3: burn the creation-time emission back to the reservoir so a
+            // dead-end leaks no KASS. The emission sits in `stake_vault` (token
+            // authority == the oracle PDA), so the burn is signed by the oracle
+            // seeds. Only when positive; reward_pool stays 0 (no distribution).
+            if oracle.reward_emission > 0 {
+                let nonce_le = nonce.to_le_bytes();
+                let bump_seed = [oracle.bump];
+                let seeds = [
+                    Seed::from(b"oracle".as_ref()),
+                    Seed::from(nonce_le.as_ref()),
+                    Seed::from(&bump_seed),
+                ];
+                Burn {
+                    account: stake_vault_ai,
+                    mint: kass_mint_ai,
+                    authority: oracle_ai,
+                    amount: oracle.reward_emission,
+                }
+                .invoke_signed(&[Signer::from(&seeds)])?;
+            }
         }
     }
 

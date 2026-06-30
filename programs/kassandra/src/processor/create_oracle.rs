@@ -21,16 +21,28 @@
 //! * Oracle: `[b"oracle", &nonce.to_le_bytes()]`, program = [`crate::ID`].
 //! * Stake vault: `[b"vault", oracle_pubkey]`, program = [`crate::ID`].
 //!
+//! # Emission minted at creation (Task S3 / design "Emissions")
+//! After the fee burn, the program computes `reward_emission = (total_supply_cap
+//! − kass_supply) · emission_num/den` (u128, floor; 0 when emission is disabled)
+//! and, if positive, MINTS it into the new oracle's `stake_vault` — program-
+//! signed by the **mint-authority PDA** `[b"mint_authority"]`, which MUST be the
+//! `kass_mint`'s SPL mint authority (else [`KassandraError::BadMintAuthority`]).
+//! Reading supply AFTER the burn means the burn boosts the same-tx reservoir. The
+//! amount is recorded as `Oracle.reward_emission`: `finalize_oracle` folds it into
+//! `reward_pool` on Resolved and burns it back on InvalidDeadend.
+//!
 //! # Accounts
 //! 0. protocol            — writable; pins the canonical mints + holds/updates `fee_ema`
 //! 1. oracle PDA          — writable, uninitialized (created here)
-//! 2. stake_vault PDA     — writable, uninitialized (created + initialized here)
+//! 2. stake_vault PDA     — writable, uninitialized (created + initialized here; emission minted in)
 //! 3. creator             — signer, writable; pays rent, recorded as `creator`, burn authority
-//! 4. kass_mint           — writable (burn decrements supply); must equal `protocol.kass_mint`
+//! 4. kass_mint           — writable (burn decrements / emission increments supply); == `protocol.kass_mint`
 //! 5. usdc_mint           — must equal `protocol.usdc_mint`
 //! 6. token program
 //! 7. system program
 //! 8. creator_kass_token  — writable; KASS token account on `kass_mint` the fee is burned from
+//! 9. mint_authority PDA  — `[b"mint_authority"]`; program-signs the emission `MintTo` (must
+//!    equal the `kass_mint`'s SPL mint authority)
 //!
 //! # Instruction payload (after the 1-byte discriminant), exactly 57 bytes
 //! `nonce: u64 LE` ++ `prompt_hash: [u8; 32]` ++ `options_count: u8` ++
@@ -39,16 +51,17 @@
 use bytemuck::Zeroable;
 use pinocchio::{
     account_info::AccountInfo,
-    instruction::Seed,
+    instruction::{Seed, Signer},
     program_error::ProgramError,
     pubkey::{find_program_address, Pubkey},
     sysvars::{rent::Rent, Sysvar},
     ProgramResult,
 };
-use pinocchio_token::instructions::{Burn, InitializeAccount3};
+use pinocchio_token::instructions::{Burn, InitializeAccount3, MintTo};
 
 use crate::{
     clock::now,
+    config::MINT_AUTHORITY_SEED,
     error::KassandraError,
     fee::{bumped_fee_ema, decay_fee_ema, fee_for_ema},
     processor::guards::{assert_key, assert_signer, create_pda, load_protocol},
@@ -74,7 +87,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     let deadline = i64::from_le_bytes(payload[41..49].try_into().unwrap());
     let twap_window = i64::from_le_bytes(payload[49..57].try_into().unwrap());
 
-    let [protocol_ai, oracle_ai, stake_vault_ai, creator_ai, kass_mint_ai, usdc_mint_ai, token_prog_ai, system_prog_ai, creator_kass_ai, ..] =
+    let [protocol_ai, oracle_ai, stake_vault_ai, creator_ai, kass_mint_ai, usdc_mint_ai, token_prog_ai, system_prog_ai, creator_kass_ai, mint_authority_ai, ..] =
         accounts
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
@@ -179,6 +192,40 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     }
     .invoke()?;
 
+    // --- emission minted at creation from the reservoir (Task S3) ----------
+    // Read the circulating supply AFTER the burn (so the burn boosts the same-tx
+    // reservoir), compute `reward_emission = (cap − supply)·num/den` (u128, floor;
+    // 0 when emission is disabled), and — if positive — mint it into stake_vault,
+    // program-signed by the mint-authority PDA. The PDA MUST be the kass_mint's
+    // SPL mint authority, else minting could be spoofed.
+    let reward_emission = compute_reward_emission(
+        kass_mint_ai,
+        protocol.total_supply_cap,
+        protocol.emission_num,
+        protocol.emission_den,
+    )?;
+    if reward_emission > 0 {
+        // Verify + derive the mint-authority PDA, then assert it is the kass_mint's
+        // SPL mint authority (the bootstrapping requirement).
+        let (expected_mint_auth, mint_auth_bump) =
+            find_program_address(&[MINT_AUTHORITY_SEED], program_id);
+        assert_key(mint_authority_ai, &expected_mint_auth)?;
+        assert_mint_authority_is(kass_mint_ai, &expected_mint_auth)?;
+
+        let mint_auth_bump_seed = [mint_auth_bump];
+        let mint_auth_seeds = [
+            Seed::from(MINT_AUTHORITY_SEED),
+            Seed::from(&mint_auth_bump_seed),
+        ];
+        MintTo {
+            mint: kass_mint_ai,
+            account: stake_vault_ai,
+            mint_authority: mint_authority_ai,
+            amount: reward_emission,
+        }
+        .invoke_signed(&[Signer::from(&mint_auth_seeds)])?;
+    }
+
     // --- create + initialize the Oracle (program-signed) -------------------
     let oracle_rent = Rent::get()?.minimum_balance(Oracle::LEN);
     let oracle_bump_seed = [oracle_bump];
@@ -225,6 +272,9 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     oracle.open_challenge_count = 0;
     oracle.prompt_hash = prompt_hash;
     oracle.bump = oracle_bump;
+    // S3: record the KASS minted into stake_vault at creation. finalize_oracle
+    // folds it into reward_pool on Resolved / burns it back on InvalidDeadend.
+    oracle.reward_emission = reward_emission;
     // Snapshot the governable behavioral params from the Protocol (F2). The
     // downstream processors read these from the Oracle, so an in-flight oracle
     // keeps its snapshot even if governance retunes the Protocol mid-dispute.
@@ -250,5 +300,66 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
         data.copy_from_slice(bytemuck::bytes_of(&oracle));
     }
 
+    Ok(())
+}
+
+/// SPL `Mint` byte offsets (mirrors `spl_token::state::Mint`): the
+/// `mint_authority` is a `COption<Pubkey>` — a 4-byte LE tag (`1` == `Some`)
+/// followed by the 32-byte pubkey — and the `supply: u64` immediately follows.
+const MINT_AUTHORITY_TAG_OFFSET: usize = 0;
+const MINT_AUTHORITY_KEY_OFFSET: usize = 4;
+const MINT_SUPPLY_OFFSET: usize = 36;
+
+/// Compute `reward_emission = (total_supply_cap − supply) · num / den` (u128
+/// intermediate, floor → u64), reading the circulating `supply` from the
+/// (post-burn) `kass_mint` account. Returns 0 when emission is disabled
+/// (`num == 0` or `cap <= supply`). Overflow-safe: the reservoir and the product
+/// are computed in u128; the floor result fits u64 because it never exceeds the
+/// reservoir (`num <= den`). `den == 0` is impossible (set_config / init keep it
+/// positive) but is defended as 0.
+fn compute_reward_emission(
+    kass_mint_ai: &AccountInfo,
+    total_supply_cap: u64,
+    emission_num: u64,
+    emission_den: u64,
+) -> Result<u64, ProgramError> {
+    if emission_num == 0 || emission_den == 0 || total_supply_cap == 0 {
+        return Ok(0);
+    }
+    let data = kass_mint_ai.try_borrow_data()?;
+    if data.len() < MINT_SUPPLY_OFFSET + 8 {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    let supply = u64::from_le_bytes(
+        data[MINT_SUPPLY_OFFSET..MINT_SUPPLY_OFFSET + 8]
+            .try_into()
+            .unwrap(),
+    );
+    let reservoir = (total_supply_cap as u128).saturating_sub(supply as u128);
+    let emission = reservoir * (emission_num as u128) / (emission_den as u128);
+    // `emission <= reservoir <= total_supply_cap <= u64::MAX`, so this fits u64.
+    Ok(emission as u64)
+}
+
+/// Assert the SPL `kass_mint`'s `mint_authority` is `Some(expected)`, else
+/// [`KassandraError::BadMintAuthority`]. A `None` authority (a fixed-supply mint)
+/// or any other key is rejected — emission requires the program PDA be the sole
+/// minter.
+fn assert_mint_authority_is(kass_mint_ai: &AccountInfo, expected: &Pubkey) -> ProgramResult {
+    let data = kass_mint_ai.try_borrow_data()?;
+    if data.len() < MINT_AUTHORITY_KEY_OFFSET + 32 {
+        return Err(KassandraError::BadMintAuthority.into());
+    }
+    let tag = u32::from_le_bytes(
+        data[MINT_AUTHORITY_TAG_OFFSET..MINT_AUTHORITY_TAG_OFFSET + 4]
+            .try_into()
+            .unwrap(),
+    );
+    if tag != 1 {
+        return Err(KassandraError::BadMintAuthority.into());
+    }
+    if &data[MINT_AUTHORITY_KEY_OFFSET..MINT_AUTHORITY_KEY_OFFSET + 32] != expected.as_ref() {
+        return Err(KassandraError::BadMintAuthority.into());
+    }
     Ok(())
 }

@@ -459,16 +459,9 @@ fn finalize_ai_claims_ix(ctx: &TestCtx, oracle: Pubkey, tail: &[Pubkey]) -> Inst
 }
 
 fn finalize_oracle_ix(ctx: &TestCtx, oracle: Pubkey, tail: &[Pubkey]) -> Instruction {
-    let mut accounts = Vec::with_capacity(1 + tail.len());
-    accounts.push(AccountMeta::new(oracle, false));
-    for k in tail {
-        accounts.push(AccountMeta::new_readonly(*k, false));
-    }
-    Instruction {
-        program_id: ctx.program_id,
-        accounts,
-        data: vec![Ix::FinalizeOracle as u8],
-    }
+    // S3 account order (oracle, kass_mint, stake_vault, token program, tail) +
+    // the oracle-nonce payload, via the shared harness builder.
+    ctx.finalize_oracle_ix(oracle, tail)
 }
 
 // ---------------------------------------------------------------------------

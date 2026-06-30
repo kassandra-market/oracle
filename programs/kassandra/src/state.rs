@@ -84,7 +84,7 @@ impl Phase {
     }
 }
 
-/// Top-level dispute account. `size_of == 384`.
+/// Top-level dispute account. `size_of == 392`.
 ///
 /// # Governable params snapshot (Task F2)
 /// The behavioral governable params (`threshold_*`, `market_threshold_*`,
@@ -182,6 +182,16 @@ pub struct Oracle {
     pub total_correct_proposer_stake: u64,
     pub total_approved_fact_stake: u64,
     pub reward_pool: u64,
+    // ---- Emission minted at creation (Task S3) -------------------------------
+    // KASS minted into `stake_vault` by `create_oracle` from the supply reservoir
+    // (`reward_emission = (total_supply_cap − kass_supply) · emission_num/den`,
+    // computed AFTER the EMA fee burn so the burn boosts the same-tx reservoir),
+    // recorded here. On the `Resolved` branch `finalize_oracle` folds it into
+    // `reward_pool` (`reward_pool = bond_pool + reward_emission`); on
+    // `InvalidDeadend` it is BURNED back from `stake_vault` to the reservoir so a
+    // dead-end leaks no emission. 0 when emission is disabled (`total_supply_cap
+    // == 0` or `emission_num == 0`) — the genesis/disabled default.
+    pub reward_emission: u64,
 }
 
 impl Oracle {

@@ -275,9 +275,19 @@ impl TestCtx {
             protocol_initialized: false,
         };
 
-        let authority = ctx.payer.pubkey();
-        ctx.kass_mint = ctx.create_mint(KASS_DECIMALS, authority);
-        ctx.usdc_mint = ctx.create_mint(USDC_DECIMALS, authority);
+        // Mint-authority bootstrap (Task S3): the KASS mint's authority MUST be
+        // the program's mint-authority PDA `[b"mint_authority"]`, so the program
+        // (and ONLY the program, via the emission `MintTo` CPI) can mint KASS.
+        // This harness fabricates every token balance directly (`create_token_
+        // account` writes the balance; `add_mint_supply` rewrites the mint supply
+        // field) and burns via the creator (token-account owner) as the SPL Burn
+        // authority — NONE of which uses the mint authority — so handing the mint
+        // authority to the PDA leaves all existing test funding working while
+        // enabling the program's emission mint. USDC's authority stays the payer
+        // (no program ever mints USDC).
+        let (mint_auth, _) = Self::mint_authority_pda(&ctx.program_id);
+        ctx.kass_mint = ctx.create_mint(KASS_DECIMALS, mint_auth);
+        ctx.usdc_mint = ctx.create_mint(USDC_DECIMALS, ctx.payer.pubkey());
         // Bankroll the payer with KASS backed by real mint supply so the
         // creation-fee burn reduces both the balance AND the supply.
         let payer = ctx.payer.pubkey();
@@ -295,6 +305,16 @@ impl TestCtx {
     /// Derive the Protocol singleton PDA: seeds `[b"protocol"]`.
     pub fn protocol_pda(program_id: &Pubkey) -> (Pubkey, u8) {
         Pubkey::find_program_address(&[b"protocol"], program_id)
+    }
+
+    /// Derive the KASS mint-authority PDA: seeds `[b"mint_authority"]`. This is
+    /// the authority handed to the KASS mint so the program's emission `MintTo`
+    /// (Task S3) can program-sign.
+    pub fn mint_authority_pda(program_id: &Pubkey) -> (Pubkey, u8) {
+        Pubkey::find_program_address(
+            &[kassandra_program::config::MINT_AUTHORITY_SEED],
+            program_id,
+        )
     }
 
     /// Derive the stake-vault PDA for an oracle: seeds `[b"vault", oracle]`.
@@ -617,6 +637,7 @@ impl TestCtx {
     ) -> Instruction {
         let (protocol_pda, _) = Self::protocol_pda(&self.program_id);
         let (stake_vault, _) = Self::stake_vault_pda(&self.program_id, &oracle);
+        let (mint_auth, _) = Self::mint_authority_pda(&self.program_id);
 
         let mut data = Vec::with_capacity(1 + 57);
         data.push(kassandra_program::instruction::Ix::CreateOracle as u8);
@@ -638,6 +659,8 @@ impl TestCtx {
                 AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
                 AccountMeta::new_readonly(system_program::ID, false),
                 AccountMeta::new(self.payer_kass, false),
+                // S3: the mint-authority PDA program-signs the emission MintTo.
+                AccountMeta::new_readonly(mint_auth, false),
             ],
             data,
         }
@@ -1066,6 +1089,95 @@ impl TestCtx {
         o.challenge_success_kass_fee_num = success_kass_num;
         o.challenge_success_kass_fee_den = success_kass_den;
         self.set_program_account(oracle, bytemuck::bytes_of(&o).to_vec());
+    }
+
+    /// Stamp a seeded oracle's `reward_emission` (the KASS minted at creation,
+    /// Task S3) AND physically place that KASS in its `stake_vault`, backed by
+    /// mint supply — so a `finalize_oracle` InvalidDeadend burn-back has real
+    /// tokens + supply to subtract (no underflow). Lets `finalize_oracle` tests
+    /// drive the emission fold-in / burn-back without the full create flow.
+    pub fn set_reward_emission(&mut self, oracle: Pubkey, amount: u64) {
+        let mut o = self.oracle(oracle);
+        o.reward_emission = amount;
+        let vault = Pubkey::new_from_array(o.stake_vault);
+        self.set_program_account(oracle, bytemuck::bytes_of(&o).to_vec());
+        self.add_token_balance(vault, amount);
+        self.add_mint_supply(self.kass_mint, amount);
+    }
+
+    /// Overwrite the KASS mint's SPL `mint_authority` (a `COption<Pubkey>`).
+    /// Lets the mint-authority-mismatch test point the canonical mint at a
+    /// non-PDA authority so `create_oracle`'s emission mint is rejected with
+    /// [`kassandra_program::error::KassandraError::BadMintAuthority`].
+    pub fn set_kass_mint_authority(&mut self, authority: Pubkey) {
+        let mint = self.kass_mint;
+        let acc = self.svm.get_account(&mint).expect("kass mint not found");
+        let mut state = Mint::unpack(&acc.data).expect("not a mint");
+        state.mint_authority = COption::Some(authority);
+        let mut data = vec![0u8; Mint::LEN];
+        state.pack_into_slice(&mut data);
+        self.svm
+            .set_account(
+                mint,
+                Account {
+                    lamports: acc.lamports,
+                    data,
+                    owner: TOKEN_PROGRAM_ID,
+                    executable: false,
+                    rent_epoch: 0,
+                },
+            )
+            .unwrap();
+    }
+
+    /// Add `delta` base units to an existing SPL token account's balance,
+    /// rewriting its account data in place.
+    fn add_token_balance(&mut self, addr: Pubkey, delta: u64) {
+        let acc = self
+            .svm
+            .get_account(&addr)
+            .unwrap_or_else(|| panic!("token account {addr} not found"));
+        let mut state = TokenAccount::unpack(&acc.data).expect("not a token account");
+        state.amount = state.amount.checked_add(delta).expect("balance overflow");
+        let mut data = vec![0u8; TokenAccount::LEN];
+        state.pack_into_slice(&mut data);
+        self.svm
+            .set_account(
+                addr,
+                Account {
+                    lamports: acc.lamports,
+                    data,
+                    owner: TOKEN_PROGRAM_ID,
+                    executable: false,
+                    rent_epoch: 0,
+                },
+            )
+            .unwrap();
+    }
+
+    /// Build a `FinalizeOracle` instruction (Ix 6). Account order:
+    /// `[0] oracle(w) [1] kass_mint(w) [2] stake_vault(w) [3] token program`
+    /// followed by the read-only proposer tail. Payload = `oracle_nonce` LE
+    /// (signs the InvalidDeadend emission burn-back). The oracle must be in the
+    /// bookkeeping map (seeded or real-flow) so its nonce/vault are known.
+    pub fn finalize_oracle_ix(&self, oracle: Pubkey, tail: &[Pubkey]) -> Instruction {
+        let seeded = self.seeded(oracle);
+        let mut data = Vec::with_capacity(1 + 8);
+        data.push(kassandra_program::instruction::Ix::FinalizeOracle as u8);
+        data.extend_from_slice(&seeded.nonce.to_le_bytes());
+        let mut accounts = Vec::with_capacity(4 + tail.len());
+        accounts.push(AccountMeta::new(oracle, false));
+        accounts.push(AccountMeta::new(self.kass_mint, false));
+        accounts.push(AccountMeta::new(seeded.stake_vault, false));
+        accounts.push(AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false));
+        for k in tail {
+            accounts.push(AccountMeta::new_readonly(*k, false));
+        }
+        Instruction {
+            program_id: self.program_id,
+            accounts,
+            data,
+        }
     }
 
     /// Fabricate a program-owned account at a fresh address holding `data`.
@@ -1687,7 +1799,8 @@ impl TestCtx {
                     // Approve-voter on a rejected fact is slashed CEIL(stake·num/den)
                     // (mirrors on-chain: ceil keeps the vault from running short
                     // against the floor-aggregate bond_pool credit).
-                    let ceil = ((v.stake as u128) * (slash_num as u128)).div_ceil(slash_den as u128);
+                    let ceil =
+                        ((v.stake as u128) * (slash_num as u128)).div_ceil(slash_den as u128);
                     v.stake - ceil as u64
                 } else {
                     // InvalidDeadend, duplicate-voter, or approve-on-duplicate: full stake.

@@ -290,3 +290,78 @@ slashed_amount` (reward_pool 0); the flip-slash portion stays as conservation-sa
 vault dust (under-pay, never over-pay).
 
 Full suite **211 passed / 0 failed**; clippy + fmt clean.
+
+### S3 — Emissions: mint-auth PDA + mint-at-creation + deadend burn-back (DONE; real KASS supply changes)
+
+**Oracle layout re-pinned** — `Oracle::LEN 384 → 392`. One new `u64`,
+`reward_emission @384`, appended after the S1 `reward_pool`: the KASS minted into
+`stake_vault` at creation. `tests/state_layout.rs` updated (LEN 392 + offset 384).
+All other struct LENs unchanged. 0 at create when emission is disabled.
+
+**Emission config defaults / reservoir formula** (`src/config.rs`): added
+`TOTAL_SUPPLY_CAP = 1e9·1e9 = 1e18` (1e9 KASS at 9 dp), `EMISSION_NUM = 1`,
+`EMISSION_DEN = 1_000_000` (mint 1/1_000_000 of the remaining reservoir per
+oracle). The reservoir formula:
+`reward_emission = floor((TOTAL_SUPPLY_CAP − kass_supply) · EMISSION_NUM/DEN)`
+(u128 intermediate, overflow-safe; `emission ≤ reservoir ≤ cap ≤ u64::MAX`).
+**Decision — emission DISABLED at genesis:** `init_protocol` was left UNCHANGED
+(`emission_num = 0`, `emission_den = 1`, `total_supply_cap = 0`), so a fresh
+`Protocol` mints nothing. Reasoning: a supply cap below the live supply is
+meaningless and the cap is a deliberate governance choice, so genesis cap 0 is
+the only safe default — and it keeps every existing real-flow conservation test
+(`stake_vault == total_oracle_stake == Σ bonds`) exactly true. The consts are the
+RECOMMENDED governance values, enabled via `set_config` (its existing emission
+bounds — `emission_den > 0`, `emission_num ≤ emission_den` — already cover the
+rate; `total_supply_cap` stays unbounded/0-allowed, no new bound). `governance_setup.rs`'s
+"defaults are 0/1/0" assertion stays green.
+
+**Mint-authority bootstrap (harness):** the KASS mint's SPL authority is now the
+program **mint-authority PDA** `[b"mint_authority"]` (was the payer). Because the
+harness fabricates ALL token balances directly (`create_token_account` writes the
+balance, `add_mint_supply` rewrites the mint supply field) and the creation-fee
+`Burn` is authorized by the token-account OWNER (the creator), NOT the mint
+authority, handing the mint authority to the PDA changed no existing funding —
+every staker is still funded as before, and ONLY the program's emission `MintTo`
+uses the authority. USDC's authority stays the payer. (So the "mint to payer
+first, then set_authority" dance the brief described is unneeded here — this
+harness never does a real `MintTo`.) New harness helpers: `mint_authority_pda`,
+`set_reward_emission` (stamps the field + funds the vault + bumps supply so the
+deadend burn has real tokens), `set_kass_mint_authority` (points the mint at a
+non-PDA key for the mismatch test), `add_token_balance`, and a shared
+`finalize_oracle_ix`.
+
+**`create_oracle` — mint emission (after the fee burn):** reads `kass_mint`
+supply AFTER the `Burn` CPI (so the burn boosts the same-tx reservoir), computes
+`reward_emission`; if `> 0`, asserts the mint-auth PDA == `kass_mint.mint_authority`
+(`BadMintAuthority` else) and CPI `MintTo`s it into `stake_vault`, **program-signed
+by `[b"mint_authority", bump]`** (the MintTo signer). Records `oracle.reward_emission`.
+NEW account appended: **9. mint_authority PDA** (`new_readonly`). New error
+**`BadMintAuthority = 28`**. SPL `Mint` read at fixed offsets (authority COption
+tag@0/key@4, supply@36).
+
+**`finalize_oracle` — fold-in / burn-back:** Resolved branch now stamps
+`reward_pool = bond_pool + reward_emission` (checked_add). InvalidDeadend branch
+**burns `reward_emission` back** from `stake_vault` against `kass_mint`, **signed
+by the ORACLE PDA `[b"oracle", nonce_le, bump]`** (the vault's token authority —
+a DIFFERENT signer from the MintTo's mint-auth PDA), only when `> 0`; `reward_pool`
+stays 0. New payload: **`oracle_nonce: u64 LE` (8 bytes)** (re-derives the oracle
+PDA signer). New account order: **`[0] oracle(w) [1] kass_mint(w) [2] stake_vault(w)
+[3] token program [4..] proposer tail`**. `load_oracle` runs BEFORE the payload/
+fixed-account parse so a bad-owner oracle still fails `InvalidAccount` (dispatch
+contract preserved); all gating errors (WrongPhase/WindowNotElapsed/Challenges
+Outstanding) also precede the payload parse. The 3 local `finalize_oracle_ix`
+test builders (finalize_oracle/invariants/lifecycle_e2e) now delegate to the
+shared harness builder.
+
+**Conservation:** on Resolved, `stake_vault_in = Σ stakes + reward_emission`, and
+`reward_pool` includes the emission, so Σ claims + dust == vault. On InvalidDeadend
+the emission is burned, leaving `Σ stakes` for the full-stake claims (no leak).
+
+**Tests** (`tests/emissions.rs`, 7): `create_oracle_mints_emission_into_vault`
+(supply +E, reservoir −E, vault == E, stamp set), `fee_burn_boosts_emission`
+(E uses post-burn supply, strictly > the pre-burn value → ordering proof),
+`resolved_folds_emission_into_reward_pool_and_claim` (reward_pool == bond_pool + E;
+chained claim pays `bond + emission-funded reward`), `invalid_deadend_burns_emission_back`
+(vault back to Σ stakes, supply −E, stamp retained), `mint_authority_mismatch_rejected`
+(`BadMintAuthority`), `cap_zero_emits_nothing` + `emission_num_zero_emits_nothing`
+(disabled is harmless). Full suite **218 passed / 0 failed**; clippy + fmt clean.
