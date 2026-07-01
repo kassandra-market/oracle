@@ -65,6 +65,11 @@ const SYSTEM_PROGRAM_ID: Pubkey = Pubkey::new_from_array([0u8; 32]);
 /// `submit_ai_claim` contract.
 const CLAIM_SEED: &[u8] = b"claim";
 
+/// The Proposer PDA seed prefix (`[b"proposer", oracle, authority]`), the
+/// on-chain `propose` contract — so the keeper can DERIVE its own proposer PDA
+/// from the oracle + the signing authority (no `--proposer` flag needed).
+const PROPOSER_SEED: &[u8] = b"proposer";
+
 /// Anything that can go wrong building/sending/confirming the claim tx.
 #[derive(Debug, thiserror::Error)]
 pub enum SubmitError {
@@ -131,6 +136,20 @@ pub fn program_id() -> Pubkey {
 pub fn derive_ai_claim_pda(oracle: &Pubkey, proposer: &Pubkey) -> Pubkey {
     Pubkey::find_program_address(
         &[CLAIM_SEED, oracle.as_ref(), proposer.as_ref()],
+        &program_id(),
+    )
+    .0
+}
+
+/// Derive the `proposer` PDA `find_program_address([b"proposer", oracle,
+/// authority], kassandra_id)` (the on-chain `propose` contract).
+///
+/// The keeper is run BY the proposer, so its Proposer PDA is fully determined by
+/// the oracle and the signing `authority` (the `--keypair` pubkey) — no separate
+/// `--proposer` argument is required.
+pub fn derive_proposer_pda(oracle: &Pubkey, authority: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(
+        &[PROPOSER_SEED, oracle.as_ref(), authority.as_ref()],
         &program_id(),
     )
     .0
@@ -483,6 +502,18 @@ mod tests {
         )
         .0;
         assert_eq!(derive_ai_claim_pda(&oracle, &proposer), expected);
+    }
+
+    #[test]
+    fn proposer_pda_matches_proposer_oracle_authority_seeds() {
+        let oracle = oracle_pk();
+        let authority = sample_keypair().pubkey();
+        let expected = Pubkey::find_program_address(
+            &[b"proposer", oracle.as_ref(), authority.as_ref()],
+            &program_id(),
+        )
+        .0;
+        assert_eq!(derive_proposer_pda(&oracle, &authority), expected);
     }
 
     #[test]

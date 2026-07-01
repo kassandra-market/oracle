@@ -18,8 +18,10 @@ the runner:
    `submit_ai_claim` payload — the bytes the on-chain program records and that a
    **challenger can independently reproduce**.
 
-It does not submit a transaction (see [v1 limitations](#v1-limitations)). It can
-read the oracle/fact accounts read-only from chain (the [on-chain config
+By default it only **emits** the payload. It can also run as a self-contained
+**keeper** (`run --submit`) that signs + sends + confirms the `submit_ai_claim`
+transaction itself (see [Keeper mode](#keeper-mode-run---submit)). It can read
+the oracle/fact accounts read-only from chain (the [on-chain config
 mode](#on-chain-config-mode), which pairs an RPC fetch with a `--prompt-file`
 supplying the interpretation text that hashes to the on-chain `prompt_hash`), or
 take an explicit config as input; either way it prints the claim metadata.
@@ -190,7 +192,56 @@ kassandra-runner run --config oracle.json
 97-byte `submit_ai_claim_payload_hex` (`model_id ++ params_hash ++ io_hash ++
 option`), the `resolved_model_id`, and (when `oracle`/`proposer` are present) the
 AiClaim PDA seeds. The payload hex is what you hand to the SDK/CLI that actually
-submits the transaction.
+submits the transaction — unless you use `--submit` (below), where the runner
+submits it for you.
+
+### Keeper mode (`run --submit`)
+
+By default `run` only emits the payload (no network write). With `--submit`, the
+runner becomes a **self-contained keeper**: after producing the claim it BUILDS,
+SIGNS, SENDS, and CONFIRMS the `submit_ai_claim` transaction itself, then reports
+the confirmed signature (or a clear program error). No SDK bridge needed.
+
+```sh
+export ANTHROPIC_API_KEY=sk-...
+kassandra-runner run --submit \
+  --oracle <ORACLE_PUBKEY_BASE58> \
+  --rpc-url https://api.mainnet-beta.solana.com \
+  --keypair ~/.config/solana/id.json \
+  --prompt-file interpretation.txt
+```
+
+The full keeper path is: **fetch the oracle/facts from chain (or read an explicit
+`--config`) → run the model → sign + submit → confirmed signature.**
+
+- **`--keypair <path>`** is a standard Solana CLI keypair JSON (a 64-byte array).
+  **The signer MUST be the proposer's registered `authority`** — the on-chain
+  `submit_ai_claim` asserts `authority == proposer.authority`, and the Proposer
+  PDA the transaction targets is DERIVED as `[b"proposer", oracle, authority]`
+  from the oracle and this keypair's pubkey. There is no `--proposer` flag: the
+  keeper is run *by* that proposer, so its Proposer PDA is fully determined.
+- **The submitted transaction carries the runner's OWN 97-byte payload verbatim**
+  — the exact bytes shown in `submit_ai_claim_payload_hex`, never recomputed — so
+  the submitted claim can never diverge from the emitted metadata.
+- **`--oracle`** (or the config's `oracle` field) and **`--rpc-url`** are
+  required with `--submit`. In explicit-`--config` mode `--rpc-url` is normally
+  optional, but it is **required for submission** (the network to submit to); a
+  missing `--keypair` / `--rpc-url` / oracle fails fast with a clear error before
+  the model is ever called.
+- The result is appended to the JSON output under `submission` (the confirmed
+  `signature`, `confirmation_status`, `oracle`, derived `proposer`, and
+  `authority`). Send + confirm rides the same reqwest JSON-RPC transport as the
+  on-chain fetch (no `solana-client`); confirmation polls `getSignatureStatuses`
+  to `confirmed` (~30s budget).
+
+> **Idempotency / phase notes.** `submit_ai_claim` creates the AiClaim PDA
+> `[b"claim", oracle, proposer]`, so a **second submit for the same (oracle,
+> proposer) FAILS** — the PDA already exists (`DuplicateClaim`). Submission also
+> requires the oracle to be in its `AiClaim` phase within the claim window, the
+> proposer to be registered + not disqualified, and the option to index a real
+> categorical option; a wrong-phase / closed-window / already-submitted attempt
+> surfaces the program error (via the tx preflight or the confirmed status),
+> which the runner reports rather than retrying.
 
 ### `verify` — should I challenge?
 
@@ -212,6 +263,8 @@ provided, the submitted hashes) to a submitted claim, advising
 | `--oracle <pubkey>` | Build the config from this on-chain oracle instead of `--config`. Requires `--rpc-url` + `--prompt-file`. |
 | `--rpc-url <url>` | Solana JSON-RPC url used with `--oracle`. |
 | `--prompt-file <path>` | Interpretation text file used with `--oracle`; its `sha256` must equal the on-chain `prompt_hash`. |
+| `--submit` | (`run`) Keeper mode: sign + send + confirm the `submit_ai_claim` tx. Requires `--keypair` + `--rpc-url` + an oracle. Default is emit-only. |
+| `--keypair <path>` | (`run --submit`) Solana CLI keypair JSON (64-byte array) that signs the tx. MUST be the proposer's `authority`. |
 | `--mock` | Use the deterministic `MockProvider` (offline, no key). Also enabled by `KASSANDRA_RUNNER_MOCK=1`. |
 | `--model <str>` | Override the pinned model string (default `claude-opus-4-8`). |
 | `--max-tokens <n>` | Override `max_tokens` (default `4096`). |
@@ -283,8 +336,6 @@ Deliberate, documented scope boundaries for v1:
   the on-chain `prompt_hash`. The RPC client has no retry/failover and reads at
   `confirmed` commitment; `getProgramAccounts` enumeration requires an RPC that
   serves it (some providers gate or paginate it for large programs).
-- **No transaction submission.** The runner emits the 97-byte payload (hex) for
-  the SDK/CLI to submit; it never signs or sends a transaction.
 - **SSRF to internal IPs is not blocked.** The fetcher's scheme allowlist stops
   `file:` / `data:` / etc., but a fact `uri` may still resolve to a
   link-local / loopback / internal address, and redirects follow `reqwest`'s

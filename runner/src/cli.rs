@@ -45,19 +45,26 @@
 //! `io_hash` that commits to the exact (input, raw response) seen.
 
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
+use solana_keypair::Keypair;
+use solana_pubkey::Pubkey;
+use solana_signer::Signer;
+
 use crate::anthropic::{
     AnthropicProvider, DEFAULT_MAX_TOKENS, DEFAULT_MODEL, PROVIDER_ID, THINKING_MODE,
 };
+use crate::constants::SUBMIT_AI_CLAIM_PAYLOAD_LEN;
 use crate::fetch::{fetch_and_verify_facts, FactFetcher, FactRef, HttpFactFetcher};
 use crate::hashing::ClaimMetadata;
 use crate::prompt::build_request;
 use crate::provider::{
     AiProvider, CategoricalOption, CategoricalOptions, MockProvider, ModelConfig,
 };
+use crate::submit::{derive_proposer_pda, submit_and_confirm, ConfirmOptions, SubmitError};
 
 /// Env var that, when set non-empty, forces the MockProvider (offline).
 pub const MOCK_ENV: &str = "KASSANDRA_RUNNER_MOCK";
@@ -165,6 +172,31 @@ pub struct RunOutput {
     /// The AiClaim PDA seeds, if oracle/proposer were provided.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub claim_pda_seeds: Option<ClaimPdaSeeds>,
+    /// The result of the on-chain submission, present only in `--submit` keeper
+    /// mode.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub submission: Option<SubmissionOutput>,
+    /// The exact 97-byte `submit_ai_claim` payload as raw bytes — the SAME bytes
+    /// as [`Self::submit_ai_claim_payload_hex`]. Carried (not re-serialized) so
+    /// the `--submit` path signs the runner's OWN payload verbatim rather than
+    /// recomputing it.
+    #[serde(skip)]
+    pub submit_ai_claim_payload: [u8; SUBMIT_AI_CLAIM_PAYLOAD_LEN],
+}
+
+/// The on-chain submission result appended to a `--submit` run.
+#[derive(Clone, Debug, Serialize)]
+pub struct SubmissionOutput {
+    /// The confirmed transaction signature (base58).
+    pub signature: String,
+    /// The reached confirmation status (`confirmed` / `finalized`).
+    pub confirmation_status: String,
+    /// The oracle the claim was submitted against (base58).
+    pub oracle: String,
+    /// The derived Proposer PDA (`[b"proposer", oracle, authority]`, base58).
+    pub proposer: String,
+    /// The signing authority = the `--keypair` pubkey (base58).
+    pub authority: String,
 }
 
 /// The result of comparing one submitted hash field.
@@ -254,6 +286,8 @@ pub async fn run_core(
         submit_ai_claim_payload_hex: to_hex(&payload),
         resolved_model_id: resp.model_id,
         claim_pda_seeds,
+        submission: None,
+        submit_ai_claim_payload: payload,
     })
 }
 
@@ -436,6 +470,90 @@ async fn resolve_config(common: &CommonArgs) -> anyhow::Result<RunnerConfig> {
     }
 }
 
+// --- --submit keeper mode ----------------------------------------------------
+
+/// The validated `--submit` target: the RPC url + keypair path to load + the
+/// oracle to submit against. `None` when `--submit` is not set (emit-only, the
+/// default).
+#[derive(Debug)]
+struct SubmitTarget {
+    rpc_url: String,
+    keypair_path: PathBuf,
+    oracle: Pubkey,
+}
+
+/// Resolve the oracle pubkey for submission: the explicit `--oracle` (on-chain
+/// mode) or the config's `oracle` field (explicit-config mode). Errors clearly
+/// if neither is present or the value is not a valid base58 pubkey.
+fn resolve_submit_oracle(common: &CommonArgs, config: &RunnerConfig) -> anyhow::Result<Pubkey> {
+    let raw = common
+        .oracle
+        .as_deref()
+        .or(config.oracle.as_deref())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "--submit needs an oracle: pass --oracle <pubkey> or set `oracle` in the config"
+            )
+        })?;
+    Pubkey::from_str(raw).map_err(|e| anyhow::anyhow!("invalid oracle pubkey `{raw}`: {e}"))
+}
+
+/// Validate the `--submit` args and resolve the submission target.
+///
+/// `--submit` requires BOTH `--keypair <path>` (the proposer's authority) and
+/// `--rpc-url <url>` (the network to submit to — already required in on-chain
+/// `--oracle` mode, but ALSO required for submission in explicit-config mode).
+/// The two required-arg checks are ordered keypair-then-rpc-url so each surfaces
+/// a distinct, clear error. Returns `None` when `--submit` is off.
+fn resolve_submit_target(
+    common: &CommonArgs,
+    submit: bool,
+    keypair: Option<&Path>,
+    config: &RunnerConfig,
+) -> anyhow::Result<Option<SubmitTarget>> {
+    if !submit {
+        return Ok(None);
+    }
+    let keypair_path = keypair
+        .ok_or_else(|| anyhow::anyhow!("--submit requires --keypair <path>"))?
+        .to_path_buf();
+    let rpc_url = common.rpc_url.clone().ok_or_else(|| {
+        anyhow::anyhow!("--submit requires --rpc-url <url> (the network to submit the claim to)")
+    })?;
+    let oracle = resolve_submit_oracle(common, config)?;
+    Ok(Some(SubmitTarget {
+        rpc_url,
+        keypair_path,
+        oracle,
+    }))
+}
+
+/// Sign + submit + confirm the run's claim over `rpc` — the testable seam
+/// (takes a `&dyn JsonRpc` so the keeper flow runs OFFLINE against
+/// [`crate::rpc::MockRpc`], mirroring [`build_config_from_chain`]).
+///
+/// The submitted transaction carries the RunOutput's OWN 97-byte `payload`
+/// verbatim (REUSE — never recomputed), signed by `authority`; the Proposer PDA
+/// is DERIVED from `[b"proposer", oracle, authority]`.
+pub async fn submit_claim(
+    rpc: &dyn crate::rpc::JsonRpc,
+    oracle: &Pubkey,
+    authority: &Keypair,
+    payload: &[u8; SUBMIT_AI_CLAIM_PAYLOAD_LEN],
+    opts: ConfirmOptions,
+) -> Result<SubmissionOutput, SubmitError> {
+    let authority_pubkey = authority.pubkey();
+    let proposer = derive_proposer_pda(oracle, &authority_pubkey);
+    let confirmation = submit_and_confirm(rpc, oracle, &proposer, authority, payload, opts).await?;
+    Ok(SubmissionOutput {
+        signature: confirmation.signature,
+        confirmation_status: confirmation.confirmation_status,
+        oracle: oracle.to_string(),
+        proposer: proposer.to_string(),
+        authority: authority_pubkey.to_string(),
+    })
+}
+
 /// Whether to use the mock provider (the `--mock` flag or `KASSANDRA_RUNNER_MOCK`
 /// set non-empty).
 fn use_mock(flag: bool) -> bool {
@@ -505,6 +623,18 @@ pub struct RunArgs {
     /// Shared options.
     #[command(flatten)]
     pub common: CommonArgs,
+    /// Keeper mode: after producing the claim, SIGN + SEND + CONFIRM the
+    /// `submit_ai_claim` transaction on chain (default: emit-only, no network
+    /// write). Requires `--keypair` and `--rpc-url`; the signer MUST be the
+    /// proposer's authority. The oracle comes from `--oracle` or the config's
+    /// `oracle` field; the Proposer PDA is derived from it + the keypair pubkey.
+    #[arg(long)]
+    pub submit: bool,
+    /// Path to the Solana CLI keypair JSON (a 64-byte array) that signs the
+    /// `submit_ai_claim` transaction in `--submit` mode. This keypair MUST be
+    /// the proposer's registered `authority`.
+    #[arg(long)]
+    pub keypair: Option<PathBuf>,
 }
 
 /// `verify` arguments.
@@ -542,10 +672,31 @@ pub async fn run_cli() -> anyhow::Result<()> {
     match cli.command {
         Command::Run(args) => {
             let config = resolve_config(&args.common).await?;
+            // Validate `--submit` args BEFORE the (paid) model call so a missing
+            // --keypair / --rpc-url / oracle fails fast.
+            let submit_target =
+                resolve_submit_target(&args.common, args.submit, args.keypair.as_deref(), &config)?;
             let model_config = build_model_config(args.common.model, args.common.max_tokens);
             let fetcher = HttpFactFetcher::new()?;
             let provider = build_provider(args.common.mock)?;
-            let out = run_core(&config, model_config, &fetcher, provider.as_ref()).await?;
+            let mut out = run_core(&config, model_config, &fetcher, provider.as_ref()).await?;
+
+            if let Some(target) = submit_target {
+                let authority = crate::submit::load_keypair(&target.keypair_path)?;
+                let rpc = crate::rpc::HttpJsonRpc::new(target.rpc_url)?;
+                // Reuse the run's OWN payload bytes (never recomputed) so the
+                // submitted claim can never diverge from the emitted metadata.
+                let submission = submit_claim(
+                    &rpc,
+                    &target.oracle,
+                    &authority,
+                    &out.submit_ai_claim_payload,
+                    ConfirmOptions::default(),
+                )
+                .await?;
+                out.submission = Some(submission);
+            }
+
             println!("{}", serde_json::to_string_pretty(&out)?);
         }
         Command::Verify(args) => {
@@ -864,5 +1015,185 @@ mod tests {
         (0..hex.len() / 2)
             .map(|i| u8::from_str_radix(&hex[2 * i..2 * i + 2], 16).unwrap())
             .collect()
+    }
+
+    // --- --submit keeper mode (offline) -------------------------------------
+
+    use crate::rpc::{JsonRpc, RpcError};
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+    use serde_json::json;
+    use solana_hash::Hash;
+    use solana_transaction::Transaction;
+    use std::time::Duration;
+
+    fn common_args_empty() -> CommonArgs {
+        CommonArgs {
+            config: None,
+            oracle: None,
+            rpc_url: None,
+            prompt_file: None,
+            mock: true,
+            model: None,
+            max_tokens: None,
+        }
+    }
+
+    fn fast_confirm() -> ConfirmOptions {
+        ConfirmOptions {
+            max_polls: 2,
+            poll_interval: Duration::from_millis(0),
+            require_finalized: false,
+        }
+    }
+
+    /// A [`JsonRpc`] that CAPTURES the base64 tx handed to `sendTransaction` so
+    /// the test can decode it and prove the submitted instruction data carries
+    /// the runner's OWN payload verbatim. Serves a canned blockhash + a
+    /// `confirmed` status.
+    struct CapturingRpc {
+        sent_tx: std::sync::Mutex<Option<String>>,
+        signature: String,
+    }
+
+    #[async_trait::async_trait]
+    impl JsonRpc for CapturingRpc {
+        async fn call(
+            &self,
+            method: &str,
+            params: serde_json::Value,
+        ) -> Result<serde_json::Value, RpcError> {
+            match method {
+                "getLatestBlockhash" => Ok(json!({
+                    "context": { "slot": 1 },
+                    "value": {
+                        "blockhash": Hash::new_from_array([7u8; 32]).to_string(),
+                        "lastValidBlockHeight": 100
+                    }
+                })),
+                "sendTransaction" => {
+                    let tx = params
+                        .get(0)
+                        .and_then(|v| v.as_str())
+                        .expect("sendTransaction param[0] is the base64 tx")
+                        .to_string();
+                    *self.sent_tx.lock().unwrap() = Some(tx);
+                    Ok(json!(self.signature))
+                }
+                "getSignatureStatuses" => Ok(json!({
+                    "context": { "slot": 2 },
+                    "value": [ { "slot": 2, "confirmations": null, "err": null, "confirmationStatus": "confirmed" } ]
+                })),
+                other => Err(RpcError::Malformed {
+                    method: other.to_string(),
+                    detail: "unexpected method".to_string(),
+                }),
+            }
+        }
+    }
+
+    /// Full keeper flow (fetch/config → claim → submit) against a capturing
+    /// MockRpc: the SUBMITTED tx must carry the RunOutput's own payload, the
+    /// proposer PDA must be derived from `[b"proposer", oracle, authority]`, and
+    /// the confirmed signature is reported.
+    #[tokio::test]
+    async fn keeper_submit_carries_runoutput_payload_and_reports_signature() {
+        // Produce a real RunOutput (and its payload) via the offline pipeline.
+        let content = b"BTC closed at $98,000.";
+        let uri = "https://facts.example/btc";
+        let config = sample_config(uri, content);
+        let fetcher = MockFactFetcher::new().with(uri, content.to_vec());
+        let provider = MockProvider::new(1, r#"{"option_index":1}"#, "mock-claude");
+        let out = run_core(&config, build_model_config(None, None), &fetcher, &provider)
+            .await
+            .unwrap();
+
+        let oracle = Pubkey::new_from_array([3u8; 32]);
+        let authority = Keypair::new();
+        let sig = "S".repeat(64);
+        let rpc = CapturingRpc {
+            sent_tx: std::sync::Mutex::new(None),
+            signature: sig.clone(),
+        };
+
+        let submission = submit_claim(
+            &rpc,
+            &oracle,
+            &authority,
+            &out.submit_ai_claim_payload,
+            fast_confirm(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(submission.signature, sig);
+        assert_eq!(submission.confirmation_status, "confirmed");
+        assert_eq!(submission.oracle, oracle.to_string());
+        // Proposer PDA is DERIVED from [b"proposer", oracle, authority].
+        assert_eq!(
+            submission.proposer,
+            derive_proposer_pda(&oracle, &authority.pubkey()).to_string()
+        );
+        assert_eq!(submission.authority, authority.pubkey().to_string());
+
+        // Decode the ACTUAL submitted tx: instruction data == [disc=3] ++ the
+        // RunOutput payload (the reuse guarantee, end-to-end).
+        let b64 = rpc.sent_tx.lock().unwrap().clone().unwrap();
+        let bytes = BASE64.decode(&b64).unwrap();
+        let tx: Transaction = bincode::deserialize(&bytes).unwrap();
+        let ix = &tx.message.instructions[0];
+        assert_eq!(ix.data[0], 3);
+        assert_eq!(&ix.data[1..], &out.submit_ai_claim_payload[..]);
+    }
+
+    #[test]
+    fn submit_off_yields_no_target() {
+        let common = common_args_empty();
+        let config = sample_config("https://x/y", b"z");
+        assert!(resolve_submit_target(&common, false, None, &config)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn submit_requires_keypair() {
+        let common = common_args_empty();
+        let config = sample_config("https://x/y", b"z");
+        let err = resolve_submit_target(&common, true, None, &config).unwrap_err();
+        assert!(err.to_string().contains("--keypair"), "{err}");
+    }
+
+    #[test]
+    fn submit_explicit_mode_requires_rpc_url() {
+        // Explicit-config mode (no --oracle / --rpc-url), keypair provided → the
+        // missing --rpc-url must be surfaced.
+        let common = common_args_empty();
+        let config = sample_config("https://x/y", b"z");
+        let err = resolve_submit_target(&common, true, Some(Path::new("/tmp/kp.json")), &config)
+            .unwrap_err();
+        assert!(err.to_string().contains("--rpc-url"), "{err}");
+    }
+
+    #[test]
+    fn submit_needs_an_oracle() {
+        let mut common = common_args_empty();
+        common.rpc_url = Some("http://localhost:8899".to_string());
+        let config = sample_config("https://x/y", b"z"); // config.oracle == None
+        let err = resolve_submit_target(&common, true, Some(Path::new("/tmp/kp.json")), &config)
+            .unwrap_err();
+        assert!(err.to_string().contains("oracle"), "{err}");
+    }
+
+    #[test]
+    fn submit_oracle_resolved_from_config() {
+        let mut common = common_args_empty();
+        common.rpc_url = Some("http://localhost:8899".to_string());
+        let mut config = sample_config("https://x/y", b"z");
+        let oracle_pk = "So11111111111111111111111111111111111111112";
+        config.oracle = Some(oracle_pk.to_string());
+        let target = resolve_submit_target(&common, true, Some(Path::new("/tmp/kp.json")), &config)
+            .unwrap()
+            .unwrap();
+        assert_eq!(target.oracle.to_string(), oracle_pk);
+        assert_eq!(target.rpc_url, "http://localhost:8899");
     }
 }
