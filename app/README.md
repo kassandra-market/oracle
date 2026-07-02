@@ -56,15 +56,41 @@ with loading/error/refetch and re-fetch when the cluster/connection changes.
 
 ### Write flows (wallet-signed)
 
-The detail page carries a **Participate** surface plus per-fact vote controls — three
-wallet-signed actions, each gated on a connected wallet **and** the oracle's current phase:
+The dApp covers the **full oracle lifecycle** as wallet-signed actions, each gated on a connected
+wallet **and** the oracle's current phase. Every action wraps a pure `build*Ixs` action layer
+(`src/data/actions/*.ts` + `src/data/actions.ts`) and sends via wallet-adapter's `sendTransaction`.
 
+**Create** (`/oracles/new`, linked from the list): a question (hashed to the on-chain
+`prompt_hash`) + options count + deadline + KASS/USDC mints (defaulted from the Protocol) → a new
+oracle; navigates to its detail on success.
+
+**Participate** (the detail page's Participate surface + per-fact controls):
 - **Propose** (Proposal phase): pick an option + escrow a **KASS** bond.
-- **Submit fact** (FactProposal phase): a content hash (hash pasted text, or paste a 32-byte
-  hex hash) + an off-chain URI (≤200 bytes) + a KASS stake.
+- **Submit fact** (FactProposal phase): a content hash (hash pasted text, or paste a 32-byte hex
+  hash) + an off-chain URI (≤200 bytes) + a KASS stake.
 - **Vote** (FactVoting phase): Approve or flag Duplicate on each fact + a KASS stake.
 
-Every action **requires KASS** — the bond/stake is escrowed to the oracle's stake vault (amounts
+**Crank / finalize** (permissionless, one per pre-Resolved phase): finalize proposals → advance →
+finalize facts → finalize AI claims → finalize oracle, advancing the oracle toward Resolved.
+Near-cap proposer sets (past ~24) show a v0/ALT note instead of a legacy-tx button. The oracle
+**nonce** (needed by finalize-facts/oracle and not stored on-chain) is persisted at create time
+(`src/lib/nonceStore.ts`, per-browser localStorage) and recalled before the bounded PDA-scan
+fallback.
+
+**Challenge + AI claim:**
+- **Submit AI claim** (AiClaim phase): the three 32-byte model/params/io hashes + the option (hex
+  fields, or paste the runner's JSON output); the proposer PDA is derived from the connected wallet.
+- **Challenge** (Challenge phase): a deliberately **thin** open + settle-crank + status surface —
+  a browser can't compose a MetaDAO v0.4 conditional-vault market, so the externally-composed
+  account set is pasted as runner-emitted JSON (parsed safely, never `eval`'d). Settle is withheld
+  until the market's TWAP window closes.
+
+**Claim / close / sweep** (Resolved/InvalidDeadend phase): on each card, a **Claim** control
+(shown only to the owning wallet — `authority == connected`) pays a participant's KASS reward/refund
+and closes the account; permissionless **Close** (AI claim / settled market) and a grace-gated,
+governance-checked **Sweep** (residual → the DAO treasury; rent → the creator) finish cleanup.
+
+Every staking action **requires KASS** — the bond/stake is escrowed to the oracle's stake vault (amounts
 are raw base units, matching the read view; a missing KASS ATA is created idempotently on the
 first action). Forms wrap the pure WF1 action layer (`src/data/actions.ts` `build*Ixs`) and send
 via wallet-adapter's `sendTransaction`; `src/hooks/useWriteAction.ts` + `src/data/writeAction.ts`
@@ -114,16 +140,20 @@ for lifted cards); chestnut is the ONLY button fill; flat surfaces + hairline pe
 for display ≥20px, Inter for all body; ≤2 text colors per block; ember/saffron as 1–2
 punctuation moments per viewport.
 
-## Slice 3 (this milestone) vs next
+## What's built vs next
 
-**Slice 3 (the write flows):** on top of the slice-1 design system + landing (`src/components/`)
-and the slice-2 read layer (`src/data/oracles.ts`, `/oracles` + `/oracles/:pubkey`), the dApp
-now **writes**: a real wallet connect (`AppProviders` → wallet-adapter) plus the three
-wallet-signed forms above (propose / submit-fact / vote-fact), wrapping the pure action layer
-(`src/data/{actions,send,writeAction}.ts`) and sending via `sendTransaction`. Read-only browsing
-still works fully disconnected.
+The dApp is layered across four slices: **slice 1** the Delphi design system + landing; **slice 2**
+wallet connect (`AppProviders` → wallet-adapter) + the read layer (`src/data/oracles.ts`, the
+`/oracles` browse + `/oracles/:pubkey` detail); **slice 3** the participation write flows
+(propose / submit-fact / vote-fact); **slice 4** the **complete write surface** — create-oracle,
+the finalize/crank progression, challenge (open/settle) + submit-AI-claim, and claim/close/sweep
+payouts. Every write wraps the pure action layer (`src/data/actions/*.ts` `build*Ixs`
+→ `sendAndConfirm` → `useWriteAction`) and is proven by a keypair-driven gated surfpool E2E
+(`KASSANDRA_E2E=1`), including a **forked-mainnet** challenge settle over the real MetaDAO v0.4 AMM.
+Read-only browsing still works fully disconnected.
 
-**Next:** the remaining lifecycle actions (create-oracle, finalize proposals/facts/AI/oracle,
-open/settle challenge, submit AI claim, claim/close/sweep) + a standing devnet deployment — all
-deferred. The app only ever consumes the built `@kassandra/sdk`; programs/runner/SDK-src are
-untouched.
+**Next / deferred:** a standing devnet deployment (the app points at a configurable cluster; the
+E2Es use surfpool); a KASS-balance affordance on the staking forms (the tx error surfaces cleanly
+without it); route-level code-splitting (the main chunk is over the 500 kB warning); and a richer
+challenge-market trading UI (the current open/settle surface is intentionally thin). The app only
+ever consumes the built `@kassandra/sdk`; programs/runner/SDK-src are untouched.

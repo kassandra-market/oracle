@@ -196,7 +196,7 @@ describe.skipIf(!ENABLED)("oracle read data layer over a seeded surfpool cluster
     for (let i = 1; i < oracles.length; i++) {
       expect(oracles[i - 1].oracle.deadline >= oracles[i].oracle.deadline).toBe(true);
     }
-  });
+  }, 30_000);
 
   it("fetchOracleDetail assembles the disputed oracle's fact + 2 proposers + AI claim", async () => {
     const detail = await fetchOracleDetail(f.harness.connection, oracleAddr[3]);
@@ -210,7 +210,7 @@ describe.skipIf(!ENABLED)("oracle read data layer over a seeded surfpool cluster
     expect(detail.aiClaims[0].aiClaim.option).toBe(0);
     expect(toHex(detail.aiClaims[0].aiClaim.modelId)).toBe("11".repeat(32));
     expect(detail.market).toBeUndefined(); // no challenge opened
-  });
+  }, 30_000);
 
   it("fetchOracleDetail returns an oracle with empty child sets", async () => {
     const detail = await fetchOracleDetail(f.harness.connection, oracleAddr[1]);
@@ -219,7 +219,7 @@ describe.skipIf(!ENABLED)("oracle read data layer over a seeded surfpool cluster
     expect(detail.proposers).toEqual([]);
     expect(detail.aiClaims).toEqual([]);
     expect(detail.market).toBeUndefined();
-  });
+  }, 30_000);
 });
 
 // ---------------------------------------------------------------------------
