@@ -12,6 +12,8 @@ export interface SectionHeaderProps {
   line2?: ReactNode
   /** One short supporting paragraph, Inter ~17px bronze. */
   paragraph?: ReactNode
+  /** Heading element for the headline. Defaults to `h2`; pages that own the sole page title pass `h1`. */
+  as?: 'h1' | 'h2'
   className?: string
 }
 
@@ -27,6 +29,7 @@ export function SectionHeader({
   line1,
   line2,
   paragraph,
+  as: Heading = 'h2',
   className = '',
 }: SectionHeaderProps) {
   return (
@@ -36,10 +39,10 @@ export function SectionHeader({
           <EyebrowTag pill={eyebrowPill}>{eyebrow}</EyebrowTag>
         </div>
       ) : null}
-      <h2 className="font-serif font-light text-heading text-sepia">
+      <Heading className="font-serif font-light text-heading text-sepia">
         <span className="block">{line1}</span>
         {line2 ? <span className="block italic text-bronze">{line2}</span> : null}
-      </h2>
+      </Heading>
       {paragraph ? (
         <p className="mt-5 font-inter text-[17px] leading-relaxed text-bronze">{paragraph}</p>
       ) : null}

@@ -32,7 +32,36 @@ Roboto Mono 400) — the build is fully offline (no hotlinked CDNs or images).
 ## Routes
 
 - `/` — the Kassandra landing page (`src/pages/Landing.tsx`).
-- `/styleguide` — the living design-system gallery (all tokens + primitives).
+- `/oracles` — the oracle browser (`src/pages/Oracles.tsx`): a responsive grid of Delphi
+  cards, one per decoded on-chain oracle (phase chip, relative deadline, proposer/fact/option
+  counts, resolved option). Read-only.
+- `/oracles/:pubkey` — the oracle detail view (`src/pages/OracleDetail.tsx`): an editorial
+  layout of one oracle + its facts, proposers, AI claims, and challenge market, with
+  copy-on-click truncated pubkeys/hashes. Read-only.
+
+### RPC / cluster config
+
+The browse views read the chain through the connection wired in FA1: the NavBar cluster
+selector (`localnet` / `devnet` / `mainnet-beta`, persisted in `localStorage`) drives the
+`Connection` from `useConnection()`. Localnet resolves to `VITE_RPC_URL` (default
+`http://127.0.0.1:8899`). The data layer (`src/data/oracles.ts`, FA2) enumerates + decodes
+oracle accounts via `getProgramAccounts`; the query hooks (`src/hooks/useOracles.ts`) wrap it
+with loading/error/refetch and re-fetch when the cluster/connection changes.
+
+**Point at a seeded surfpool:** run the FA2 gated integration test's seed flow (surfpool on
+`127.0.0.1:8899` with the program deployed + oracles seeded — see
+`app/test/oracle-data.e2e.test.ts`), then `pnpm --filter app dev` with the cluster on
+**Localnet** (or `VITE_RPC_URL` pointed at the surfpool RPC) and open `/oracles`.
+
+### Offline preview (mock mode)
+
+There is no standing deployment, so the browse views ship a mock affordance for offline design
+review that does **not** touch the real data path: set **`VITE_MOCK=1`** at build/dev time, or
+append **`?mock`** to any browse URL at runtime (e.g. `/oracles?mock`). Fixtures live in
+`src/data/mockOracles.ts` (decoded-shaped oracles covering every phase + a fully-populated
+detail with facts/proposers/AI-claims/market; a bogus `:pubkey?mock` exercises the not-found
+state). Without the flag, the pages always go through `fetchOracles`/`fetchOracleDetail` over
+the live connection.
 
 ## The Delphi design system
 
@@ -43,6 +72,10 @@ Roboto Mono 400) — the build is fully offline (no hotlinked CDNs or images).
 - **Primitives** in `src/components/ui/` (barrel `index.ts`): `Button`
   (PrimaryChestnut / GhostOutline / NavPill), `Card`, `EyebrowTag`, `SectionHeader`,
   `AvatarBubble` (+ `VerifiedDot`), `TriggerPreviewCard`.
+- **Oracle-browse components** in `src/components/oracles/`: `Chip` (on-brand status tones —
+  ember reserved for the single "Challenged" moment), `PhaseChip` (`Phase` → label + tone),
+  and `Truncated` (copy-on-click pubkeys/hashes). Presentation helpers (phase mapping, relative
+  deadline, digit grouping, hash previews) live in `src/lib/oracleView.ts`.
 - **Landing sections** in `src/components/landing/`: `NavBar`, `Hero` (the signature
   constellation of scattered question cards), `HowItWorks`, `WhyKassandra`, `TrustPanel`
   (the centered portrait panel — the one place a gradient is allowed), `SiteFooter`.
