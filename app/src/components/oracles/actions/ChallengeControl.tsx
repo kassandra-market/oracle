@@ -5,8 +5,9 @@ import { Card } from '../../ui'
 import { relativeDeadline } from '../../../lib/oracleView'
 import { recallNonce } from '../../../lib/nonceStore'
 import { resolveOracleNonce } from '../../../data/actions/finalize'
-import { buildOpenChallengeIxs, buildSettleChallengeIxs } from '../../../data/actions/challenge'
+import { buildSettleChallengeIxs } from '../../../data/actions/challenge'
 import { useWriteAction } from '../../../hooks/useWriteAction'
+import { ChallengeComposeForm } from './ChallengeComposeForm'
 import { ConnectGate } from './ConnectGate'
 import { SubmitButton } from './formPrimitives'
 import { WriteStatusRegion } from './WriteStatusRegion'
@@ -103,8 +104,6 @@ export function ChallengeControl({
   const nowUnix = BigInt(Math.floor(Date.now() / 1000))
   const settleOpen = market !== undefined && !market.market.settled && twapEnd !== undefined && nowUnix >= twapEnd
 
-  const openPlaceholder =
-    '{ "proposer": "…", "question": "…", "kassVault": "…", "usdcVault": "…", "passAmm": "…", "failAmm": "…", "kassVaultUnderlying": "…", "passKassMint": "…", "failKassMint": "…", "oraclePassKass": "…", "oracleFailKass": "…", "cvEventAuthority": "…", "kassDao": "…", "usdcMint": "…", "challengerUsdcSrc": "…" }'
   const settlePlaceholder =
     '{ "aiClaim": "…", "proposer": "…", "question": "…", "passAmm": "…", "failAmm": "…", "cvEventAuthority": "…", "kassVault": "…", "kassVaultUnderlying": "…", "passKassMint": "…", "failKassMint": "…", "oraclePassKass": "…", "oracleFailKass": "…", "proposerUsdc": "…", "challengerUsdcDest": "…", "challengerKass": "…" }'
 
@@ -122,49 +121,17 @@ export function ChallengeControl({
           ) : null}
         </p>
         <p className="mt-1 font-inter text-[12px] text-driftwood">
-          Challenges run over an externally-composed MetaDAO v0.4 market. This is a thin control:
-          paste the composed account set (the runner emits it) to open or settle-crank. It is not a
-          full trading UI.
+          Open a challenge directly from the browser — the full MetaDAO v0.4 market is composed
+          client-side (no runner JSON). Settle still takes the composed account set as a pasted
+          payload (the runner emits it).
         </p>
       </div>
 
-      {/* Open a challenge */}
-      <div className="border-t border-pebble pt-3">
-        <h4 className="font-inter text-[13px] font-medium text-sepia">Open a challenge</h4>
-        <p className="mt-0.5 font-inter text-[12px] text-driftwood">
-          Stake USDC to challenge an uncontested claim. The connected wallet is the challenger.
-        </p>
-        <div className="mt-3">
-          <JsonCrankForm
-            verb="Open challenge"
-            successVerb="Opened"
-            placeholder={openPlaceholder}
-            refetch={refetch}
-            build={async (payload, address) => {
-              const nonce = await oracleNonce(pubkey)
-              return buildOpenChallengeIxs({
-                oracleNonce: nonce,
-                challenger: address,
-                proposer: payload.proposer as string,
-                question: payload.question as string,
-                kassVault: payload.kassVault as string,
-                usdcVault: payload.usdcVault as string,
-                passAmm: payload.passAmm as string,
-                failAmm: payload.failAmm as string,
-                kassVaultUnderlying: payload.kassVaultUnderlying as string,
-                passKassMint: payload.passKassMint as string,
-                failKassMint: payload.failKassMint as string,
-                oraclePassKass: payload.oraclePassKass as string,
-                oracleFailKass: payload.oracleFailKass as string,
-                cvEventAuthority: payload.cvEventAuthority as string,
-                kassDao: payload.kassDao as string,
-                usdcMint: payload.usdcMint as string,
-                challengerUsdcSrc: payload.challengerUsdcSrc as string,
-              })
-            }}
-          />
-        </div>
-      </div>
+      {/* Open a challenge — the client-side staged compose→open (CU3). Only when
+          no market is open yet (opening a second challenge is not the flow). */}
+      {market === undefined ? (
+        <ChallengeComposeForm oraclePubkey={pubkey} oracle={oracle} refetch={refetch} />
+      ) : null}
 
       {/* Settle-crank */}
       <div className="border-t border-pebble pt-3">

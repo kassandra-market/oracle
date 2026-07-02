@@ -128,6 +128,24 @@ const ORACLES: OracleSummary[] = [
     }),
   },
   {
+    // Challenge phase with NO market yet → the CU3 client-side compose→open form
+    // (a challenger can compose the market from the browser).
+    pubkey: 'OracLeChaLLengeOpen11111111111111111111111111',
+    oracle: makeOracle({
+      deadline: secs(-1),
+      phaseEndsAt: secs(1),
+      phaseRaw: Phase.Challenge,
+      phase: Phase.Challenge,
+      optionsCount: 2,
+      proposerCount: 2,
+      survivingCount: 2,
+      factCount: 1,
+      settledCount: 1,
+      openChallengeCount: 0,
+      promptHash: hashBytes(33),
+    }),
+  },
+  {
     pubkey: 'OracLeProposaL111111111111111111111111111111',
     oracle: makeOracle({
       deadline: secs(3),

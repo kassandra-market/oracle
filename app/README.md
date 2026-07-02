@@ -121,10 +121,21 @@ fallback.
 **Challenge + AI claim:**
 - **Submit AI claim** (AiClaim phase): the three 32-byte model/params/io hashes + the option (hex
   fields, or paste the runner's JSON output); the proposer PDA is derived from the connected wallet.
-- **Challenge** (Challenge phase): a deliberately **thin** open + settle-crank + status surface —
-  a browser can't compose a MetaDAO v0.4 conditional-vault market, so the externally-composed
-  account set is pasted as runner-emitted JSON (parsed safely, never `eval`'d). Settle is withheld
-  until the market's TWAP window closes.
+- **Challenge** (Challenge phase): the challenge-market surface is now a full **live viz +
+  trade/crank/settle + CLIENT-SIDE compose→open**:
+  - **Open a challenge — no runner JSON.** A real form
+    (`components/oracles/actions/ChallengeComposeForm.tsx`) composes the entire MetaDAO v0.4 market
+    from the browser: the binary question → KASS + USDC conditional vaults → the challenger's +
+    oracle-holder ATAs → `split_tokens` (into pass/fail conditional tokens) → 2× `create_amm` +
+    `add_liquidity` (seed) → `open_challenge`. The choreography far exceeds one transaction, so it
+    runs as an **ordered, staged sequence** of wallet-signed txs with **per-step progress**
+    (Question ✓ → KASS vault ✓ → USDC vault ✓ → Fund + split ✓ → Pass pool ✓ → Fail pool ✓ → Open
+    ✓) and **retry-from-the-failed-step** on a mid-sequence failure (the idempotent ATA-creates +
+    deterministic PDAs make a resume safe). The seed/TWAP math mirrors the proven recipe
+    (`twap_initial_observation = quote·1e12/base`, max-change `(2^64−1)·1e12`, start-delay 0).
+  - **Trade / crank** (CU2): swap the pass/fail pools + crank their TWAP.
+  - **Settle** is permissionless once the market's TWAP window closes (still takes the composed
+    settle account set as a pasted payload, parsed safely, never `eval`'d).
 
 **Claim / close / sweep** (Resolved/InvalidDeadend phase): on each card, a **Claim** control
 (shown only to the owning wallet — `authority == connected`) pays a participant's KASS reward/refund
@@ -194,6 +205,7 @@ payouts. Every write wraps the pure action layer (`src/data/actions/*.ts` `build
 Read-only browsing still works fully disconnected.
 
 **Next / deferred:** a standing devnet deployment (the app points at a configurable cluster; the
-E2Es use surfpool); and a richer
-challenge-market trading UI (the current open/settle surface is intentionally thin). The app only
-ever consumes the built `@kassandra/sdk`; programs/runner/SDK-src are untouched.
+E2Es use surfpool). The challenge-market surface is now complete — a **live viz** (CU1) +
+**trade/crank/settle** (CU2) + **client-side compose→open** (CU3, no runner JSON) — each proven by
+a gated forked-mainnet E2E over the real MetaDAO v0.4 conditional-vault + AMM. The app only ever
+consumes the built `@kassandra/sdk`; programs/runner/SDK-src are untouched.
