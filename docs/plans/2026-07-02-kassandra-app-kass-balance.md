@@ -1,0 +1,32 @@
+# Kassandra dApp — KASS-Balance Affordance on Staking Forms — Design + Plan
+
+> **For Claude:** REQUIRED SUB-SKILL: subagent-driven-development (per-task implement + review).
+
+**Goal:** Show the connected wallet's **KASS balance** on the three staking forms (propose / submit-fact / vote-fact) and **gate the submit** when the entered bond/stake exceeds it (or the wallet holds no KASS), instead of letting the transaction fail on-chain. A small UX improvement (the deferred slice-3/4 follow-on). NO behavior change to the write path itself, NO core (programs/runner/sdk) change, NO new dep.
+
+## Context / what exists
+- The three staking forms — `app/src/components/oracles/actions/{ProposeForm,SubmitFactForm,VoteControl}.tsx` — each have a KASS amount input (bond/stake) parsed via `parseAmount` (`./amount.ts` → `{value?: bigint, error?}`), have `oracle.kassMint` in scope, and use `useWriteAction(refetch)` which exposes `action.connection`, `action.address` (the connected pubkey), `action.connected`.
+- The ATA deriver `associatedTokenAccount(owner, kassMint)` is already used in the action layer (`app/src/data/actions.ts:118` etc.).
+- `app/src/lib/mockWrite.ts:61` ALREADY stubs `getTokenAccountBalance: async () => ({ value: { amount: '250000000000', decimals: 9 } })` — the mock scaffold left for exactly this; so mock-mode preview works out of the box.
+- `groupDigits(n: bigint)` (`app/src/lib/oracleView.ts:76`) formats a bigint with digit grouping (for display).
+
+## Approach
+1. **Balance data fn** (`app/src/data/balance.ts` — pure, takes a `Connection`, NO React): `fetchKassBalance(connection, owner, kassMint): Promise<bigint>` — derive `ATA(owner, kassMint)` via `associatedTokenAccount`, call `connection.getTokenAccountBalance(ata)`, return `BigInt(value.amount)`; a missing/uninitialized ATA (the RPC throws or returns no value) → **0n** (caught, not thrown — an absent KASS ATA legitimately means zero balance). Never throws to the caller (a transient RPC error → return null/0 with a soft signal the form can ignore).
+2. **A small hook** (`app/src/hooks/useKassBalance.ts`): `useKassBalance(kassMint): { balance: bigint | null, loading, refetch }` — uses `useConnection()` + the connected `publicKey` (via wallet-adapter `useWallet` or the `action` seam), fetches on mount + when connection/wallet/kassMint changes (unmount-guarded, like `useOracles`), null when disconnected. Reuse the `useAsync`/guard pattern from `app/src/hooks/useOracles.ts`. Mock mode: the mock connection's `getTokenAccountBalance` stub feeds it (works under `?mock&wallet=connected`).
+3. **Wire into the 3 staking forms:** below each KASS amount input, show **"Your KASS: {groupDigits(balance)}"** (raw base units, matching the existing "raw, unscaled" convention; a quiet Delphi bronze/driftwood line — NOT ember). Gate the submit: disable + an inline Delphi message when the parsed amount **> balance** ("Amount exceeds your KASS balance ({groupDigits(balance)}).") or the balance is **0n** ("You have no KASS — you need KASS to {bond|stake}."). Keep the existing client-side validation (amount>0, etc.); this ADDS a balance check. On a successful write, refetch the balance (thread the balance refetch alongside the oracle refetch, or refetch on the same trigger) so it reflects the spent bond/stake. Loading/absent balance → don't block (show a subtle "checking…" or just the balance once loaded; never hard-block on a transient fetch — the tx remains the ultimate guard).
+4. **Disconnected / read-only:** the balance line + gate only apply when connected (the forms already ConnectGate the inputs). Read-only browse unaffected.
+
+## Task KB1 — KASS-balance fetch + hook + form gating
+- `app/src/data/balance.ts` (`fetchKassBalance`) + `app/src/hooks/useKassBalance.ts` (the hook).
+- Wire the balance display + submit gate into ProposeForm/SubmitFactForm/VoteControl (below the bond/stake input; disable submit + inline message on insufficient/zero; refetch balance on success).
+- **Offline unit test** (`app/test/balance.unit.test.ts`): mock Connection — `getTokenAccountBalance` returns an amount → `fetchKassBalance` returns that bigint; a throwing/absent ATA → 0n (not thrown). Assert the ATA is derived correctly (the queried address == ATA(owner, kassMint)).
+- **No regression / verify:** `pnpm --filter app typecheck` + `pnpm --filter app test` (73 offline: 72 + the new balance test) + `pnpm --filter app build` (verify-css OK) + `pnpm --filter app lint`. Headless-render (if the browser cache is present; else `vite preview` + document) the staking forms under `?mock&wallet=connected` at 1280: confirm the balance line shows (the mock 250000000000), and drive an amount ABOVE the mock balance → the submit is disabled + the "exceeds your KASS balance" message shows; an amount within → enabled. 0 console errors, one h1/page, Delphi (the balance line quiet, ember only stays on genuine errors). Read-only browse still fine disconnected.
+- Update `app/README.md` (the staking forms now show the KASS balance + gate on insufficient) + drop the item from the deferred list; append a KB1 delta to the plan. Commit `feat(app): KASS-balance display + insufficient-balance gate on staking forms`.
+
+## Out of scope / deferred
+- The create-oracle form's creation-fee balance check (createOracle burns a small creation fee from the creator's KASS — a different, smaller semantic than a user-chosen stake; the fetchKassBalance/useKassBalance are reusable there later if wanted, but not required now). Optionally add it if trivial + the same hook fits, else leave it.
+- Any core/behavior change beyond the balance display + submit gate; no new dep; the tx remains the ultimate on-chain guard.
+- USDC/other-token balances (only KASS bonds/stakes are gated here).
+
+## Execution note
+Build the SDK first. REUSE: `associatedTokenAccount` (ATA), `getTokenAccountBalance` (already mock-stubbed), `groupDigits` (format), the `useOracles` async/guard pattern, `useWriteAction`'s connection/address. The balance line is quiet Delphi (bronze/driftwood, NOT ember); ember stays for genuine errors. The gate is additive to the existing validation — the tx is still the ultimate guard (never hard-block on a transient fetch). Keep the default suite offline + green; `verify-css` green; read-only browse intact disconnected. Don't touch programs/runner/sdk-src or the action-layer behavior (only the forms + a new data fn/hook + test). Append a KB1 delta.
