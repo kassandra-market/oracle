@@ -15,7 +15,7 @@ export default defineConfig({
   // branded-type check throws across duplicate module instances otherwise).
   resolve: { dedupe: ["@solana/web3.js"] },
   test: {
-    include: ["test/**/*.test.ts"],
+    include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
     exclude: e2e
       ? configDefaults.exclude
       : [...configDefaults.exclude, "test/**/*.e2e.test.ts"],

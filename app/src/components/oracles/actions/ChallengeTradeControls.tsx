@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import type { Market, Oracle } from '@kassandra/sdk'
+import type { Market, Oracle, Proposer } from '@kassandra/sdk'
 import {
   PRICE_SCALE,
   marginProgress,
@@ -14,7 +14,7 @@ import {
   type Pool,
   type Side,
 } from '../../../data/actions/challengeTrade'
-import { buildSettleChallengeIxs } from '../../../data/actions/challenge'
+import { buildSettleFromMarketIxs } from '../../../data/actions/challengeSettle'
 import { useMarketAmms } from '../../../hooks/useMarketAmms'
 import { useWriteAction } from '../../../hooks/useWriteAction'
 import { isMockMode } from '../../../data/mockOracles'
@@ -244,57 +244,59 @@ function CrankForm({
   )
 }
 
-/** A settle JSON-paste sub-form carrying the composed-account payload → settle. */
-function SettleForm({
+/**
+ * The ONE-CLICK settle sub-form (no JSON paste). The full 21-account settle set
+ * is DERIVED client-side from the decoded {@link Market} + {@link Oracle} (+ the
+ * challenged proposer's authority, read off the fetched proposers) via
+ * {@link buildSettleFromMarketIxs}; the connected wallet just presses "Settle".
+ * The oracle nonce is recalled (or PDA-scanned) exactly like every other write.
+ */
+function SettleButton({
   oracleKey,
-  build,
+  oracle,
+  market,
+  proposerAuthority,
   refetch,
 }: {
   oracleKey: string
-  build: (
-    payload: Record<string, unknown>,
-    nonce: bigint,
-  ) => ReturnType<typeof buildSettleChallengeIxs>
+  oracle: Oracle
+  market: Market
+  /** The challenged proposer's wallet authority (owner of proposerUsdc). */
+  proposerAuthority: string | undefined
   refetch: () => void
 }) {
   const action = useWriteAction(refetch)
-  const [text, setText] = useState('')
-  const [error, setError] = useState<string | undefined>()
-
-  const placeholder =
-    '{ "aiClaim": "…", "proposer": "…", "question": "…", "passAmm": "…", "failAmm": "…", "cvEventAuthority": "…", "kassVault": "…", "kassVaultUnderlying": "…", "passKassMint": "…", "failKassMint": "…", "oraclePassKass": "…", "oracleFailKass": "…", "proposerUsdc": "…", "challengerUsdcDest": "…", "challengerKass": "…" }'
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
-    setError(undefined)
-    let payload: Record<string, unknown>
-    try {
-      payload = JSON.parse(text) as Record<string, unknown>
-    } catch {
-      setError('Could not parse the composed-account payload as JSON.')
-      return
-    }
     void action.run(async () => {
       const nonce = await oracleNonce(oracleKey)
-      return build(payload, nonce)
+      return buildSettleFromMarketIxs({
+        connection: action.connection,
+        oracleNonce: nonce,
+        market,
+        oracle,
+        proposerAuthority: proposerAuthority!,
+        payer: action.address ?? undefined,
+      })
     })
   }
 
   return (
     <ConnectGate connected={action.connected}>
       <form className="flex flex-col gap-3" onSubmit={onSubmit} noValidate>
-        <textarea
-          aria-label="Settle challenge — composed account payload (JSON)"
-          rows={5}
-          placeholder={placeholder}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          className="w-full rounded-tag border border-pebble bg-pure-card px-3 py-2 font-mono text-[12px] text-sepia placeholder:text-driftwood focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sepia/40"
-        />
         <div className="flex items-center gap-3">
-          <SubmitButton verb="Settle challenge" status={action.status} />
+          <SubmitButton
+            verb="Settle challenge"
+            status={action.status}
+            disabled={proposerAuthority === undefined}
+          />
         </div>
-        {error ? <p className="font-inter text-[12px] text-ember-orange">{error}</p> : null}
+        {proposerAuthority === undefined ? (
+          <p className="font-inter text-[12px] text-ember-orange">
+            The challenged proposer isn&apos;t loaded yet — reload the oracle to settle.
+          </p>
+        ) : null}
         <WriteStatusRegion status={action.status} successVerb="Settled" />
       </form>
     </ConnectGate>
@@ -327,6 +329,7 @@ export function ChallengeTradeControls({
   oraclePubkey,
   oracle,
   market,
+  proposers,
   refetch,
 }: {
   /** The oracle PDA (base58). */
@@ -335,6 +338,12 @@ export function ChallengeTradeControls({
   oracle: Oracle
   /** The challenge {@link Market} being traded. */
   market: Market
+  /**
+   * The oracle's decoded proposers (keyed by PDA) — the one-click settle reads the
+   * challenged proposer's `authority` (owner of the proposer USDC payout) off the
+   * proposer whose pubkey == `market.proposer`.
+   */
+  proposers: { pubkey: string; proposer: Proposer }[]
   /** Refetch the oracle detail on a successful write. */
   refetch: () => void
 }) {
@@ -378,6 +387,13 @@ export function ChallengeTradeControls({
 
   const nowUnix = BigInt(Math.floor(Date.now() / 1000))
   const settleOpen = !market.settled && nowUnix >= market.twapEnd
+
+  // The challenged proposer's wallet authority (owner of the proposer USDC payout
+  // the settle handler asserts) — off the proposer whose PDA == market.proposer.
+  const marketProposer = market.proposer.toString()
+  const proposerAuthority = proposers
+    .find((p) => p.pubkey === marketProposer)
+    ?.proposer.authority.toString()
 
   return (
     <Card className="mt-4 flex flex-col gap-5">
@@ -478,33 +494,16 @@ export function ChallengeTradeControls({
         ) : (
           <div className="mt-3">
             <p className="font-inter text-[12px] text-driftwood">
-              Permissionless — any connected wallet can crank the settle. Paste the composed account
-              set (the runner emits it).
+              Permissionless — any connected wallet can crank the settle. The full account set is
+              derived from the market; no paste needed.
             </p>
             <div className="mt-3">
-              <SettleForm
+              <SettleButton
                 oracleKey={oraclePubkey}
+                oracle={oracle}
+                market={market}
+                proposerAuthority={proposerAuthority}
                 refetch={onWrite}
-                build={(payload, nonce) =>
-                  buildSettleChallengeIxs({
-                    oracleNonce: nonce,
-                    aiClaim: payload.aiClaim as string,
-                    proposer: payload.proposer as string,
-                    question: payload.question as string,
-                    passAmm: payload.passAmm as string,
-                    failAmm: payload.failAmm as string,
-                    cvEventAuthority: payload.cvEventAuthority as string,
-                    kassVault: payload.kassVault as string,
-                    kassVaultUnderlying: payload.kassVaultUnderlying as string,
-                    passKassMint: payload.passKassMint as string,
-                    failKassMint: payload.failKassMint as string,
-                    oraclePassKass: payload.oraclePassKass as string,
-                    oracleFailKass: payload.oracleFailKass as string,
-                    proposerUsdc: payload.proposerUsdc as string,
-                    challengerUsdcDest: payload.challengerUsdcDest as string,
-                    challengerKass: payload.challengerKass as string,
-                  })
-                }
               />
             </div>
           </div>

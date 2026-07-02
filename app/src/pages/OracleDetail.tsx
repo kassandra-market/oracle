@@ -649,6 +649,7 @@ function OracleBody({
                 oraclePubkey={pubkey}
                 oracle={oracle}
                 market={market.market}
+                proposers={proposers}
                 refetch={refetch}
               />
             ) : null}

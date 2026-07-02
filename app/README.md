@@ -134,8 +134,16 @@ fallback.
     deterministic PDAs make a resume safe). The seed/TWAP math mirrors the proven recipe
     (`twap_initial_observation = quote·1e12/base`, max-change `(2^64−1)·1e12`, start-delay 0).
   - **Trade / crank** (CU2): swap the pass/fail pools + crank their TWAP.
-  - **Settle** is permissionless once the market's TWAP window closes (still takes the composed
-    settle account set as a pasted payload, parsed safely, never `eval`'d).
+  - **Settle — ONE CLICK, no JSON paste.** Once the market's TWAP window closes, the permissionless
+    settle is a single button: the full 15-account settle set is **derived client-side from the
+    decoded Market + Oracle** (`data/actions/challengeSettle.ts::buildSettleFromMarketIxs`) — 8
+    accounts are Market fields (aiClaim / proposer / question / pass+fail AMM / kassVault / oracle
+    pass+fail KASS holders) and 7 are derived (pass/fail conditional-KASS mints, the KASS vault
+    underlying ATA, the conditional-vault event authority, and the proposer-USDC / challenger-USDC /
+    challenger-KASS payout ATAs). The challenger-USDC **destination** is the challenger's own USDC
+    ATA (`ATA(market.challenger, usdc_mint)`), distinct from the Market's SDK-derived USDC escrow.
+    The three payout ATAs are idempotently created before settle so an absent destination never
+    fails the crank. After SD1 the **challenge UI has NO JSON paste anywhere**.
 
 **Claim / close / sweep** (Resolved/InvalidDeadend phase): on each card, a **Claim** control
 (shown only to the owning wallet — `authority == connected`) pays a participant's KASS reward/refund
@@ -201,11 +209,13 @@ wallet connect (`AppProviders` → wallet-adapter) + the read layer (`src/data/o
 the finalize/crank progression, challenge (open/settle) + submit-AI-claim, and claim/close/sweep
 payouts. Every write wraps the pure action layer (`src/data/actions/*.ts` `build*Ixs`
 → `sendAndConfirm` → `useWriteAction`) and is proven by a keypair-driven gated surfpool E2E
-(`KASSANDRA_E2E=1`), including a **forked-mainnet** challenge settle over the real MetaDAO v0.4 AMM.
+(`KASSANDRA_E2E=1`), including a **forked-mainnet** challenge settle over the real MetaDAO v0.4 AMM
+driven through the **one-click derive-from-Market settle** (`buildSettleFromMarketIxs`).
 Read-only browsing still works fully disconnected.
 
 **Next / deferred:** a standing devnet deployment (the app points at a configurable cluster; the
 E2Es use surfpool). The challenge-market surface is now complete — a **live viz** (CU1) +
-**trade/crank/settle** (CU2) + **client-side compose→open** (CU3, no runner JSON) — each proven by
+**trade/crank/settle** (CU2, settle is **one-click**: the account set is derived from the Market,
+no JSON paste) + **client-side compose→open** (CU3, no runner JSON) — each proven by
 a gated forked-mainnet E2E over the real MetaDAO v0.4 conditional-vault + AMM. The app only ever
 consumes the built `@kassandra/sdk`; programs/runner/SDK-src are untouched.

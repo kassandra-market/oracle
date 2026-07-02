@@ -16,12 +16,16 @@
  *                           MetaDAO market (program-signed split_tokens CPI runs
  *                           on the forked conditional_vault); the Market PDA +
  *                           ai_claim.challenged flip are asserted.
- *   buildSettleChallengeIxs → after a REAL swap-driven FAIL-pool TWAP clears the
- *                           10% margin (two cranks ≥150 slots apart), the settle
- *                           crank resolves the question FAIL-side and DISQUALIFIES
- *                           + slashes the proposer; the economics are asserted.
+ *   buildSettleFromMarketIxs → after a REAL swap-driven FAIL-pool TWAP clears the
+ *                           10% margin (two cranks ≥150 slots apart), the SD1
+ *                           derive-from-Market settle builder derives the full
+ *                           15-account settle set from the DECODED on-chain Market
+ *                           + Oracle (NOT the composed JSON), resolves the question
+ *                           FAIL-side and DISQUALIFIES + slashes the proposer; the
+ *                           economics are asserted.
  *
- * DRIVEN LIVE: all three app builders (submitAiClaim, openChallenge, settle).
+ * DRIVEN LIVE: submitAiClaim + openChallenge (RF4 builders) + the SD1 one-click
+ * derive-from-Market settle (`buildSettleFromMarketIxs`).
  * The AMM pool build/swap/crank is SETUP via the SDK `ammV04` builders (the crank
  * is not an app builder); the market composition (question + conditional vaults)
  * uses the same raw CPIs the SDK test documents.
@@ -72,9 +76,9 @@ import {
 } from "../../sdk/test/surfpool/harness.ts";
 import {
   buildOpenChallengeIxs,
-  buildSettleChallengeIxs,
   buildSubmitAiClaimIxs,
 } from "../src/data/actions/challenge.ts";
+import { buildSettleFromMarketIxs } from "../src/data/actions/challengeSettle.ts";
 import { keypairSender, sendAndConfirm } from "../src/data/send.ts";
 
 const ENABLED = process.env.KASSANDRA_E2E === "1" && surfpoolReady();
@@ -402,7 +406,17 @@ interface Payouts {
   challengerKass: Address;
 }
 
-/** settleChallenge via `buildSettleChallengeIxs` → the app seam (permissionless; payer sends). */
+/**
+ * settleChallenge via the SD1 `buildSettleFromMarketIxs` — DERIVING the full 15
+ * settle accounts from the DECODED on-chain {@link Market} + {@link Oracle} (NOT
+ * the composed-account JSON `m`), then sending through the app seam
+ * (permissionless; payer sends). The three payout destinations are the DERIVED
+ * ATAs (proposer-authority USDC, challenger USDC + KASS); we fabricate token
+ * accounts AT those ATA addresses so the handler's `assert_token_account` +
+ * transfers land on them, exactly as they would on a real cluster after an
+ * idempotent create. Asserts each derived account == what the market was composed
+ * with.
+ */
 async function settleChallengeViaApp(
   f: Fixture,
   nonce: bigint,
@@ -413,33 +427,48 @@ async function settleChallengeViaApp(
   passAmm: Address,
   failAmm: Address,
 ): Promise<Payouts> {
-  const proposerUsdc = await fabricateTokenAccountMint(f, f.usdcMint.publicKey, c.proposerAuthority, 0n);
-  const challengerUsdcDest = await fabricateTokenAccountMint(f, f.usdcMint.publicKey, challenger.publicKey, 0n);
-  const challengerKass = await fabricateTokenAccountMint(f, f.kassMint.publicKey, challenger.publicKey, 0n);
-  const escrowVault = (await pda.challengeUsdcVault(market)).address;
-  const cvEventAuthority = (await Address.findProgramAddress([enc.encode("__event_authority")], VLTX))[0];
+  // DECODE the on-chain Market + Oracle — the derive source (no composed JSON).
+  const decodedMarket = decodeMarket(await fetchAccount(f, market));
+  const decodedOracle = decodeOracle(await fetchAccount(f, c.oracle));
 
-  const twapEnd = decodeMarket(await fetchAccount(f, market)).twapEnd;
+  // The derived payout ATAs (owner: proposer.authority / challenger).
+  const proposerUsdc = await ata(c.proposerAuthority, f.usdcMint.publicKey);
+  const challengerUsdcDest = await ata(challenger.publicKey, f.usdcMint.publicKey);
+  const challengerKass = await ata(challenger.publicKey, f.kassMint.publicKey);
+  await setTokenAccountAt(f, proposerUsdc, f.usdcMint.publicKey, c.proposerAuthority, 0n);
+  await setTokenAccountAt(f, challengerUsdcDest, f.usdcMint.publicKey, challenger.publicKey, 0n);
+  await setTokenAccountAt(f, challengerKass, f.kassMint.publicKey, challenger.publicKey, 0n);
+  const escrowVault = (await pda.challengeUsdcVault(market)).address;
+
+  const twapEnd = decodedMarket.twapEnd;
   await f.harness.advanceToUnix(twapEnd + 120n);
 
-  const ixs = await buildSettleChallengeIxs({
+  const ixs = await buildSettleFromMarketIxs({
     oracleNonce: nonce,
-    aiClaim: c.aiClaim,
-    proposer: c.proposer,
-    question: m.question,
-    passAmm,
-    failAmm,
-    cvEventAuthority,
-    kassVault: m.kass.vault,
-    kassVaultUnderlying: m.kass.underlying,
-    passKassMint: m.kass.passMint,
-    failKassMint: m.kass.failMint,
-    oraclePassKass: m.oraclePassKass,
-    oracleFailKass: m.oracleFailKass,
-    proposerUsdc,
-    challengerUsdcDest,
-    challengerKass,
+    market: decodedMarket,
+    oracle: decodedOracle,
+    proposerAuthority: c.proposerAuthority,
   });
+
+  // The derived settle ix binds EXACTLY the accounts the market was composed with
+  // (proves the derivation is correct against the real Market, pre-flight).
+  const settleIx = ixs[ixs.length - 1];
+  const keys = settleIx.keys.map((k) => k.pubkey.toString());
+  expect(keys[2]).toBe(c.aiClaim.toString());
+  expect(keys[3]).toBe(c.proposer.toString());
+  expect(keys[4]).toBe(m.question.toString());
+  expect(keys[5]).toBe(passAmm.toString());
+  expect(keys[6]).toBe(failAmm.toString());
+  expect(keys[11]).toBe(m.kass.vault.toString());
+  expect(keys[12]).toBe(m.kass.underlying.toString());
+  expect(keys[13]).toBe(m.kass.passMint.toString());
+  expect(keys[14]).toBe(m.kass.failMint.toString());
+  expect(keys[15]).toBe(m.oraclePassKass.toString());
+  expect(keys[16]).toBe(m.oracleFailKass.toString());
+  expect(keys[18]).toBe(proposerUsdc.toString());
+  expect(keys[19]).toBe(challengerUsdcDest.toString());
+  expect(keys[20]).toBe(challengerKass.toString());
+
   await sendViaApp(f, f.payer, ixs, 1_400_000);
   return { escrowVault, proposerUsdc, challengerUsdcDest, challengerKass };
 }
