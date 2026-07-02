@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/*
+ * Delphi design system — "warm parchment editorial with ember sparks".
+ * Authoritative tokens transcribed from docs/design/delphi-style-guide.md
+ * (the corrected CSS custom-properties block). Tailwind v4 CSS-first @theme:
+ * every token below is emitted as a utility (colors -> bg-/text-/border-,
+ * fonts -> font-, radii -> rounded-, text scale -> text-/leading-/tracking-).
+ */
+@theme {
+  /* Colors */
+  --color-parchment: #fdf6ee;
+  --color-soft-cream: #f0e6dc;
+  --color-pure-card: #ffffff;
+  --color-ink-black: #000000;
+  --color-charcoal-bark: #21201c;
+  --color-sepia: #2b180a;
+  --color-bronze: #7f6e60;
+  --color-driftwood: #94877c;
+  --color-stone: #a99d93;
+  --color-pebble: #d9cfc3;
+  --color-chestnut: #3e2407;
+  --color-ember-orange: #f65726;
+  --color-saffron-pulse: #ff5c00;
+  --color-peach-glow: #fed0b3;
+  --color-cobalt: #1da1f2; /* the ONLY blue — verified-dot check overlay */
+
+  /* Font families -> font-serif / font-inter / font-mono */
+  --font-serif: "Cormorant Garamond", Lora, ui-serif, Georgia, serif; /* display >=20px, weight 300 */
+  --font-inter: "Inter", ui-sans-serif, system-ui, sans-serif;        /* body / UI */
+  --font-mono: "Roboto Mono", ui-monospace, Menlo, monospace;         /* code accents */
+
+  /* Type scale — each role carries its own line-height + tracking (Tailwind v4 paired modifiers) */
+  --text-caption: 10px;
+  --text-caption--line-height: 1.2;
+  --text-caption--letter-spacing: -0.012px;
+  --text-body: 15px;
+  --text-body--line-height: 1.32;
+  --text-body--letter-spacing: -0.015px;
+  --text-subheading: 20px;
+  --text-subheading--line-height: 1.32;
+  --text-subheading--letter-spacing: -0.24px;
+  --text-heading-sm: 24px;
+  --text-heading-sm--line-height: 1.22;
+  --text-heading-sm--letter-spacing: -0.312px;
+  --text-heading: 40px;
+  --text-heading--line-height: 1.2;
+  --text-heading--letter-spacing: -0.8px;
+  --text-heading-lg: 56px;
+  --text-heading-lg--line-height: 1;
+  --text-heading-lg--letter-spacing: -1.232px;
+  --text-display: 64px;
+  --text-display--line-height: 1;
+  --text-display--letter-spacing: -1.92px;
+
+  /* Standalone leading / tracking tokens (leading-* / tracking-* utilities) */
+  --leading-caption: 1.2;
+  --leading-body: 1.32;
+  --leading-subheading: 1.32;
+  --leading-heading-sm: 1.22;
+  --leading-heading: 1.2;
+  --leading-heading-lg: 1;
+  --leading-display: 1;
+  --tracking-caption: -0.012px;
+  --tracking-body: -0.015px;
+  --tracking-subheading: -0.24px;
+  --tracking-heading-sm: -0.312px;
+  --tracking-heading: -0.8px;
+  --tracking-heading-lg: -1.232px;
+  --tracking-display: -1.92px;
+
+  /* Font weights */
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+
+  /* Radii vocabulary — ONLY {4, 8, 12, 16, 70}px */
+  --radius-sm: 4px;
+  --radius-tag: 8px;
+  --radius-button: 12px;
+  --radius-card: 16px;
+  --radius-avatar: 70px;
+
+  /* Layout */
+  --page-max-width: 1200px;
+  --section-gap: 80px;
+
+  /* The peach bloom — the ONLY button shadow: warmth radiating, not a drop shadow */
+  --shadow-bloom: 0 8px 32px -6px #fed0b3, 0 2px 10px -4px #fed0b3;
+}
+
+/*
+ * Spacing note: the Delphi scale {4,8,12,16,20,24,32,48,64,80,96,120}px is a
+ * pure multiple of the 4px base unit, which is exactly Tailwind v4's default
+ * `--spacing` (0.25rem = 4px). So p-4 = 16px, gap-3 = 12px, etc. all already
+ * match — no override needed (overriding would break the numeric spacing scale).
+ */
+
+/* Global parchment canvas */
+@layer base {
+  html {
+    background-color: var(--color-parchment);
+  }
+  body {
+    margin: 0;
+    background-color: var(--color-parchment);
+    color: var(--color-charcoal-bark);
+    font-family: var(--font-inter);
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+    letter-spacing: var(--tracking-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}

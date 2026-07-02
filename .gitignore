@@ -4,3 +4,9 @@
 # surfpool runtime working dirs (logs/state) created by `surfpool start`
 .surfpool/
 .DS_Store
+
+# Node / pnpm workspace (Kassandra UI — app/)
+node_modules/
+dist/
+dist-ssr/
+*.local

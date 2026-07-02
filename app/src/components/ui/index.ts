@@ -1,0 +1,13 @@
+// Delphi design-system primitives barrel.
+export { Button } from './Button'
+export type { ButtonProps, ButtonVariant } from './Button'
+export { Card } from './Card'
+export type { CardProps } from './Card'
+export { EyebrowTag } from './EyebrowTag'
+export type { EyebrowTagProps } from './EyebrowTag'
+export { SectionHeader } from './SectionHeader'
+export type { SectionHeaderProps } from './SectionHeader'
+export { AvatarBubble, VerifiedDot } from './AvatarBubble'
+export type { AvatarBubbleProps } from './AvatarBubble'
+export { TriggerPreviewCard } from './TriggerPreviewCard'
+export type { TriggerPreviewCardProps } from './TriggerPreviewCard'
