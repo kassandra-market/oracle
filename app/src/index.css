@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* Wallet-adapter base styles — imported here (before our overrides below) so
+ * the Delphi restyle reliably wins the cascade. */
+@import "@solana/wallet-adapter-react-ui/styles.css";
 
 /*
  * Delphi design system — "warm parchment editorial with ember sparks".
@@ -96,6 +99,50 @@
  * `--spacing` (0.25rem = 4px). So p-4 = 16px, gap-3 = 12px, etc. all already
  * match — no override needed (overriding would break the numeric spacing scale).
  */
+
+/*
+ * Wallet-adapter modal — restyled from the default dark/purple theme to the
+ * Delphi look. We never render the adapter's own connect button (the NavPill
+ * drives the modal), so only the select-wallet modal surfaces here: give it a
+ * parchment panel, sepia serif title, and soft-cream wallet rows with a chestnut
+ * hover — no purple (#512da8) leaks through.
+ */
+.wallet-adapter-modal-wrapper {
+  background-color: var(--color-parchment);
+  color: var(--color-charcoal-bark);
+  border: 1px solid var(--color-pebble);
+  border-radius: var(--radius-card);
+  box-shadow: none;
+  font-family: var(--font-inter);
+}
+.wallet-adapter-modal-title {
+  color: var(--color-sepia);
+  font-family: var(--font-serif);
+  font-weight: 300;
+}
+.wallet-adapter-modal-button-close {
+  background-color: var(--color-soft-cream);
+}
+.wallet-adapter-modal-button-close svg {
+  fill: var(--color-sepia);
+}
+.wallet-adapter-modal-list .wallet-adapter-button {
+  background-color: var(--color-soft-cream);
+  color: var(--color-sepia);
+  border-radius: var(--radius-button);
+  font-family: var(--font-inter);
+  font-weight: 500;
+}
+.wallet-adapter-modal-list .wallet-adapter-button:not([disabled]):hover {
+  background-color: var(--color-chestnut);
+  color: #ffffff;
+}
+.wallet-adapter-modal-list-more {
+  color: var(--color-bronze);
+}
+.wallet-adapter-modal-list-more svg {
+  fill: var(--color-bronze);
+}
 
 /* Global parchment canvas */
 @layer base {

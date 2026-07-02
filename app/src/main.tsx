@@ -12,17 +12,27 @@ import '@fontsource/inter/500.css'
 import '@fontsource/roboto-mono/400.css'
 
 import './index.css'
+import AppProviders from './providers/AppProviders.tsx'
+import Layout from './components/layout/Layout.tsx'
 import Landing from './pages/Landing.tsx'
 import StyleGuide from './pages/StyleGuide.tsx'
+import Oracles from './pages/Oracles.tsx'
+import OracleDetail from './pages/OracleDetail.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/styleguide" element={<StyleGuide />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <AppProviders>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<Landing />} />
+            <Route path="/oracles" element={<Oracles />} />
+            <Route path="/oracles/:pubkey" element={<OracleDetail />} />
+            <Route path="/styleguide" element={<StyleGuide />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </AppProviders>
   </StrictMode>,
 )
