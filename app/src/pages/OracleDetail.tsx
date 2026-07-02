@@ -1,15 +1,24 @@
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { CLAIM_OPTION_NONE, Phase } from '@kassandra/sdk'
+import { CLAIM_OPTION_NONE, Phase, pda } from '@kassandra/sdk'
 import type { AiClaim, Fact, Market, Proposer } from '@kassandra/sdk'
 import type { Address } from '@solana/web3.js'
 import { AvatarBubble, Button, Card, EyebrowTag } from '../components/ui'
 import { Chip } from '../components/oracles/Chip'
 import { PhaseChip } from '../components/oracles/PhaseChip'
 import { Truncated } from '../components/oracles/Truncated'
-import { OracleActions, VoteControl } from '../components/oracles/actions'
+import { ClaimControl, CloseControl, OracleActions, VoteControl } from '../components/oracles/actions'
 import { useOracleDetail } from '../hooks/useOracles'
 import { OracleNotFoundError } from '../data/oracles'
+import { recallNonce } from '../lib/nonceStore'
+import { resolveOracleNonce } from '../data/actions/finalize'
+import {
+  buildClaimFactIxs,
+  buildClaimFactVoteIxs,
+  buildClaimProposerIxs,
+  buildCloseAiClaimIxs,
+  buildCloseMarketIxs,
+} from '../data/actions/claims'
 import { CLUSTER_LABELS, useCluster } from '../lib/cluster'
 import {
   RESOLVED_OPTION_NONE,
@@ -68,15 +77,34 @@ const emptyNote = (text: string) => (
   <p className="font-inter text-[14px] text-driftwood">{text}</p>
 )
 
+/**
+ * Settlement context threaded to the claim / close controls once an oracle is
+ * terminal (Resolved / InvalidDeadend). Present ⇒ render the payout controls.
+ */
+interface SettleCtx {
+  oracle: string
+  kassMint: Address
+  refetch: () => void
+}
+
+/** Recall the oracle's create nonce, else recover it via the pure PDA scan (RF1). */
+function oracleNonce(oracle: string): Promise<bigint> {
+  const recalled = recallNonce(oracle)
+  return recalled !== null ? Promise.resolve(recalled) : resolveOracleNonce(oracle)
+}
+
 function FactCard({
   pubkey,
   fact,
   voting,
+  settle,
 }: {
   pubkey: string
   fact: Fact
   /** When set (FactVoting phase), renders the per-fact vote control. */
   voting?: { oracle: string; kassMint: Address; refetch: () => void }
+  /** When set (terminal phase), renders the fact-claim + fact-vote-claim controls. */
+  settle?: SettleCtx
 }) {
   return (
     <Card className="flex flex-col gap-2">
@@ -126,11 +154,62 @@ function FactCard({
           refetch={voting.refetch}
         />
       ) : null}
+      {settle ? (
+        <>
+          {/* The fact submitter claims the fact stake + reward (rent → them). */}
+          <ClaimControl
+            authority={fact.proposer.toString()}
+            verb="Claim fact payout"
+            successVerb="Claimed"
+            description="Pull your fact stake + reward out of the vault and close this fact."
+            refetch={settle.refetch}
+            build={({ connection }) =>
+              oracleNonce(settle.oracle).then((oracleNonce) =>
+                buildClaimFactIxs({
+                  connection,
+                  oracleNonce,
+                  fact: pubkey,
+                  authority: fact.proposer,
+                  kassMint: settle.kassMint,
+                }),
+              )
+            }
+          />
+          {/* Any connected wallet that voted on this fact claims its own vote. */}
+          <ClaimControl
+            verb="Claim your fact vote"
+            successVerb="Claimed"
+            description="If you voted on this fact, claim your vote stake ± slash + reward."
+            refetch={settle.refetch}
+            build={async ({ address, connection }) => {
+              const oracleNonceValue = await oracleNonce(settle.oracle)
+              const factVote = (await pda.factVote(pubkey, address)).address
+              return buildClaimFactVoteIxs({
+                connection,
+                oracleNonce: oracleNonceValue,
+                factVote,
+                fact: pubkey,
+                voter: address,
+                kassMint: settle.kassMint,
+              })
+            }}
+          />
+        </>
+      ) : null}
     </Card>
   )
 }
 
-function ProposerCard({ pubkey, proposer }: { pubkey: string; proposer: Proposer }) {
+function ProposerCard({
+  pubkey,
+  proposer,
+  settle,
+}: {
+  pubkey: string
+  proposer: Proposer
+  /** When set (terminal phase), renders the proposer-claim control (authority-gated). */
+  settle?: SettleCtx
+}) {
   const authority = proposer.authority.toString()
   const hasClaim = proposer.claimOption !== CLAIM_OPTION_NONE
   return (
@@ -179,6 +258,26 @@ function ProposerCard({ pubkey, proposer }: { pubkey: string; proposer: Proposer
             </dd>
           </div>
         </dl>
+        {settle ? (
+          <ClaimControl
+            authority={authority}
+            verb="Claim proposer payout"
+            successVerb="Claimed"
+            description="Pull your bond (± slash) + reward out of the vault and close this proposer."
+            refetch={settle.refetch}
+            build={({ connection }) =>
+              oracleNonce(settle.oracle).then((oracleNonce) =>
+                buildClaimProposerIxs({
+                  connection,
+                  oracleNonce,
+                  proposer: pubkey,
+                  authority: proposer.authority,
+                  kassMint: settle.kassMint,
+                }),
+              )
+            }
+          />
+        ) : null}
       </div>
     </Card>
   )
@@ -196,7 +295,16 @@ function HashRow({ label, value }: { label: string; value: Uint8Array }) {
   )
 }
 
-function AiClaimCard({ pubkey, aiClaim }: { pubkey: string; aiClaim: AiClaim }) {
+function AiClaimCard({
+  pubkey,
+  aiClaim,
+  settle,
+}: {
+  pubkey: string
+  aiClaim: AiClaim
+  /** When set (terminal phase), renders the permissionless close control. */
+  settle?: SettleCtx
+}) {
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -218,11 +326,35 @@ function AiClaimCard({ pubkey, aiClaim }: { pubkey: string; aiClaim: AiClaim }) 
         <HashRow label="Params" value={aiClaim.paramsHash} />
         <HashRow label="I/O" value={aiClaim.ioHash} />
       </div>
+      {settle ? (
+        <CloseControl
+          verb="Close AI claim"
+          successVerb="Closed"
+          description="Permissionless — reap this AI claim; its rent refunds to the submitter."
+          refetch={settle.refetch}
+          build={() =>
+            buildCloseAiClaimIxs({
+              oracle: settle.oracle,
+              aiClaim: pubkey,
+              rentRecipient: aiClaim.authority,
+            })
+          }
+        />
+      ) : null}
     </Card>
   )
 }
 
-function MarketCard({ pubkey, market }: { pubkey: string; market: Market }) {
+function MarketCard({
+  pubkey,
+  market,
+  settle,
+}: {
+  pubkey: string
+  market: Market
+  /** When set (terminal phase) and the market is settled, renders the close control. */
+  settle?: SettleCtx
+}) {
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -242,6 +374,23 @@ function MarketCard({ pubkey, market }: { pubkey: string; market: Market }) {
           <Truncated value={market.question.toString()} copyable label="question" />
         </Row>
       </dl>
+      {settle && market.settled ? (
+        <CloseControl
+          verb="Close market"
+          successVerb="Closed"
+          description="Permissionless — reap this settled market + escrow; rent refunds to the challenger."
+          refetch={settle.refetch}
+          build={() =>
+            oracleNonce(settle.oracle).then((oracleNonce) =>
+              buildCloseMarketIxs({
+                oracleNonce,
+                market: pubkey,
+                rentRecipient: market.challenger,
+              }),
+            )
+          }
+        />
+      ) : null}
     </Card>
   )
 }
@@ -312,6 +461,11 @@ function OracleBody({
   const resolved = oracle.phase === Phase.Resolved
   const hasResolvedOption = resolved && oracle.resolvedOption !== RESOLVED_OPTION_NONE
   const votingOpen = oracle.phase === Phase.FactVoting
+  // Terminal phases open the claim / close / sweep payout controls.
+  const settleOpen = oracle.phase === Phase.Resolved || oracle.phase === Phase.InvalidDeadend
+  const settle: SettleCtx | undefined = settleOpen
+    ? { oracle: pubkey, kassMint: oracle.kassMint, refetch }
+    : undefined
 
   return (
     <>
@@ -407,6 +561,7 @@ function OracleBody({
                 voting={
                   votingOpen ? { oracle: pubkey, kassMint: oracle.kassMint, refetch } : undefined
                 }
+                settle={settle}
               />
             ))}
           </div>
@@ -420,7 +575,7 @@ function OracleBody({
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {proposers.map((p) => (
-              <ProposerCard key={p.pubkey} pubkey={p.pubkey} proposer={p.proposer} />
+              <ProposerCard key={p.pubkey} pubkey={p.pubkey} proposer={p.proposer} settle={settle} />
             ))}
           </div>
         )}
@@ -433,7 +588,7 @@ function OracleBody({
         ) : (
           <div className="flex flex-col gap-4">
             {aiClaims.map((c) => (
-              <AiClaimCard key={c.pubkey} pubkey={c.pubkey} aiClaim={c.aiClaim} />
+              <AiClaimCard key={c.pubkey} pubkey={c.pubkey} aiClaim={c.aiClaim} settle={settle} />
             ))}
           </div>
         )}
@@ -442,7 +597,7 @@ function OracleBody({
       {/* Market */}
       <Section title="Challenge market">
         {market ? (
-          <MarketCard pubkey={market.pubkey} market={market.market} />
+          <MarketCard pubkey={market.pubkey} market={market.market} settle={settle} />
         ) : (
           emptyNote('No challenge market opened for this oracle.')
         )}

@@ -13,6 +13,7 @@ import {
 import { ProposeForm } from './ProposeForm'
 import { SubmitFactForm } from './SubmitFactForm'
 import { FinalizeControl } from './FinalizeControl'
+import { SweepControl } from './SweepControl'
 
 /** Muted "participation closed / redirected" note for the non-form phases. */
 function Note({ children }: { children: React.ReactNode }) {
@@ -134,6 +135,14 @@ export function OracleActions({
               })
             }
           />
+        ) : oracle.phase === Phase.Resolved || oracle.phase === Phase.InvalidDeadend ? (
+          <>
+            <Note>
+              This oracle is settled — participants claim their KASS payouts using the controls on
+              each proposer, fact and AI-claim card below.
+            </Note>
+            <SweepControl oracle={pubkey} oracleAccount={oracle} refetch={refetch} />
+          </>
         ) : (
           <Note>Participation is closed — this oracle is in the {phaseLabel} phase.</Note>
         )}
