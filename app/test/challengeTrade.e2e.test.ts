@@ -14,12 +14,12 @@
  *                       derivation lands on the right pool (a wrong mint fails).
  *   buildCrankTwapIxs → two cranks ≥150 slots apart ACCUMULATE the FAIL TWAP
  *                       oracle (the aggregator + `twapPrice` rise).
- *   buildSettleChallengeIxs → after the TWAP window, the swap-driven verdict
- *                       resolves the question + settles the Market.
  *
- * The market composition + the open_challenge/settle plumbing use the same raw
- * CPIs the SDK/RF4 tests document (not under test here); the SWAP + CRANK are the
- * app builders under test, asserted via CU1's decoder.
+ * SCOPE: this file asserts the app SWAP + CRANK builders (via CU1's decoder). The
+ * settle path (`buildSettleChallengeIxs`) is proven live separately in RF4's
+ * `challenge.e2e.test.ts` (a full swap-driven verdict → settle); the market
+ * composition + open/settle plumbing use the raw CPIs the SDK/RF4 tests document
+ * and are not re-driven here.
  *
  * Gated: skips (never fails) unless `KASSANDRA_E2E=1` AND surfpool + the `.so`
  * are present.
