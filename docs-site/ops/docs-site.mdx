@@ -34,30 +34,54 @@ Only link to targets that exist in the navigation (`docs-site/docs.json`); a lin
 
 ## How deploys happen
 
-Two mechanisms cover publishing and validation:
+Publishing is performed **entirely by GitHub Actions** — the workflow
+`.github/workflows/docs.yml` runs on every push to `master` and:
 
-- **Auto-deploy** — the **Mintlify GitHub App** auto-deploys the `docs-site/` project on **every push to `master`**. No manual publish step.
-- **Validation gate** — the GitHub Actions workflow `.github/workflows/docs.yml` runs `mint broken-links` on pushes to `master` and on PRs, so a broken link is caught before it merges.
+1. Validates: `mint validate` (strict build) and `mint broken-links`.
+2. Builds a static site: `mint export` produces an air-gapped static bundle.
+3. Rewrites the export's root-absolute URLs to the GitHub Pages base path
+   (`docs-site/scripts/rewrite-base-path.mjs`) so every page resolves at
+   `https://<owner>.github.io/<repo>/`.
+4. Deploys the result to **GitHub Pages** (`actions/deploy-pages`).
+
+Pull requests run steps 1–3 (build + validate) but **do not deploy** — only pushes to
+`master` publish.
+
+<Note>
+Mintlify's static export uses root-absolute paths. Served from a project sub-path they
+would 404, so the workflow rewrites them to the repo base path. Direct page loads, assets,
+search-engine hits, and refreshes all resolve. For pixel-perfect client-side navigation,
+serve from a domain root with a custom domain (below).
+</Note>
 
 ## One-time setup
 
-Connecting the repo to Mintlify is a one-time task in the Mintlify dashboard:
+Enabling GitHub Pages is a one-time repository setting:
 
 <Steps>
-  <Step title="Sign in with GitHub">
-    Go to [dashboard.mintlify.com](https://dashboard.mintlify.com) and sign in
-    with GitHub.
+  <Step title="Enable Pages via Actions">
+    In the repository, go to **Settings → Pages → Build and deployment** and set
+    **Source** to **GitHub Actions**.
   </Step>
-  <Step title="Connect the repository">
-    Connect `Dodecahedr0x/kassandra`.
+  <Step title="Push to master">
+    Push a commit to `master` (or run the workflow via **Actions → Docs → Run workflow**).
+    The workflow builds and deploys; the live URL appears on the workflow's
+    `github-pages` environment.
   </Step>
-  <Step title="Set the content directory and branch">
-    Set the content directory to `docs-site` and the deployment branch to `master`.
-  </Step>
-  <Step title="Install the GitHub App">
-    Install the Mintlify GitHub App so it can auto-deploy on every push to `master`.
+  <Step title="(Optional) Custom domain">
+    Add a `docs-site/CNAME` file containing your domain (e.g. `docs.kassandra.xyz`) and set
+    it under **Settings → Pages → Custom domain**. The workflow then serves from the domain
+    root and skips the base-path rewrite automatically.
   </Step>
 </Steps>
+
+<Accordion title="Alternative: Mintlify's hosted platform">
+Prefer Mintlify's managed hosting (their rendering, analytics, and hosted search)? Connect
+the repo at [dashboard.mintlify.com](https://dashboard.mintlify.com) with content directory
+`docs-site` and deployment branch `master`, install the Mintlify GitHub App, and it will
+auto-deploy on every push. In that case reduce `.github/workflows/docs.yml` to the
+validation steps (`mint validate` + `mint broken-links`) and drop the export/deploy steps.
+</Accordion>
 
 <CardGroup cols={2}>
   <Card title="Contributing conventions" icon="pen-nib" href="/contributing/conventions">

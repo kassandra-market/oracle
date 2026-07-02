@@ -1,19 +1,23 @@
-# Kassandra documentation — CI validation + publish gate.
+# Kassandra documentation — build, validate, and PUBLISH via GitHub Actions.
 #
 # HOW PUBLISHING WORKS
 # --------------------
-# Mintlify hosts the docs. Publishing on push to `master` is performed by the
-# **Mintlify GitHub App**, which auto-deploys the `docs-site/` project whenever a
-# commit lands on the deployment branch. This workflow is the CI gate that runs on
-# every push to `master` (and on pull requests): it validates the Mintlify config
-# and checks for broken links so a bad commit never reaches the live site.
+# On every push to `master`, this workflow builds the Mintlify docs into a static site
+# (`mint export`), rewrites the export's root-absolute URLs to the GitHub Pages base path,
+# and deploys it to GitHub Pages. The publish is performed BY THIS WORKFLOW — no external
+# hosted service. Pull requests build + validate only (they do not deploy).
 #
 # ONE-TIME SETUP (human, done once — see docs-site/README.md and /ops/docs-site):
-#   1. Go to https://dashboard.mintlify.com and sign in with GitHub.
-#   2. Connect the `Dodecahedr0x/kassandra` repository.
-#   3. Set the content directory to `docs-site` and the deployment branch to `master`.
-#   4. Install the Mintlify GitHub App when prompted.
-# After that, every push to `master` auto-deploys, and this workflow guards it.
+#   Settings → Pages → "Build and deployment" → Source: **GitHub Actions**.
+# Optional — a custom domain: add `docs-site/CNAME` containing your domain (e.g.
+# docs.kassandra.xyz) and set it under Settings → Pages. With a custom domain the site is
+# served from the domain root, so the base-path rewrite becomes a no-op and client-side
+# navigation is pixel-perfect. Without one, the site is served at
+# https://<owner>.github.io/<repo>/ and the rewrite makes every page resolve.
+#
+# ALTERNATIVE: prefer Mintlify's hosted platform? Connect the repo at
+# dashboard.mintlify.com (content dir `docs-site`, branch `master`) and this workflow can be
+# reduced to the validation steps. See /ops/docs-site.
 
 name: Docs
 
@@ -31,10 +35,16 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: docs-pages
+  cancel-in-progress: false
 
 jobs:
-  validate:
-    name: Validate docs
+  build:
+    name: Build & validate
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -59,3 +69,41 @@ jobs:
 
       - name: Check for broken links
         run: mint broken-links
+
+      - name: Export static site
+        run: |
+          mint export --output export.zip
+          rm -rf _site
+          unzip -q export.zip -d _site
+
+      - name: Rewrite base path + finalize
+        run: |
+          if [ -f CNAME ]; then
+            BASE=""
+            cp CNAME _site/CNAME
+            echo "custom domain detected — serving from root"
+          else
+            BASE="/${GITHUB_REPOSITORY#*/}"
+            echo "no CNAME — serving at project sub-path $BASE"
+          fi
+          node scripts/rewrite-base-path.mjs _site "$BASE"
+          touch _site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-site/_site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    # Publish only from master; PRs build + validate above but never deploy.
+    if: github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -26,20 +26,30 @@ The same check runs in CI on every push to `master` and on pull requests
 
 ## How publishing works
 
-Mintlify hosts the docs. Publishing is performed by the **Mintlify GitHub App**, which
-auto-deploys this `docs-site/` project on every push to the `master` branch. The GitHub
-Actions workflow validates the config and links so a broken commit never reaches the live
-site.
+Publishing is performed **entirely by GitHub Actions** (`.github/workflows/docs.yml`). On
+every push to `master` the workflow validates (`mint validate` + `mint broken-links`),
+builds a static site (`mint export`), rewrites the export's root-absolute URLs to the
+GitHub Pages base path (`scripts/rewrite-base-path.mjs`), and deploys to **GitHub Pages**.
+Pull requests build + validate only; they do not deploy.
 
 ### One-time setup (done once by a maintainer)
 
-1. Sign in at <https://dashboard.mintlify.com> with GitHub.
-2. Connect the `Dodecahedr0x/kassandra` repository.
-3. Set the **content directory** to `docs-site` and the **deployment branch** to `master`.
-4. Install the **Mintlify GitHub App** when prompted.
+1. In the repo, go to **Settings → Pages → Build and deployment** and set **Source** to
+   **GitHub Actions**.
+2. Push to `master` (or run **Actions → Docs → Run workflow**). The live URL appears on the
+   workflow's `github-pages` environment.
+3. *(Optional)* For a custom domain, add a `CNAME` file to this directory with your domain
+   and set it under **Settings → Pages**. The workflow then serves from the domain root and
+   skips the base-path rewrite.
 
-After that, every push to `master` auto-deploys, gated by the CI workflow. See the
-[Operations → The docs site](https://github.com/Dodecahedr0x/kassandra) page for details.
+> Mintlify's static export uses root-absolute paths; served from a project sub-path they'd
+> 404, so the workflow rewrites them. Direct page loads, assets, and refreshes resolve.
+> A custom domain (domain-root serving) gives pixel-perfect client-side navigation.
+
+**Alternative:** to use Mintlify's hosted platform instead, connect the repo at
+<https://dashboard.mintlify.com> (content dir `docs-site`, branch `master`, install the
+GitHub App) and reduce the workflow to just the validation steps. See the
+**Operations → This documentation site** page for details.
 
 ## Structure
 
