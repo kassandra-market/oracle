@@ -11,6 +11,7 @@ dist/
 dist-ssr/
 *.local
 
-# Mintlify docs site (docs-site/) — local CLI cache + local lockfile
+# Mintlify docs site (docs-site/) — local CLI cache + local lockfile + export output
 .mint/
 docs-site/package-lock.json
+docs-site/export.zip

@@ -54,5 +54,8 @@ jobs:
       - name: Check docs.json is valid JSON
         run: node -e "JSON.parse(require('fs').readFileSync('docs.json','utf8')); console.log('docs.json is valid JSON')"
 
+      - name: Validate build (strict)
+        run: mint validate
+
       - name: Check for broken links
         run: mint broken-links
