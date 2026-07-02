@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build && node scripts/verify-css.mjs",
     "verify-css": "node scripts/verify-css.mjs",
     "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:e2e": "KASSANDRA_E2E=1 vitest run",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -34,6 +36,7 @@
     "oxlint": "^1.71.0",
     "tailwindcss": "^4.3.2",
     "typescript": "~6.0.2",
-    "vite": "^8.1.1"
+    "vite": "^8.1.1",
+    "vitest": "^2.1.9"
   }
 }
