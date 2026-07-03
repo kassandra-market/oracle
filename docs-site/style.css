@@ -1,0 +1,65 @@
+/*
+ * Auros abyssal theme for the Kassandra docs — layered on top of docs.json's
+ * dark appearance + teal accent. Near-black teal canvas, platinum headings,
+ * silver body, rationed cyan/pink accents, no heavy elevation. Auto-loaded by
+ * Mintlify (root .css files are bundled).
+ */
+
+:root {
+  --auros-abyss: #012624;
+  --auros-deep: #011d1c;
+  --auros-kelp: #003734;
+  --auros-mist: #edfffe;
+  --auros-silver: #bbc7c6;
+  --auros-phosphor: #fde9ff;
+  --auros-cyan: #cbfffc;
+}
+
+/* Deep-water canvas with a faint bioluminescent glow at the top. */
+body {
+  background-color: var(--auros-abyss);
+  background-image:
+    radial-gradient(1100px 640px at 50% -10%, rgba(0, 130, 124, 0.16), transparent 60%),
+    radial-gradient(820px 560px at 100% 0%, rgba(253, 233, 255, 0.05), transparent 55%);
+  background-attachment: fixed;
+}
+
+/* Platinum, tightly-tracked headings (geometric, medium — never bold display). */
+h1,
+h2,
+h3,
+h4 {
+  color: #ffffff !important;
+  letter-spacing: -0.02em;
+}
+
+/* Body copy in silver-mist rather than pure white. */
+p,
+li {
+  color: var(--auros-silver);
+}
+
+/* Recessed surfaces — code blocks + inline code sit in the deeper teal. */
+pre,
+code,
+:not(pre) > code {
+  background-color: var(--auros-deep) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Cards / panels lift onto the kelp surface, 16px radius, no shadow. */
+.card,
+[class*="card"] {
+  border-radius: 16px;
+}
+
+/* Large stat/emphasis figures glow lavender-phosphor pink (used sparingly). */
+strong,
+b {
+  color: var(--auros-mist);
+}
+
+::selection {
+  background: rgba(0, 130, 124, 0.4);
+  color: #ffffff;
+}

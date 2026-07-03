@@ -8,28 +8,30 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 /**
- * Delphi buttons. Chestnut is the ONLY fill; the peach bloom is the ONLY
- * button shadow. 12px radius, Inter 15/500. Never a blue/green CTA.
+ * Auros buttons. Depth is surface color, not shadow (there are none). The
+ * filled action is Liquid Kelp; the signature CTA is the aurora gradient pill.
+ * 6px radius, medium weight. Never bold.
  */
 const base =
   'inline-flex items-center justify-center gap-2 rounded-button font-inter ' +
   'text-body font-medium cursor-pointer transition-all duration-150 ' +
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ' +
-  'focus-visible:ring-offset-parchment disabled:opacity-50 disabled:cursor-not-allowed'
+  'focus-visible:ring-offset-liquid-abyss disabled:opacity-50 disabled:cursor-not-allowed'
 
 const variants: Record<ButtonVariant, string> = {
-  // Chestnut fill, white text, ~16px/10px padding, the signature peach bloom.
+  // Filled Liquid Kelp action, platinum text. The primary form action.
   PrimaryChestnut:
-    'bg-chestnut text-white px-4 py-2.5 shadow-bloom ' +
-    'hover:bg-sepia hover:-translate-y-px focus-visible:ring-peach-glow',
-  // Transparent, 1px pebble hairline, sepia text. No bg/shadow.
+    'bg-liquid-kelp text-platinum px-4 py-2.5 ' +
+    'hover:bg-[#04524c] focus-visible:ring-cyan-phosphor',
+  // Transparent, 1px hairline, platinum text. No bg/shadow.
   GhostOutline:
-    'bg-transparent text-sepia border border-pebble px-4 py-2.5 ' +
-    'hover:border-charcoal-bark focus-visible:ring-pebble',
-  // Soft-cream chip, sepia text, generous horizontal padding.
+    'bg-transparent text-platinum border border-pebble px-4 py-2.5 ' +
+    'hover:border-silver-mist focus-visible:ring-pebble',
+  // The signature aurora gradient pill (cyan -> white -> pink), dark text,
+  // uppercase tracked. Reserved for the top-level CTA (wallet connect).
   NavPill:
-    'bg-soft-cream text-sepia px-5 py-2.5 ' +
-    'hover:bg-pebble/60 focus-visible:ring-pebble',
+    'bg-aurora text-liquid-abyss px-5 py-2.5 uppercase tracking-[0.08em] text-[14px] ' +
+    'hover:brightness-105 focus-visible:ring-cyan-phosphor',
 }
 
 export function Button({ variant = 'PrimaryChestnut', className = '', children, ...rest }: ButtonProps) {

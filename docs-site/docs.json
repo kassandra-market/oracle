@@ -4,9 +4,22 @@
   "name": "Kassandra",
   "description": "A decentralized, AI-assisted optimistic oracle on Solana.",
   "colors": {
-    "primary": "#7C3AED",
-    "light": "#A78BFA",
-    "dark": "#6D28D9"
+    "primary": "#00827c",
+    "light": "#cbfffc",
+    "dark": "#4bd8cb"
+  },
+  "appearance": {
+    "default": "dark",
+    "strict": true
+  },
+  "background": {
+    "color": {
+      "dark": "#012624",
+      "light": "#012624"
+    }
+  },
+  "fonts": {
+    "family": "Inter"
   },
   "favicon": "/favicon.svg",
   "navigation": {

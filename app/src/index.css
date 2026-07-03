@@ -1,163 +1,217 @@
 @import "tailwindcss";
 /* Wallet-adapter base styles — imported here (before our overrides below) so
- * the Delphi restyle reliably wins the cascade. */
+ * the Auros restyle reliably wins the cascade. */
 @import "@solana/wallet-adapter-react-ui/styles.css";
 
 /*
- * Delphi design system — "warm parchment editorial with ember sparks".
- * Authoritative tokens transcribed from docs/design/delphi-style-guide.md
- * (the corrected CSS custom-properties block). Tailwind v4 CSS-first @theme:
- * every token below is emitted as a utility (colors -> bg-/text-/border-,
- * fonts -> font-, radii -> rounded-, text scale -> text-/leading-/tracking-).
+ * Auros design system — "abyssal terminal with bioluminescent data orbs".
+ * Near-black teal canvas, rationed color, geometric medium-weight display type,
+ * surface-lift depth (no shadows). Tailwind v4 CSS-first @theme: every token is
+ * emitted as a utility. The legacy Delphi token NAMES are preserved and remapped
+ * onto the Auros palette so existing components re-skin without edits; new code
+ * should prefer the Auros-named tokens (liquid-*, platinum, silver-mist,
+ * lavender-phosphor).
  */
 @theme {
-  /* Colors */
-  --color-parchment: #fdf6ee;
-  --color-soft-cream: #f0e6dc;
-  --color-pure-card: #ffffff;
-  --color-ink-black: #000000;
-  --color-charcoal-bark: #21201c;
-  --color-sepia: #2b180a;
-  --color-bronze: #7f6e60;
-  --color-driftwood: #94877c;
-  --color-stone: #a99d93;
-  --color-pebble: #d9cfc3;
-  --color-chestnut: #3e2407;
-  --color-ember-orange: #f65726;
-  --color-saffron-pulse: #ff5c00;
-  --color-peach-glow: #fed0b3;
-  --color-cobalt: #1da1f2; /* the ONLY blue — verified-dot check overlay */
+  /* ---- Auros palette (canonical) ---- */
+  --color-liquid-abyss: #012624; /* 0 — page canvas */
+  --color-liquid-deep: #011d1c; /* 1 — recessed / footer */
+  --color-liquid-kelp: #003734; /* 2 — raised card + filled action */
+  --color-liquid-mist: #edfffe; /* emphasized body / labels */
+  --color-platinum: #ffffff; /* headings + nav */
+  --color-silver-mist: #bbc7c6; /* body / links */
+  --color-ash: #f2f2f2; /* neutral tertiary text */
+  --color-slate-deep: #707777; /* low-emphasis surface tint */
+  --color-lavender-phosphor: #fde9ff; /* stat / emphasis accent (pink) */
+  --color-cyan-phosphor: #cbfffc; /* aqua end of the signature gradient */
 
-  /* Font families -> font-serif / font-inter / font-mono */
-  --font-serif: "Cormorant Garamond", Lora, ui-serif, Georgia, serif; /* display >=20px, weight 300 */
-  --font-inter: "Inter", ui-sans-serif, system-ui, sans-serif;        /* body / UI */
-  --font-mono: "Roboto Mono", ui-monospace, Menlo, monospace;         /* code accents */
+  /* ---- Legacy (Delphi) names remapped onto Auros so components re-skin ---- */
+  --color-parchment: #012624; /* page bg -> abyss */
+  --color-soft-cream: #011d1c; /* recessed bg -> deep */
+  --color-pure-card: #003734; /* card -> kelp */
+  --color-ink-black: #011d1c; /* darkest -> deep */
+  --color-charcoal-bark: #edfffe; /* default body text -> mist */
+  --color-sepia: #ffffff; /* headings -> platinum */
+  --color-bronze: #bbc7c6; /* secondary text -> silver-mist */
+  --color-driftwood: #bbc7c6; /* muted body -> silver-mist */
+  --color-stone: #8fa3a1; /* lighter muted -> teal-gray */
+  --color-pebble: rgba(255, 255, 255, 0.1); /* hairline borders on dark */
+  --color-chestnut: #003734; /* hover/dark accent -> kelp */
+  --color-ember-orange: #fde9ff; /* accent/highlight -> lavender-phosphor */
+  --color-saffron-pulse: #cbfffc; /* secondary accent -> cyan */
+  --color-peach-glow: #003734; /* soft accent bg -> kelp */
+  --color-cobalt: #cbfffc; /* the verified dot -> cyan (no blue) */
 
-  /* Type scale — each role carries its own line-height + tracking (Tailwind v4 paired modifiers) */
+  /* Signature gradients — reserved for the primary CTA + rare accent moments */
+  --gradient-bioluminescent: linear-gradient(90deg, rgb(0, 130, 124) 0%, rgb(203, 255, 252) 100%);
+  --gradient-aurora: linear-gradient(
+    90deg,
+    rgb(203, 255, 252) 0%,
+    rgb(237, 255, 254) 26.25%,
+    rgb(255, 253, 250) 47.57%,
+    rgb(250, 209, 255) 88.96%
+  );
+
+  /* Font families -> font-serif (now the geometric display face) / font-inter / font-mono.
+   * Matter is proprietary; Inter is the specified geometric substitute. */
+  --font-serif: "Matter", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-inter: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, Menlo, monospace;
+
+  /* Type scale — negative tracking at scale, positive wide tracking on small caps labels. */
   --text-caption: 10px;
-  --text-caption--line-height: 1.2;
-  --text-caption--letter-spacing: -0.012px;
+  --text-caption--line-height: 1.4;
+  --text-caption--letter-spacing: 1.2px; /* wide tracked uppercase label */
   --text-body: 15px;
-  --text-body--line-height: 1.32;
-  --text-body--letter-spacing: -0.015px;
+  --text-body--line-height: 1.4;
+  --text-body--letter-spacing: 0px;
   --text-subheading: 20px;
-  --text-subheading--line-height: 1.32;
-  --text-subheading--letter-spacing: -0.24px;
+  --text-subheading--line-height: 1.3;
+  --text-subheading--letter-spacing: -0.3px;
   --text-heading-sm: 24px;
-  --text-heading-sm--line-height: 1.22;
-  --text-heading-sm--letter-spacing: -0.312px;
+  --text-heading-sm--line-height: 1.2;
+  --text-heading-sm--letter-spacing: -0.48px;
   --text-heading: 40px;
-  --text-heading--line-height: 1.2;
-  --text-heading--letter-spacing: -0.8px;
+  --text-heading--line-height: 1;
+  --text-heading--letter-spacing: -1.2px;
   --text-heading-lg: 56px;
   --text-heading-lg--line-height: 1;
-  --text-heading-lg--letter-spacing: -1.232px;
-  --text-display: 64px;
+  --text-heading-lg--letter-spacing: -2.24px;
+  --text-display: 72px;
   --text-display--line-height: 1;
-  --text-display--letter-spacing: -1.92px;
+  --text-display--letter-spacing: -3px;
 
-  /* Standalone leading / tracking tokens (leading-* / tracking-* utilities) */
-  --leading-caption: 1.2;
-  --leading-body: 1.32;
-  --leading-subheading: 1.32;
-  --leading-heading-sm: 1.22;
-  --leading-heading: 1.2;
+  /* Standalone leading / tracking tokens */
+  --leading-caption: 1.4;
+  --leading-body: 1.4;
+  --leading-subheading: 1.3;
+  --leading-heading-sm: 1.2;
+  --leading-heading: 1;
   --leading-heading-lg: 1;
   --leading-display: 1;
-  --tracking-caption: -0.012px;
-  --tracking-body: -0.015px;
-  --tracking-subheading: -0.24px;
-  --tracking-heading-sm: -0.312px;
-  --tracking-heading: -0.8px;
-  --tracking-heading-lg: -1.232px;
-  --tracking-display: -1.92px;
+  --tracking-caption: 1.2px;
+  --tracking-body: 0px;
+  --tracking-subheading: -0.3px;
+  --tracking-heading-sm: -0.48px;
+  --tracking-heading: -1.2px;
+  --tracking-heading-lg: -2.24px;
+  --tracking-display: -3px;
 
-  /* Font weights */
-  --font-weight-light: 300;
+  /* Font weights — medium-only heading strategy (no bold, no light at display sizes) */
+  --font-weight-light: 400;
   --font-weight-regular: 400;
   --font-weight-medium: 500;
-  --font-weight-bold: 700;
+  --font-weight-bold: 500;
 
-  /* Radii vocabulary — ONLY {4, 8, 12, 16, 70}px */
-  --radius-sm: 4px;
-  --radius-tag: 8px;
-  --radius-button: 12px;
+  /* Radii vocabulary — the complete shape set is {6, 16}px (avatars stay round) */
+  --radius-sm: 6px;
+  --radius-tag: 6px;
+  --radius-button: 6px;
   --radius-card: 16px;
-  --radius-avatar: 70px;
+  --radius-avatar: 9999px;
 
   /* Layout */
-  --page-max-width: 1200px;
-  --section-gap: 80px;
+  --page-max-width: 1440px;
+  --section-gap: 68px;
 
-  /* The peach bloom — the ONLY button shadow: warmth radiating, not a drop shadow */
-  --shadow-bloom: 0 8px 32px -6px #fed0b3, 0 2px 10px -4px #fed0b3;
+  /* Auros avoids elevation entirely — depth is surface color, never shadow. */
+  --shadow-bloom: none;
 }
 
 /*
- * Spacing note: the Delphi scale {4,8,12,16,20,24,32,48,64,80,96,120}px is a
- * pure multiple of the 4px base unit, which is exactly Tailwind v4's default
- * `--spacing` (0.25rem = 4px). So p-4 = 16px, gap-3 = 12px, etc. all already
- * match — no override needed (overriding would break the numeric spacing scale).
- */
-
-/*
  * Wallet-adapter modal — restyled from the default dark/purple theme to the
- * Delphi look. We never render the adapter's own connect button (the NavPill
- * drives the modal), so only the select-wallet modal surfaces here: give it a
- * parchment panel, sepia serif title, and soft-cream wallet rows with a chestnut
- * hover — no purple (#512da8) leaks through.
+ * Auros abyss: deep-teal panel, platinum sans title, kelp wallet rows with a
+ * cyan-tinted hover. No purple (#512da8) leaks through.
  */
 .wallet-adapter-modal-wrapper {
-  background-color: var(--color-parchment);
-  color: var(--color-charcoal-bark);
+  background-color: var(--color-liquid-deep);
+  color: var(--color-liquid-mist);
   border: 1px solid var(--color-pebble);
   border-radius: var(--radius-card);
   box-shadow: none;
   font-family: var(--font-inter);
 }
 .wallet-adapter-modal-title {
-  color: var(--color-sepia);
+  color: var(--color-platinum);
   font-family: var(--font-serif);
-  font-weight: 300;
+  font-weight: 500;
 }
 .wallet-adapter-modal-button-close {
-  background-color: var(--color-soft-cream);
+  background-color: var(--color-liquid-kelp);
 }
 .wallet-adapter-modal-button-close svg {
-  fill: var(--color-sepia);
+  fill: var(--color-platinum);
 }
 .wallet-adapter-modal-list .wallet-adapter-button {
-  background-color: var(--color-soft-cream);
-  color: var(--color-sepia);
+  background-color: var(--color-liquid-kelp);
+  color: var(--color-platinum);
   border-radius: var(--radius-button);
   font-family: var(--font-inter);
   font-weight: 500;
 }
 .wallet-adapter-modal-list .wallet-adapter-button:not([disabled]):hover {
-  background-color: var(--color-chestnut);
+  background-color: #04524c;
   color: #ffffff;
 }
 .wallet-adapter-modal-list-more {
-  color: var(--color-bronze);
+  color: var(--color-silver-mist);
 }
 .wallet-adapter-modal-list-more svg {
-  fill: var(--color-bronze);
+  fill: var(--color-silver-mist);
 }
 
-/* Global parchment canvas */
+/* Global abyssal canvas with a subtle bioluminescent glow. */
 @layer base {
   html {
-    background-color: var(--color-parchment);
+    background-color: var(--color-liquid-abyss);
   }
   body {
     margin: 0;
-    background-color: var(--color-parchment);
-    color: var(--color-charcoal-bark);
+    background-color: var(--color-liquid-abyss);
+    background-image:
+      radial-gradient(1200px 760px at 50% -12%, rgba(0, 130, 124, 0.2), transparent 60%),
+      radial-gradient(900px 680px at 100% 0%, rgba(253, 233, 255, 0.06), transparent 55%);
+    background-attachment: fixed;
+    color: var(--color-silver-mist);
     font-family: var(--font-inter);
     font-size: var(--text-body);
     line-height: var(--leading-body);
-    letter-spacing: var(--tracking-body);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+  /* Headings: platinum, geometric, medium weight (never bold, never light). */
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: var(--color-platinum);
+    font-family: var(--font-serif);
+    font-weight: 500;
+  }
+  a {
+    color: var(--color-silver-mist);
+  }
+  a:hover {
+    color: var(--color-liquid-mist);
+  }
+  ::selection {
+    background: rgba(0, 130, 124, 0.4);
+    color: #ffffff;
+  }
+}
+
+/* Signature gradient fills — reserved for the primary CTA + rare accents. */
+@layer utilities {
+  .bg-aurora {
+    background-image: var(--gradient-aurora);
+  }
+  .bg-bioluminescent {
+    background-image: var(--gradient-bioluminescent);
+  }
+  /* Wide-tracked uppercase instrumentation label. */
+  .label-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 500;
   }
 }
