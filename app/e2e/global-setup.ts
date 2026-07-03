@@ -1,129 +1,126 @@
 /**
- * Playwright globalSetup for the browser E2E — spins up ALL the local nodes the
- * app needs and funds the wallet keypair the browser will sign with.
+ * Playwright globalSetup — spins up surfpool and seeds ONE oracle per browser
+ * action so the specs can drive every app UI write against an oracle already in
+ * the right phase, with a REAL funded wallet keypair.
  *
- * Steps (mirrors the gated surfpool E2Es in `app/test/*.e2e.test.ts`):
- *   1. Boot a headless surfpool simnet on :8899 and deploy the built program.
- *   2. init_protocol with fresh KASS/USDC mints (KASS authority = mint-authority PDA).
- *   3. Generate the USER wallet keypair; airdrop SOL + fund its KASS ATA (the
- *      creation-fee burn source + bond source).
- *   4. Seed a couple of oracles in the Proposal phase so the app has real data.
- *   5. Write the funded keypair's secret + the RPC url + seeded nonces to
- *      `e2e/.wallet.json`, which the specs inject into the browser as
- *      `window.__E2E_WALLET_SECRET__` for the real-signing e2e wallet.
+ * Seeds (see `seed.ts` for the drivers):
+ *   proposal      — Proposal, window open        → wallet proposes
+ *   factProposal  — dispute → FactProposal open   → wallet submits a fact
+ *   factVoting    — → FactVoting (1 fact)         → wallet votes
+ *   aiClaim       — → AiClaim, WALLET is proposer → wallet submits an AI claim
+ *   finalizeReady — Proposal, window ELAPSED      → wallet cranks finalize
+ *   resolved      — uncontested → Resolved,
+ *                   WALLET is a winning proposer  → wallet claims
  *
- * Returns a teardown that stops surfpool after the suite. The app dev server is
- * started separately by Playwright's `webServer` config (pointed at :8899 with
- * VITE_E2E=1).
+ * Writes the funded keypair + the seeded oracle map to `e2e/.wallet.json`.
  */
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { Keypair, Transaction, type TransactionInstruction } from '@solana/web3.js'
+import { Keypair } from '@solana/web3.js'
+import { TOKEN_PROGRAM_ID, associatedTokenAccount, finalizeProposals } from '@kassandra/sdk'
+
+import { toHex, tokenAccountBytes } from '../../sdk/test/surfpool/harness.ts'
 import {
-  TOKEN_PROGRAM_ID,
-  associatedTokenAccount,
-  createOracle,
-  initProtocol,
-  mintAuthority,
-  pda,
-} from '@kassandra/sdk'
-
-import {
-  SurfpoolHarness,
-  mintBytes,
-  toHex,
-  tokenAccountBytes,
-} from '../../sdk/test/surfpool/harness.ts'
-
-// NOTE: seeding calls the SDK builders DIRECTLY (with base58-string args), never
-// the app's `build*Ixs` wrappers. Under Playwright's loader the app and the SDK
-// resolve separate copies of `@solana/web3.js`, so passing a web3.js `Address`
-// object from the app layer into the SDK fails its `instanceof Address` check;
-// staying inside the SDK's copy (strings in, SDK objects out) sidesteps it.
-
-async function sha256(s: string): Promise<Uint8Array> {
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))
-}
+  advanceToAiClaim,
+  advanceToFactVoting,
+  advancePastPhaseEnd,
+  approveVote,
+  bootAndInit,
+  createOracleReal,
+  driveToFactProposal,
+  keepWindowOpen,
+  openProposals,
+  proposeAs,
+  sendIx,
+  submitOneFact,
+} from './seed.ts'
 
 const PORT = 8899
 const WALLET_FILE = join(process.cwd(), 'e2e', '.wallet.json')
 
 async function globalSetup(): Promise<() => Promise<void>> {
-  const harness = await SurfpoolHarness.start({ port: PORT })
+  const ctx = await bootAndInit(PORT)
   const rpcUrl = `http://127.0.0.1:${PORT}`
 
-  const payer = await Keypair.generate()
-  await harness.airdrop(payer.publicKey.toString(), 1_000_000_000_000)
-
-  // Mints: KASS authority MUST be the program's mint-authority PDA (emission mint);
-  // USDC authority is the payer.
-  const mintAuth = await mintAuthority()
-  const kassMint = await Keypair.generate()
-  const usdcMint = await Keypair.generate()
-  await harness.setAccount(kassMint.publicKey.toString(), {
-    lamports: 1_000_000_000,
-    owner: TOKEN_PROGRAM_ID.toString(),
-    executable: false,
-    data: toHex(mintBytes(mintAuth.address.toBytes(), 10n ** 18n, 9)),
-  })
-  await harness.setAccount(usdcMint.publicKey.toString(), {
-    lamports: 1_000_000_000,
-    owner: TOKEN_PROGRAM_ID.toString(),
-    executable: false,
-    data: toHex(mintBytes(payer.publicKey.toBytes(), 0n, 6)),
-  })
-
-  // NOTE: hand the SDK plain base58 strings (`.toString()`), not the web3.js
-  // `Address` objects. Under Playwright's loader the SDK resolves a separate
-  // copy of `@solana/web3.js`, so a foreign `Address` object fails the SDK's
-  // `instanceof Address` check; a base58 string is accepted copy-agnostically.
-  await sendIx(
-    harness,
-    payer,
-    await initProtocol({
-      admin: payer.publicKey.toString(),
-      kassMint: kassMint.publicKey.toString(),
-      usdcMint: usdcMint.publicKey.toString(),
-    }),
-  )
-
-  // The funded USER wallet the browser signs with: SOL for rent/fees + KASS at
-  // its canonical ATA (the create-fee burn + proposal-bond source).
+  // The funded browser wallet — SOL + KASS at its canonical ATA (create-fee burn
+  // + claim destination). It also plays a proposer in the AiClaim + Resolved seeds.
   const wallet = await Keypair.generate()
-  await harness.airdrop(wallet.publicKey.toString(), 50_000_000_000)
+  await ctx.harness.airdrop(wallet.publicKey.toString(), 50_000_000_000)
   const walletKass = (
-    await associatedTokenAccount(wallet.publicKey.toString(), kassMint.publicKey.toString())
+    await associatedTokenAccount(wallet.publicKey.toString(), ctx.kassMint.publicKey.toString())
   ).address
-  await harness.setAccount(walletKass.toString(), {
+  await ctx.harness.setAccount(walletKass.toString(), {
     lamports: 5_000_000,
     owner: TOKEN_PROGRAM_ID.toString(),
     executable: false,
     data: toHex(
-      tokenAccountBytes(kassMint.publicKey.toBytes(), wallet.publicKey.toBytes(), 10n ** 15n),
+      tokenAccountBytes(ctx.kassMint.publicKey.toBytes(), wallet.publicKey.toBytes(), 10n ** 15n),
     ),
   })
 
-  // Seed a couple of oracles (Proposal phase) so the dashboard has real data.
-  const nowUnix = await harness.clockUnixTimestamp()
-  const seeded: { nonce: string; address: string }[] = []
-  for (let i = 0; i < 2; i++) {
-    const nonce = BigInt(i + 1)
-    const ix = await createOracle({
-      nonce,
-      promptHash: await sha256(`E2E seed oracle #${i + 1}: did the funded browser wallet work?`),
-      optionsCount: 3,
-      deadline: nowUnix + 3_600n,
-      twapWindow: 600n,
-      creator: wallet.publicKey.toString(),
-      creatorKassToken: walletKass.toString(),
-      kassMint: kassMint.publicKey.toString(),
-      usdcMint: usdcMint.publicKey.toString(),
-    })
-    // The creator (wallet) signs: it pays rent + is the fee-burn authority.
-    await sendIx(harness, wallet, ix)
-    const oracleAddr = (await pda.oracle(nonce)).address
-    seeded.push({ nonce: nonce.toString(), address: oracleAddr.toString() })
+  const oracles: Record<string, Record<string, string>> = {}
+
+  // 1) Proposal (window open) — wallet proposes.
+  {
+    const o = await createOracleReal(ctx, 1n, 3, 'E2E propose: pick an option')
+    await openProposals(ctx, o)
+    await keepWindowOpen(ctx, o)
+    oracles.proposal = { nonce: '1', address: o.toString() }
+  }
+
+  // 2) FactProposal (open) — wallet submits a fact.
+  {
+    const o = await createOracleReal(ctx, 2n, 2, 'E2E submitFact: disputed')
+    await driveToFactProposal(ctx, o)
+    await keepWindowOpen(ctx, o)
+    oracles.factProposal = { nonce: '2', address: o.toString() }
+  }
+
+  // 3) FactVoting (1 fact) — wallet votes.
+  {
+    const o = await createOracleReal(ctx, 3n, 2, 'E2E voteFact: disputed')
+    await driveToFactProposal(ctx, o)
+    const fact = await submitOneFact(ctx, o)
+    await advanceToFactVoting(ctx, o)
+    await keepWindowOpen(ctx, o)
+    oracles.factVoting = { nonce: '3', address: o.toString(), fact: fact.toString() }
+  }
+
+  // 4) AiClaim — the WALLET is a locked-in proposer; it submits its AI claim.
+  {
+    const o = await createOracleReal(ctx, 4n, 2, 'E2E submitAiClaim: wallet is a proposer')
+    const proposers = await driveToFactProposal(ctx, o, wallet)
+    const fact = await submitOneFact(ctx, o)
+    await advanceToFactVoting(ctx, o)
+    await approveVote(ctx, o, fact)
+    await advanceToAiClaim(ctx, o, 4n, fact)
+    await keepWindowOpen(ctx, o)
+    oracles.aiClaim = { nonce: '4', address: o.toString(), proposer: proposers[0].toString() }
+  }
+
+  // 5) Proposal, window ELAPSED — wallet cranks finalize_proposals.
+  {
+    const o = await createOracleReal(ctx, 5n, 2, 'E2E finalize crank')
+    await openProposals(ctx, o)
+    await proposeAs(ctx, o, await Keypair.generate(), 0, 1_000n)
+    await proposeAs(ctx, o, await Keypair.generate(), 1, 1_000n)
+    await advancePastPhaseEnd(ctx, o)
+    oracles.finalizeReady = { nonce: '5', address: o.toString() }
+  }
+
+  // 6) Resolved (uncontested) — the WALLET is a winning proposer; it claims.
+  {
+    const o = await createOracleReal(ctx, 6n, 2, 'E2E claim: wallet wins')
+    await openProposals(ctx, o)
+    const p: string[] = []
+    const walletProposer = (await proposeAs(ctx, o, wallet, 1, 5_000n)).toString()
+    p.push(walletProposer)
+    p.push((await proposeAs(ctx, o, await Keypair.generate(), 1, 5_000n)).toString())
+    p.push((await proposeAs(ctx, o, await Keypair.generate(), 1, 5_000n)).toString())
+    await advancePastPhaseEnd(ctx, o)
+    await sendIx(ctx, await finalizeProposals({ oracle: o.toString(), proposers: p }))
+    oracles.resolved = { nonce: '6', address: o.toString(), proposer: walletProposer }
   }
 
   writeFileSync(
@@ -133,9 +130,9 @@ async function globalSetup(): Promise<() => Promise<void>> {
         secretKey: Array.from(wallet.secretKey as Uint8Array),
         publicKey: wallet.publicKey.toString(),
         rpcUrl,
-        kassMint: kassMint.publicKey.toString(),
-        usdcMint: usdcMint.publicKey.toString(),
-        oracles: seeded,
+        kassMint: ctx.kassMint.publicKey.toString(),
+        usdcMint: ctx.usdcMint.publicKey.toString(),
+        oracles,
       },
       null,
       2,
@@ -143,30 +140,11 @@ async function globalSetup(): Promise<() => Promise<void>> {
   )
 
   // eslint-disable-next-line no-console
-  console.log(
-    `[e2e] surfpool on ${rpcUrl}; funded wallet ${wallet.publicKey.toString()}; seeded ${seeded.length} oracles`,
-  )
+  console.log(`[e2e] surfpool ${rpcUrl}; wallet ${wallet.publicKey.toString()}; seeded phases: ${Object.keys(oracles).join(', ')}`)
 
   return async () => {
-    await harness.teardown()
+    await ctx.harness.teardown()
   }
-}
-
-/** Send a single instruction signed by `payer` (+ extra signers). */
-async function sendIx(
-  harness: SurfpoolHarness,
-  payer: Keypair,
-  ix: TransactionInstruction,
-  signers: Keypair[] = [],
-): Promise<void> {
-  const conn = harness.connection
-  const tx = new Transaction()
-  tx.feePayer = payer.publicKey
-  tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash
-  tx.add(ix)
-  await tx.sign(payer, ...signers)
-  const sig = await conn.sendRawTransaction(await tx.serialize(), { skipPreflight: false })
-  await harness.confirmSignature(sig)
 }
 
 export default globalSetup
