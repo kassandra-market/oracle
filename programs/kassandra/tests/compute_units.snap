@@ -7,7 +7,7 @@
   finalize_facts          2733 CU   (x1)
   finalize_oracle         6015 CU   (x1)
   finalize_proposals      1092 CU   (x1)
-  init_protocol           6079 CU   (x1)
+  init_protocol           4557 CU   (x1)
   propose                11523 CU   (x2)
   submit_ai_claim         5621 CU   (x2)
   submit_fact            11518 CU   (x1)

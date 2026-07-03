@@ -24,6 +24,10 @@ use crate::{
 pub const PROTOCOL_PDA: Pubkey =
     pinocchio_pubkey::pubkey!("DUpkpXThaPjDS7TtwwdMJHam7Ki6a8Fg9bmvNf5ggMn6");
 
+/// Canonical bump for [`PROTOCOL_PDA`] (`init_protocol` signs the create with it
+/// instead of deriving via `find_program_address`). Guarded by the same test.
+pub const PROTOCOL_BUMP: u8 = 255;
+
 /// Require that `account` is owned by `program_id`, else
 /// [`KassandraError::InvalidAccount`].
 pub fn assert_owned_by_program(account: &AccountInfo, program_id: &Pubkey) -> ProgramResult {

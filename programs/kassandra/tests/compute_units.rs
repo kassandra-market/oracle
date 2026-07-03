@@ -180,7 +180,11 @@ fn protocol_pda_const_matches_derivation() {
         kassandra_program::processor::guards::PROTOCOL_PDA,
         "PROTOCOL_PDA const is stale — re-derive it (did the program id change?)",
     );
-    assert_eq!(bump, 255, "protocol PDA bump changed");
+    assert_eq!(
+        bump,
+        kassandra_program::processor::guards::PROTOCOL_BUMP,
+        "protocol PDA bump changed",
+    );
 }
 
 #[test]

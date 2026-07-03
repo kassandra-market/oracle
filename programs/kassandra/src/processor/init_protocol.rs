@@ -39,7 +39,7 @@ use pinocchio::{
     account_info::AccountInfo,
     instruction::{Seed, Signer},
     program_error::ProgramError,
-    pubkey::{find_program_address, Pubkey},
+    pubkey::Pubkey,
     sysvars::{rent::Rent, Sysvar},
     ProgramResult,
 };
@@ -47,7 +47,7 @@ use pinocchio_system::instructions::{Allocate, Assign, Transfer};
 
 use crate::{
     error::KassandraError,
-    processor::guards::{assert_key, assert_signer},
+    processor::guards::{assert_key, assert_signer, PROTOCOL_BUMP, PROTOCOL_PDA},
     state::{AccountType, Protocol},
 };
 
@@ -60,9 +60,10 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -
     assert_signer(admin_ai)?;
     assert_key(system_prog_ai, &pinocchio_system::ID)?;
 
-    // The protocol PDA must be exactly the singleton address.
-    let (expected_protocol, bump) = find_program_address(&[b"protocol"], program_id);
-    assert_key(protocol_ai, &expected_protocol)?;
+    // The protocol PDA must be exactly the singleton address — compare against
+    // the precomputed const + use its known bump, skipping `find_program_address`.
+    assert_key(protocol_ai, &PROTOCOL_PDA)?;
+    let bump = PROTOCOL_BUMP;
 
     // Re-init guard via the account-type TAG (not lamports): a genuine second
     // init finds the account already owned by this program AND stamped
