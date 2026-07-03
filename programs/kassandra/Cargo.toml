@@ -18,6 +18,9 @@ litesvm = "0.6"
 solana-sdk = "2"
 spl-token = { version = "6", features = ["no-entrypoint"] }
 proptest = "1"
+# The Rust client SDK — the test harness builds instructions + derives PDAs
+# through it instead of hand-rolling account metas and payload bytes.
+kassandra-sdk = { path = "../../sdk-rs" }
 
 [features]
 no-entrypoint = []

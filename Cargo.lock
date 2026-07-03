@@ -1766,6 +1766,7 @@ name = "kassandra-program"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "kassandra-sdk",
  "litesvm",
  "pinocchio",
  "pinocchio-pubkey",
@@ -1801,6 +1802,16 @@ dependencies = [
  "solana-transaction",
  "thiserror 2.0.18",
  "tokio",
+]
+
+[[package]]
+name = "kassandra-sdk"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "kassandra-program",
+ "solana-instruction",
+ "solana-pubkey",
 ]
 
 [[package]]

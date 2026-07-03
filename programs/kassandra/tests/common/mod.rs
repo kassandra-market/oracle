@@ -49,10 +49,9 @@ use litesvm::{types::TransactionResult, LiteSVM};
 use solana_sdk::{
     account::Account,
     clock::Clock,
-    instruction::{AccountMeta, Instruction},
+    instruction::Instruction,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
-    system_program,
     transaction::Transaction,
 };
 use spl_token::{
@@ -131,100 +130,11 @@ pub struct SeededOracle {
     pub proposers: Vec<SeededProposer>,
 }
 
-/// The full set of `Protocol`-resident governable params for `set_config`
-/// (Task F3), in the fixed wire order. [`ConfigParams::defaults`] returns a
-/// VALID baseline (passes every bound); tests mutate one field to drive the
-/// `InvalidConfig` rejection paths.
-#[derive(Clone, Copy, Debug)]
-pub struct ConfigParams {
-    pub emission_num: u64,
-    pub emission_den: u64,
-    pub total_supply_cap: u64,
-    pub fee_ema_halflife: i64,
-    pub fee_per_ema_unit: u64,
-    pub fee_ema_increment: u64,
-    pub threshold_num: u64,
-    pub threshold_den: u64,
-    pub market_threshold_num: u64,
-    pub market_threshold_den: u64,
-    pub flip_slash_num: u64,
-    pub flip_slash_den: u64,
-    pub phase_window: i64,
-    pub proposal_window: i64,
-    pub fact_vote_slash_num: u64,
-    pub fact_vote_slash_den: u64,
-    pub reward_proposer_weight: u64,
-    pub reward_fact_weight: u64,
-    pub challenge_fail_usdc_fee_num: u64,
-    pub challenge_fail_usdc_fee_den: u64,
-    pub challenge_success_kass_fee_num: u64,
-    pub challenge_success_kass_fee_den: u64,
-}
-
-impl ConfigParams {
-    /// A VALID baseline mirroring `init_protocol`'s defaults, except the reward
-    /// weights are set to 1/1 (init defaults both to 0, but `set_config`
-    /// requires at least one reward weight > 0). Tests start here and mutate.
-    pub fn defaults() -> Self {
-        Self {
-            emission_num: 0,
-            emission_den: 1,
-            total_supply_cap: 0,
-            fee_ema_halflife: kassandra_program::config::FEE_EMA_HALFLIFE_SECS,
-            fee_per_ema_unit: kassandra_program::config::FEE_PER_EMA_UNIT,
-            fee_ema_increment: kassandra_program::config::FEE_EMA_INCREMENT,
-            threshold_num: THRESHOLD_NUM,
-            threshold_den: THRESHOLD_DEN,
-            market_threshold_num: MARKET_THRESHOLD_NUM as u64,
-            market_threshold_den: MARKET_THRESHOLD_DEN as u64,
-            flip_slash_num: FLIP_SLASH_NUM,
-            flip_slash_den: FLIP_SLASH_DEN,
-            phase_window: PHASE_WINDOW,
-            proposal_window: PROPOSAL_WINDOW,
-            fact_vote_slash_num: 0,
-            fact_vote_slash_den: 1,
-            reward_proposer_weight: 1,
-            reward_fact_weight: 1,
-            challenge_fail_usdc_fee_num: CHALLENGE_FAIL_USDC_FEE_NUM,
-            challenge_fail_usdc_fee_den: CHALLENGE_FAIL_USDC_FEE_DEN,
-            challenge_success_kass_fee_num: CHALLENGE_SUCCESS_KASS_FEE_NUM,
-            challenge_success_kass_fee_den: CHALLENGE_SUCCESS_KASS_FEE_DEN,
-        }
-    }
-
-    /// Pack into the fixed 176-byte little-endian wire layout `set_config` expects.
-    pub fn to_payload(self) -> [u8; 176] {
-        let mut out = [0u8; 176];
-        let fields: [[u8; 8]; 22] = [
-            self.emission_num.to_le_bytes(),
-            self.emission_den.to_le_bytes(),
-            self.total_supply_cap.to_le_bytes(),
-            self.fee_ema_halflife.to_le_bytes(),
-            self.fee_per_ema_unit.to_le_bytes(),
-            self.fee_ema_increment.to_le_bytes(),
-            self.threshold_num.to_le_bytes(),
-            self.threshold_den.to_le_bytes(),
-            self.market_threshold_num.to_le_bytes(),
-            self.market_threshold_den.to_le_bytes(),
-            self.flip_slash_num.to_le_bytes(),
-            self.flip_slash_den.to_le_bytes(),
-            self.phase_window.to_le_bytes(),
-            self.proposal_window.to_le_bytes(),
-            self.fact_vote_slash_num.to_le_bytes(),
-            self.fact_vote_slash_den.to_le_bytes(),
-            self.reward_proposer_weight.to_le_bytes(),
-            self.reward_fact_weight.to_le_bytes(),
-            self.challenge_fail_usdc_fee_num.to_le_bytes(),
-            self.challenge_fail_usdc_fee_den.to_le_bytes(),
-            self.challenge_success_kass_fee_num.to_le_bytes(),
-            self.challenge_success_kass_fee_den.to_le_bytes(),
-        ];
-        for (i, f) in fields.iter().enumerate() {
-            out[i * 8..i * 8 + 8].copy_from_slice(f);
-        }
-        out
-    }
-}
+/// The full set of `Protocol`-resident governable params for `set_config`,
+/// now owned by the Rust SDK (`kassandra_sdk::ConfigParams`). Re-exported here
+/// so existing test call sites (`ConfigParams::defaults()`, struct literals,
+/// `to_payload()`) keep working unchanged.
+pub use kassandra_sdk::ConfigParams;
 
 /// LiteSVM-backed test context with KASS/USDC mints and helpers for seeding
 /// disputed oracles directly into account storage.
@@ -300,62 +210,49 @@ impl TestCtx {
         ctx
     }
 
-    // ----- seed-derivation helpers (part of the program contract) -----------
+    // ----- seed-derivation helpers (thin wrappers over `kassandra_sdk::pda`) --
+    // The seed conventions are the program's public contract; the SDK owns the
+    // derivations so there is a single source of truth. These wrappers keep the
+    // harness's `*_pda` names stable for the existing test call sites.
 
     /// Derive the Oracle PDA from a `nonce`: seeds `[b"oracle", nonce_le]`.
     pub fn oracle_pda(program_id: &Pubkey, nonce: u64) -> (Pubkey, u8) {
-        Pubkey::find_program_address(&[b"oracle", &nonce.to_le_bytes()], program_id)
+        kassandra_sdk::pda::oracle(program_id, nonce)
     }
 
     /// Derive the Protocol singleton PDA: seeds `[b"protocol"]`.
     pub fn protocol_pda(program_id: &Pubkey) -> (Pubkey, u8) {
-        Pubkey::find_program_address(&[b"protocol"], program_id)
+        kassandra_sdk::pda::protocol(program_id)
     }
 
-    /// Derive the KASS mint-authority PDA: seeds `[b"mint_authority"]`. This is
-    /// the authority handed to the KASS mint so the program's emission `MintTo`
-    /// (Task S3) can program-sign.
+    /// Derive the KASS mint-authority PDA: seeds `[b"mint_authority"]`.
     pub fn mint_authority_pda(program_id: &Pubkey) -> (Pubkey, u8) {
-        Pubkey::find_program_address(
-            &[kassandra_program::config::MINT_AUTHORITY_SEED],
-            program_id,
-        )
+        kassandra_sdk::pda::mint_authority(program_id)
     }
 
     /// Derive the stake-vault PDA for an oracle: seeds `[b"vault", oracle]`.
-    /// The vault is an SPL token account on the KASS mint whose authority is the
-    /// oracle PDA, created by `create_oracle`.
     pub fn stake_vault_pda(program_id: &Pubkey, oracle: &Pubkey) -> (Pubkey, u8) {
-        Pubkey::find_program_address(&[b"vault", oracle.as_ref()], program_id)
+        kassandra_sdk::pda::stake_vault(program_id, oracle)
     }
 
-    /// Derive the challenger USDC escrow vault PDA for a market: seeds
-    /// `[b"challenge_usdc", market]`. The vault is an SPL token account on the
-    /// USDC mint whose token authority is the oracle PDA, created by
-    /// `open_challenge`.
+    /// Derive the challenger USDC escrow vault PDA: seeds `[b"challenge_usdc", market]`.
     pub fn challenge_usdc_vault_pda(program_id: &Pubkey, market: &Pubkey) -> (Pubkey, u8) {
-        Pubkey::find_program_address(&[b"challenge_usdc", market.as_ref()], program_id)
+        kassandra_sdk::pda::challenge_usdc_vault(program_id, market)
     }
 
     /// Derive the Proposer PDA: seeds `[b"proposer", oracle, authority]`.
     pub fn proposer_pda(program_id: &Pubkey, oracle: &Pubkey, authority: &Pubkey) -> (Pubkey, u8) {
-        Pubkey::find_program_address(
-            &[b"proposer", oracle.as_ref(), authority.as_ref()],
-            program_id,
-        )
+        kassandra_sdk::pda::proposer(program_id, oracle, authority)
     }
 
     /// Derive the Fact PDA: seeds `[b"fact", oracle, content_hash]`.
     pub fn fact_pda(program_id: &Pubkey, oracle: &Pubkey, content_hash: &[u8; 32]) -> (Pubkey, u8) {
-        Pubkey::find_program_address(
-            &[b"fact", oracle.as_ref(), content_hash.as_ref()],
-            program_id,
-        )
+        kassandra_sdk::pda::fact(program_id, oracle, content_hash)
     }
 
     /// Derive the FactVote PDA: seeds `[b"vote", fact, voter]`.
     pub fn vote_pda(program_id: &Pubkey, fact: &Pubkey, voter: &Pubkey) -> (Pubkey, u8) {
-        Pubkey::find_program_address(&[b"vote", fact.as_ref(), voter.as_ref()], program_id)
+        kassandra_sdk::pda::vote(program_id, fact, voter)
     }
 
     // ----- real instruction helpers -----------------------------------------
@@ -375,17 +272,13 @@ impl TestCtx {
     /// Build an `InitProtocol` instruction targeting `protocol` (so tests can
     /// pass a deliberately wrong PDA). Admin = payer (fee payer signs).
     pub fn init_protocol_ix(&self, protocol: Pubkey) -> Instruction {
-        Instruction {
-            program_id: self.program_id,
-            accounts: vec![
-                AccountMeta::new(protocol, false),
-                AccountMeta::new(self.payer.pubkey(), true),
-                AccountMeta::new_readonly(self.kass_mint, false),
-                AccountMeta::new_readonly(self.usdc_mint, false),
-                AccountMeta::new_readonly(system_program::ID, false),
-            ],
-            data: vec![kassandra_program::instruction::Ix::InitProtocol as u8],
-        }
+        kassandra_sdk::ix::init_protocol(
+            &self.program_id,
+            protocol,
+            self.payer.pubkey(),
+            self.kass_mint,
+            self.usdc_mint,
+        )
     }
 
     /// Stand-in governance keys for F1 tests: an arbitrary "Squads vault" PDA
@@ -433,19 +326,7 @@ impl TestCtx {
         dao_authority: Pubkey,
         kass_dao: Pubkey,
     ) -> Instruction {
-        let mut data = Vec::with_capacity(1 + 64);
-        data.push(kassandra_program::instruction::Ix::SetGovernance as u8);
-        data.extend_from_slice(&dao_authority.to_bytes());
-        data.extend_from_slice(&kass_dao.to_bytes());
-        Instruction {
-            program_id: self.program_id,
-            accounts: vec![
-                AccountMeta::new(protocol, false),
-                AccountMeta::new_readonly(authority, true),
-                AccountMeta::new_readonly(kass_dao, false),
-            ],
-            data,
-        }
+        kassandra_sdk::ix::set_governance(&self.program_id, protocol, authority, dao_authority, kass_dao)
     }
 
     /// Derive the Squads v4 multisig **vault** PDA (the DAO execution authority)
@@ -529,17 +410,7 @@ impl TestCtx {
         authority: Pubkey,
         params: ConfigParams,
     ) -> Instruction {
-        let mut data = Vec::with_capacity(1 + 176);
-        data.push(kassandra_program::instruction::Ix::SetConfig as u8);
-        data.extend_from_slice(&params.to_payload());
-        Instruction {
-            program_id: self.program_id,
-            accounts: vec![
-                AccountMeta::new(protocol, false),
-                AccountMeta::new_readonly(authority, true),
-            ],
-            data,
-        }
+        kassandra_sdk::ix::set_config(&self.program_id, protocol, authority, &params)
     }
 
     /// Send a real `ResolveDeadend` instruction signed by `authority`, setting
@@ -575,18 +446,7 @@ impl TestCtx {
         authority: Pubkey,
         option: u8,
     ) -> Instruction {
-        Instruction {
-            program_id: self.program_id,
-            accounts: vec![
-                AccountMeta::new_readonly(protocol, false),
-                AccountMeta::new(oracle, false),
-                AccountMeta::new_readonly(authority, true),
-            ],
-            data: vec![
-                kassandra_program::instruction::Ix::ResolveDeadend as u8,
-                option,
-            ],
-        }
+        kassandra_sdk::ix::resolve_deadend(&self.program_id, protocol, oracle, authority, option)
     }
 
     /// Build a `KassPrice` instruction (Task F5): reads the futarchy `Dao`
@@ -594,14 +454,7 @@ impl TestCtx {
     /// Exposes both accounts so tests can pass a substituted protocol or a
     /// wrong/foreign-owned `kass_dao`. No payload.
     pub fn kass_price_ix(&self, protocol: Pubkey, kass_dao: Pubkey) -> Instruction {
-        Instruction {
-            program_id: self.program_id,
-            accounts: vec![
-                AccountMeta::new_readonly(protocol, false),
-                AccountMeta::new_readonly(kass_dao, false),
-            ],
-            data: vec![kassandra_program::instruction::Ix::KassPrice as u8],
-        }
+        kassandra_sdk::ix::kass_price(&self.program_id, protocol, kass_dao)
     }
 
     /// Fabricate an account at `key` owned by `owner` holding `data`. Used by F5
@@ -698,35 +551,19 @@ impl TestCtx {
         kass_mint: Pubkey,
         usdc_mint: Pubkey,
     ) -> Instruction {
-        let (protocol_pda, _) = Self::protocol_pda(&self.program_id);
-        let (stake_vault, _) = Self::stake_vault_pda(&self.program_id, &oracle);
-        let (mint_auth, _) = Self::mint_authority_pda(&self.program_id);
-
-        let mut data = Vec::with_capacity(1 + 57);
-        data.push(kassandra_program::instruction::Ix::CreateOracle as u8);
-        data.extend_from_slice(&nonce.to_le_bytes());
-        data.extend_from_slice(&prompt_hash);
-        data.push(options_count);
-        data.extend_from_slice(&deadline.to_le_bytes());
-        data.extend_from_slice(&twap_window.to_le_bytes());
-
-        Instruction {
-            program_id: self.program_id,
-            accounts: vec![
-                AccountMeta::new(protocol_pda, false),
-                AccountMeta::new(oracle, false),
-                AccountMeta::new(stake_vault, false),
-                AccountMeta::new(self.payer.pubkey(), true),
-                AccountMeta::new(kass_mint, false),
-                AccountMeta::new_readonly(usdc_mint, false),
-                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
-                AccountMeta::new_readonly(system_program::ID, false),
-                AccountMeta::new(self.payer_kass, false),
-                // S3: the mint-authority PDA program-signs the emission MintTo.
-                AccountMeta::new_readonly(mint_auth, false),
-            ],
-            data,
-        }
+        kassandra_sdk::ix::create_oracle(
+            &self.program_id,
+            nonce,
+            options_count,
+            deadline,
+            twap_window,
+            &prompt_hash,
+            oracle,
+            kass_mint,
+            usdc_mint,
+            self.payer.pubkey(),
+            self.payer_kass,
+        )
     }
 
     /// Send a real `Propose` instruction registering `authority`'s proposal
@@ -778,40 +615,23 @@ impl TestCtx {
         option: u8,
         bond: u64,
     ) -> Instruction {
-        let mut data = Vec::with_capacity(1 + 9);
-        data.push(kassandra_program::instruction::Ix::Propose as u8);
-        data.push(option);
-        data.extend_from_slice(&bond.to_le_bytes());
-
-        Instruction {
-            program_id: self.program_id,
-            accounts: vec![
-                AccountMeta::new(oracle, false),
-                AccountMeta::new(proposer, false),
-                AccountMeta::new(authority, true),
-                AccountMeta::new(authority_kass, false),
-                AccountMeta::new(vault, false),
-                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
-                AccountMeta::new_readonly(system_program::ID, false),
-            ],
-            data,
-        }
+        kassandra_sdk::ix::propose(
+            &self.program_id,
+            oracle,
+            proposer,
+            authority,
+            authority_kass,
+            vault,
+            option,
+            bond,
+        )
     }
 
     /// Build a `FinalizeProposals` instruction: `[0] oracle(w)` followed by the
     /// given proposer accounts as a READ-ONLY tail. Exposes the full proposer
     /// slice so tests can pass a subset, a duplicate, or a foreign-oracle account.
     pub fn finalize_proposals_ix(&self, oracle: Pubkey, proposers: &[Pubkey]) -> Instruction {
-        let mut accounts = Vec::with_capacity(1 + proposers.len());
-        accounts.push(AccountMeta::new(oracle, false));
-        for p in proposers {
-            accounts.push(AccountMeta::new_readonly(*p, false));
-        }
-        Instruction {
-            program_id: self.program_id,
-            accounts,
-            data: vec![kassandra_program::instruction::Ix::FinalizeProposals as u8],
-        }
+        kassandra_sdk::ix::finalize_proposals(&self.program_id, oracle, proposers)
     }
 
     // ----- real-flow builders ------------------------------------------------
@@ -1263,22 +1083,14 @@ impl TestCtx {
     /// bookkeeping map (seeded or real-flow) so its nonce/vault are known.
     pub fn finalize_oracle_ix(&self, oracle: Pubkey, tail: &[Pubkey]) -> Instruction {
         let seeded = self.seeded(oracle);
-        let mut data = Vec::with_capacity(1 + 8);
-        data.push(kassandra_program::instruction::Ix::FinalizeOracle as u8);
-        data.extend_from_slice(&seeded.nonce.to_le_bytes());
-        let mut accounts = Vec::with_capacity(4 + tail.len());
-        accounts.push(AccountMeta::new(oracle, false));
-        accounts.push(AccountMeta::new(self.kass_mint, false));
-        accounts.push(AccountMeta::new(seeded.stake_vault, false));
-        accounts.push(AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false));
-        for k in tail {
-            accounts.push(AccountMeta::new_readonly(*k, false));
-        }
-        Instruction {
-            program_id: self.program_id,
-            accounts,
-            data,
-        }
+        kassandra_sdk::ix::finalize_oracle(
+            &self.program_id,
+            oracle,
+            self.kass_mint,
+            seeded.stake_vault,
+            seeded.nonce,
+            tail,
+        )
     }
 
     /// Build a `FinalizeFacts` instruction (Ix 2). Account order (mirrors
@@ -1289,22 +1101,14 @@ impl TestCtx {
     /// the bookkeeping map (seeded or real-flow) so its nonce/vault are known.
     pub fn finalize_facts_ix(&self, oracle: Pubkey, tail: &[Pubkey]) -> Instruction {
         let seeded = self.seeded(oracle);
-        let mut data = Vec::with_capacity(1 + 8);
-        data.push(kassandra_program::instruction::Ix::FinalizeFacts as u8);
-        data.extend_from_slice(&seeded.nonce.to_le_bytes());
-        let mut accounts = Vec::with_capacity(4 + tail.len());
-        accounts.push(AccountMeta::new(oracle, false));
-        accounts.push(AccountMeta::new(self.kass_mint, false));
-        accounts.push(AccountMeta::new(seeded.stake_vault, false));
-        accounts.push(AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false));
-        for k in tail {
-            accounts.push(AccountMeta::new(*k, false));
-        }
-        Instruction {
-            program_id: self.program_id,
-            accounts,
-            data,
-        }
+        kassandra_sdk::ix::finalize_facts(
+            &self.program_id,
+            oracle,
+            self.kass_mint,
+            seeded.stake_vault,
+            seeded.nonce,
+            tail,
+        )
     }
 
     /// Fabricate a program-owned account at a fresh address holding `data`.
@@ -2067,21 +1871,15 @@ impl TestCtx {
         stake_vault: Pubkey,
         rent_recipient: Pubkey,
     ) -> Instruction {
-        let mut data = Vec::with_capacity(1 + 8);
-        data.push(kassandra_program::instruction::Ix::ClaimProposer as u8);
-        data.extend_from_slice(&nonce.to_le_bytes());
-        Instruction {
-            program_id: self.program_id,
-            accounts: vec![
-                AccountMeta::new_readonly(oracle, false),
-                AccountMeta::new(proposer, false),
-                AccountMeta::new(dest_kass, false),
-                AccountMeta::new(stake_vault, false),
-                AccountMeta::new(rent_recipient, false),
-                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
-            ],
-            data,
-        }
+        kassandra_sdk::ix::claim_proposer(
+            &self.program_id,
+            oracle,
+            nonce,
+            proposer,
+            dest_kass,
+            stake_vault,
+            rent_recipient,
+        )
     }
 
     /// Build a `ClaimFact` instruction (Ix 18). Same account order as
@@ -2095,21 +1893,15 @@ impl TestCtx {
         stake_vault: Pubkey,
         rent_recipient: Pubkey,
     ) -> Instruction {
-        let mut data = Vec::with_capacity(1 + 8);
-        data.push(kassandra_program::instruction::Ix::ClaimFact as u8);
-        data.extend_from_slice(&nonce.to_le_bytes());
-        Instruction {
-            program_id: self.program_id,
-            accounts: vec![
-                AccountMeta::new_readonly(oracle, false),
-                AccountMeta::new(fact, false),
-                AccountMeta::new(dest_kass, false),
-                AccountMeta::new(stake_vault, false),
-                AccountMeta::new(rent_recipient, false),
-                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
-            ],
-            data,
-        }
+        kassandra_sdk::ix::claim_fact(
+            &self.program_id,
+            oracle,
+            nonce,
+            fact,
+            dest_kass,
+            stake_vault,
+            rent_recipient,
+        )
     }
 
     /// Build a `ClaimFactVote` instruction (Ix 19). Account order:
@@ -2126,22 +1918,16 @@ impl TestCtx {
         stake_vault: Pubkey,
         rent_recipient: Pubkey,
     ) -> Instruction {
-        let mut data = Vec::with_capacity(1 + 8);
-        data.push(kassandra_program::instruction::Ix::ClaimFactVote as u8);
-        data.extend_from_slice(&nonce.to_le_bytes());
-        Instruction {
-            program_id: self.program_id,
-            accounts: vec![
-                AccountMeta::new_readonly(oracle, false),
-                AccountMeta::new(fact_vote, false),
-                AccountMeta::new(fact, false),
-                AccountMeta::new(dest_kass, false),
-                AccountMeta::new(stake_vault, false),
-                AccountMeta::new(rent_recipient, false),
-                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
-            ],
-            data,
-        }
+        kassandra_sdk::ix::claim_fact_vote(
+            &self.program_id,
+            oracle,
+            nonce,
+            fact_vote,
+            fact,
+            dest_kass,
+            stake_vault,
+            rent_recipient,
+        )
     }
 
     /// Lamports balance of any account (0 if it does not exist), for asserting
@@ -2204,15 +1990,7 @@ impl TestCtx {
         ai_claim: Pubkey,
         rent_recipient: Pubkey,
     ) -> Instruction {
-        Instruction {
-            program_id: self.program_id,
-            accounts: vec![
-                AccountMeta::new_readonly(oracle, false),
-                AccountMeta::new(ai_claim, false),
-                AccountMeta::new(rent_recipient, false),
-            ],
-            data: vec![kassandra_program::instruction::Ix::CloseAiClaim as u8],
-        }
+        kassandra_sdk::ix::close_ai_claim(&self.program_id, oracle, ai_claim, rent_recipient)
     }
 
     /// Build a `CloseMarket` instruction (Ix 21). Account order:
@@ -2226,20 +2004,14 @@ impl TestCtx {
         challenger_usdc_vault: Pubkey,
         rent_recipient: Pubkey,
     ) -> Instruction {
-        let mut data = Vec::with_capacity(1 + 8);
-        data.push(kassandra_program::instruction::Ix::CloseMarket as u8);
-        data.extend_from_slice(&nonce.to_le_bytes());
-        Instruction {
-            program_id: self.program_id,
-            accounts: vec![
-                AccountMeta::new_readonly(oracle, false),
-                AccountMeta::new(market, false),
-                AccountMeta::new(challenger_usdc_vault, false),
-                AccountMeta::new(rent_recipient, false),
-                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
-            ],
-            data,
-        }
+        kassandra_sdk::ix::close_market(
+            &self.program_id,
+            oracle,
+            nonce,
+            market,
+            challenger_usdc_vault,
+            rent_recipient,
+        )
     }
 
     // ----- SW1: sweep_oracle (dust → treasury + terminal closure) helpers -----
@@ -2327,21 +2099,15 @@ impl TestCtx {
         dao_treasury: Pubkey,
         creator: Pubkey,
     ) -> Instruction {
-        let mut data = Vec::with_capacity(1 + 8);
-        data.push(kassandra_program::instruction::Ix::SweepOracle as u8);
-        data.extend_from_slice(&nonce.to_le_bytes());
-        Instruction {
-            program_id: self.program_id,
-            accounts: vec![
-                AccountMeta::new(oracle, false),
-                AccountMeta::new(stake_vault, false),
-                AccountMeta::new_readonly(protocol, false),
-                AccountMeta::new(dao_treasury, false),
-                AccountMeta::new(creator, false),
-                AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
-            ],
-            data,
-        }
+        kassandra_sdk::ix::sweep_oracle(
+            &self.program_id,
+            oracle,
+            nonce,
+            stake_vault,
+            protocol,
+            dao_treasury,
+            creator,
+        )
     }
 }
 
