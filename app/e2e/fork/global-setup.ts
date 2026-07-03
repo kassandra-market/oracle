@@ -12,6 +12,7 @@
  * the funded keypair + the seeded market inputs to `e2e/fork/.wallet.json`.
  */
 import { writeFileSync } from 'node:fs'
+import { buildDaoBlob } from '../../../sdk/test/surfpool/futarchy-dao.ts'
 import { join } from 'node:path'
 
 import { Keypair } from '@solana/web3.js'
@@ -29,26 +30,11 @@ import { bootAndInit, createOracleReal, driveToChallengeSurviving, sendIx } from
 const PORT = 8940
 const WALLET_FILE = join(process.cwd(), 'e2e', 'fork', '.wallet.json')
 
-const FUTARCHY_DAO_DISC = Uint8Array.from([0xa3, 0x09, 0x2f, 0x1f, 0x34, 0x55, 0xc5, 0x31])
 // KASS/USDC spot TWAP (raw USDC per raw KASS × 1e12). open_challenge sizes the
 // escrow as `required_usdc = proposer.bond × twap / 1e12`; the seed's proposers
 // bond only 1_000 raw KASS, so the TWAP is set high enough that the escrow is a
 // non-zero 500_000 raw USDC (else the tiny bond rounds it to 0 → ZeroStake).
 const KASS_PRICE_TWAP = 500_000_000_000_000n
-
-/** A minimal futarchy `Dao` blob carrying an embedded spot TWAP (kass_price source). */
-function buildDaoBlob(aggregator: bigint, lastUpdated: bigint, createdAt: bigint): Uint8Array {
-  const data = new Uint8Array(141)
-  data.set(FUTARCHY_DAO_DISC, 0)
-  data[8] = 0 // PoolState::Spot
-  const dv = new DataView(data.buffer)
-  dv.setBigUint64(9, aggregator & 0xffffffffffffffffn, true)
-  dv.setBigUint64(17, aggregator >> 64n, true)
-  dv.setBigInt64(25, lastUpdated, true)
-  dv.setBigInt64(33, createdAt, true)
-  return data
-}
-
 async function globalSetup(): Promise<() => Promise<void>> {
   const ctx = await bootAndInit(PORT, {
     fork: 'mainnet',

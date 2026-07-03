@@ -40,6 +40,7 @@ import {
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
+import { buildDaoBlob } from "../../sdk/test/surfpool/futarchy-dao.ts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -93,7 +94,6 @@ const INITIALIZE_CONDITIONAL_VAULT = Uint8Array.from([0x25, 0x58, 0xfa, 0xd4, 0x
 
 const KASS_PRICE_TWAP = 500_000_000n;
 const KASS_PRICE_SCALE = 1_000_000_000_000n;
-const FUTARCHY_DAO_DISC = Uint8Array.from([0xa3, 0x09, 0x2f, 0x1f, 0x34, 0x55, 0xc5, 0x31]);
 
 const enc = new TextEncoder();
 
@@ -476,20 +476,6 @@ async function settleChallengeViaApp(
 // ---------------------------------------------------------------------------
 // MetaDAO market composition + AMM driving (ported from challenge-market-e2e).
 // ---------------------------------------------------------------------------
-
-function buildDaoBlob(aggregator: bigint, lastUpdated: bigint, createdAt: bigint, startDelay: number): Uint8Array {
-  const data = new Uint8Array(141);
-  data.set(FUTARCHY_DAO_DISC, 0);
-  data[8] = 0;
-  const dv = new DataView(data.buffer);
-  dv.setBigUint64(9, aggregator & 0xffffffffffffffffn, true);
-  dv.setBigUint64(17, aggregator >> 64n, true);
-  dv.setBigInt64(25, lastUpdated, true);
-  dv.setBigInt64(33, createdAt, true);
-  dv.setUint32(105, startDelay, true);
-  return data;
-}
-
 async function ata(owner: Address, mint: Address): Promise<Address> {
   return (
     await Address.findProgramAddress(

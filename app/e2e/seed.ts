@@ -10,6 +10,7 @@
  * `@solana/web3.js`, so a foreign `Address` fails the SDK's `instanceof` check.
  */
 import { Address, Keypair, Transaction, type TransactionInstruction } from '@solana/web3.js'
+import { buildDaoBlob } from '../../sdk/test/surfpool/futarchy-dao.ts'
 import {
   TOKEN_PROGRAM_ID,
   VOTE_APPROVE,
@@ -292,22 +293,6 @@ export async function backdateForSweep(ctx: SeedCtx, oracle: Address): Promise<v
     data: toHex(data),
   })
 }
-
-const FUTARCHY_DAO_DISC = Uint8Array.from([0xa3, 0x09, 0x2f, 0x1f, 0x34, 0x55, 0xc5, 0x31])
-
-/** Build a minimal futarchy `Dao` account blob with an embedded spot TWAP. */
-function buildDaoBlob(aggregator: bigint, lastUpdated: bigint, createdAt: bigint): Uint8Array {
-  const data = new Uint8Array(141)
-  data.set(FUTARCHY_DAO_DISC, 0)
-  data[8] = 0 // PoolState::Spot
-  const dv = new DataView(data.buffer)
-  dv.setBigUint64(9, aggregator & 0xffffffffffffffffn, true)
-  dv.setBigUint64(17, aggregator >> 64n, true)
-  dv.setBigInt64(25, lastUpdated, true)
-  dv.setBigInt64(33, createdAt, true)
-  return data
-}
-
 /** Patch the Protocol singleton bytes in place (for governance fabrication). */
 async function patchProtocolBytes(ctx: SeedCtx, mutate: (d: Uint8Array) => void): Promise<void> {
   const { KASSANDRA_PROGRAM_ID } = await import('@kassandra/sdk')

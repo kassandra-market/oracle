@@ -33,6 +33,7 @@ import {
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
+import { buildDaoBlob } from "../../sdk/test/surfpool/futarchy-dao.ts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -75,7 +76,6 @@ const ENABLED = process.env.KASSANDRA_E2E === "1" && surfpoolReady();
 const FUTARCHY_ID = EXTERNAL_PROGRAM_IDS.futarchyV06;
 const KASS_PRICE_TWAP = 500_000_000n;
 const KASS_PRICE_SCALE = 1_000_000_000_000n;
-const FUTARCHY_DAO_DISC = Uint8Array.from([0xa3, 0x09, 0x2f, 0x1f, 0x34, 0x55, 0xc5, 0x31]);
 
 const BOND = 1_000_000_000n;
 // The compose defaults (challengeCompose DEFAULT_BASE/QUOTE_RESERVE).
@@ -235,20 +235,6 @@ describe.skipIf(!ENABLED)("CU3 client-side compose→open over FORKED MetaDAO", 
 // Fixture helpers (mirror challenge.e2e; the market composition itself is the
 // app builder under test, so only the front-door drivers are ported here).
 // ---------------------------------------------------------------------------
-
-function buildDaoBlob(aggregator: bigint, lastUpdated: bigint, createdAt: bigint, startDelay: number): Uint8Array {
-  const data = new Uint8Array(141);
-  data.set(FUTARCHY_DAO_DISC, 0);
-  data[8] = 0;
-  const dv = new DataView(data.buffer);
-  dv.setBigUint64(9, aggregator & 0xffffffffffffffffn, true);
-  dv.setBigUint64(17, aggregator >> 64n, true);
-  dv.setBigInt64(25, lastUpdated, true);
-  dv.setBigInt64(33, createdAt, true);
-  dv.setUint32(105, startDelay, true);
-  return data;
-}
-
 interface Challenged {
   oracle: Address;
   proposer: Address;
