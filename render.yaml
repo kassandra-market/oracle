@@ -1,0 +1,60 @@
+# Render Blueprint — deploy the Kassandra dApp (app/) as a static site.
+#
+# The app is a Vite + React SPA that talks directly to a Solana RPC from the
+# browser (no backend). This blueprint builds it from the pnpm monorepo and
+# serves the static `app/dist` bundle from Render's global CDN.
+#
+# DEPLOY
+#   1. Push this file to the repo's default branch.
+#   2. Render Dashboard → New → Blueprint → pick this repo. Render reads render.yaml
+#      and provisions the `kassandra-app` static site.
+#   3. (Optional) set VITE_RPC_URL — see the env var note below.
+#
+# The site auto-deploys on every push to `master` that touches app/**, sdk/**, or
+# the lockfile (see buildFilter). Pull requests get an ephemeral preview URL.
+#
+# Docs: https://render.com/docs/blueprint-spec  ·  https://render.com/docs/static-sites
+
+services:
+  - type: web
+    name: kassandra-app
+    runtime: static
+    # Rebuild only when the app, the SDK it bundles, the lockfile, or this file
+    # change — not on unrelated program/runner/docs commits.
+    buildFilter:
+      paths:
+        - app/**
+        - sdk/**
+        - pnpm-lock.yaml
+        - render.yaml
+    # Pin pnpm via corepack (the lockfile is v9 → pnpm 10), install the workspace,
+    # build the SDK (the app bundles its dist/) then the app. `pnpm --filter app
+    # build` runs `tsc -b && vite build && verify-css`.
+    buildCommand: >-
+      corepack enable &&
+      corepack prepare pnpm@10.28.1 --activate &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter sdk build &&
+      pnpm --filter app build
+    staticPublishPath: app/dist
+    pullRequestPreviewsEnabled: true
+    # SPA fallback: React Router owns client-side routes, so every unmatched path
+    # must serve index.html (a hard refresh on /oracles/… should not 404).
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # Vite fingerprints asset filenames, so they are safe to cache forever.
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # OPTIONAL build-time override for the "Localnet" cluster's RPC endpoint
+      # (Vite inlines VITE_* at build time). Leave unset to ship the built-in
+      # Devnet / Mainnet endpoints the in-app cluster switcher already offers;
+      # set it to your own RPC URL to point "Localnet" at a custom validator.
+      - key: VITE_RPC_URL
+        sync: false
