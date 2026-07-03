@@ -37,7 +37,7 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 use solana_hash::Hash;
-use solana_instruction::{AccountMeta, Instruction};
+use solana_instruction::Instruction;
 use solana_keypair::Keypair;
 use solana_message::Message;
 use solana_pubkey::Pubkey;
@@ -54,21 +54,6 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 /// a renumber in the program breaks this build.
 pub const SUBMIT_AI_CLAIM_DISCRIMINANT: u8 =
     kassandra_program::instruction::Ix::SubmitAiClaim as u8;
-
-/// The System program id (`11111111111111111111111111111111` = 32 zero bytes),
-/// the read-only trailing account the processor asserts against
-/// (`pinocchio_system::ID`). Kept as an explicit constant with a test pinning it
-/// to the canonical base58 form.
-const SYSTEM_PROGRAM_ID: Pubkey = Pubkey::new_from_array([0u8; 32]);
-
-/// The AiClaim PDA seed prefix (`[b"claim", oracle, proposer]`), the on-chain
-/// `submit_ai_claim` contract.
-const CLAIM_SEED: &[u8] = b"claim";
-
-/// The Proposer PDA seed prefix (`[b"proposer", oracle, authority]`), the
-/// on-chain `propose` contract — so the keeper can DERIVE its own proposer PDA
-/// from the oracle + the signing authority (no `--proposer` flag needed).
-const PROPOSER_SEED: &[u8] = b"proposer";
 
 /// Anything that can go wrong building/sending/confirming the claim tx.
 #[derive(Debug, thiserror::Error)]
@@ -125,20 +110,14 @@ pub enum SubmitError {
     },
 }
 
-/// The Kassandra program id as a [`Pubkey`], converting the on-chain pinocchio
-/// `[u8; 32]` [`kassandra_program::ID`] at the type boundary.
+/// The Kassandra program id as a [`Pubkey`] (from the SDK's canonical constant).
 pub fn program_id() -> Pubkey {
-    Pubkey::new_from_array(kassandra_program::ID)
+    kassandra_sdk::PROGRAM_ID
 }
 
-/// Derive the `ai_claim` PDA `find_program_address([b"claim", oracle,
-/// proposer], kassandra_id)` (the on-chain `submit_ai_claim` contract).
+/// Derive the `ai_claim` PDA (seeds `[b"claim", oracle, proposer]`) via the SDK.
 pub fn derive_ai_claim_pda(oracle: &Pubkey, proposer: &Pubkey) -> Pubkey {
-    Pubkey::find_program_address(
-        &[CLAIM_SEED, oracle.as_ref(), proposer.as_ref()],
-        &program_id(),
-    )
-    .0
+    kassandra_sdk::pda::ai_claim(&program_id(), oracle, proposer).0
 }
 
 /// Derive the `proposer` PDA `find_program_address([b"proposer", oracle,
@@ -148,11 +127,7 @@ pub fn derive_ai_claim_pda(oracle: &Pubkey, proposer: &Pubkey) -> Pubkey {
 /// the oracle and the signing `authority` (the `--keypair` pubkey) — no separate
 /// `--proposer` argument is required.
 pub fn derive_proposer_pda(oracle: &Pubkey, authority: &Pubkey) -> Pubkey {
-    Pubkey::find_program_address(
-        &[PROPOSER_SEED, oracle.as_ref(), authority.as_ref()],
-        &program_id(),
-    )
-    .0
+    kassandra_sdk::pda::proposer(&program_id(), oracle, authority).0
 }
 
 /// Build the `submit_ai_claim` [`Instruction`].
@@ -176,24 +151,14 @@ pub fn build_submit_ai_claim_ix(
     );
 
     let ai_claim = derive_ai_claim_pda(oracle, proposer);
-
-    let accounts = vec![
-        AccountMeta::new(*oracle, false),                    // 0: oracle (w)
-        AccountMeta::new(*proposer, false),                  // 1: proposer PDA (w)
-        AccountMeta::new(ai_claim, false),                   // 2: ai_claim PDA (w, created)
-        AccountMeta::new(*authority, true),                  // 3: authority (signer, w)
-        AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false), // 4: system (ro)
-    ];
-
-    let mut data = Vec::with_capacity(1 + SUBMIT_AI_CLAIM_PAYLOAD_LEN);
-    data.push(SUBMIT_AI_CLAIM_DISCRIMINANT);
-    data.extend_from_slice(payload);
-
-    Instruction {
-        program_id: program_id(),
-        accounts,
-        data,
-    }
+    kassandra_sdk::ix::submit_ai_claim_raw(
+        &program_id(),
+        *oracle,
+        *proposer,
+        ai_claim,
+        *authority,
+        payload,
+    )
 }
 
 /// Load a Solana CLI JSON keypair file (a 64-byte JSON array: 32 secret ++ 32
@@ -450,7 +415,7 @@ mod tests {
     #[test]
     fn system_program_id_is_canonical() {
         assert_eq!(
-            SYSTEM_PROGRAM_ID,
+            kassandra_sdk::SYSTEM_PROGRAM_ID,
             Pubkey::from_str("11111111111111111111111111111111").unwrap()
         );
     }
@@ -477,7 +442,7 @@ mod tests {
             (proposer, false, true),           // proposer PDA (w)
             (ai_claim, false, true),           // ai_claim PDA (w)
             (authority, true, true),           // authority (signer, w)
-            (SYSTEM_PROGRAM_ID, false, false), // system (ro)
+            (kassandra_sdk::SYSTEM_PROGRAM_ID, false, false), // system (ro)
         ];
         assert_eq!(ix.accounts.len(), expected.len());
         for (meta, (pk, signer, writable)) in ix.accounts.iter().zip(expected) {

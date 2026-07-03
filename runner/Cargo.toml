@@ -17,6 +17,9 @@ path = "src/main.rs"
 # `no-entrypoint` feature gates off pinocchio's program entrypoint (global
 # allocator + panic handler) so the crate is usable as a plain host library.
 kassandra-program = { path = "../programs/kassandra", features = ["no-entrypoint"] }
+# The Rust client SDK — PDA derivations + the submit_ai_claim instruction builder,
+# so the keeper does not re-declare the program's seeds/account order/payload.
+kassandra-sdk = { path = "../sdk-rs" }
 
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
