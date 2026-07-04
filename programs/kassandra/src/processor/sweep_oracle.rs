@@ -71,7 +71,7 @@ use pinocchio::{
     account_info::AccountInfo,
     instruction::{Seed, Signer},
     program_error::ProgramError,
-    pubkey::{create_program_address, find_program_address, Pubkey},
+    pubkey::{find_program_address, Pubkey},
     ProgramResult,
 };
 use pinocchio_pubkey::pubkey;
@@ -81,7 +81,7 @@ use crate::{
     clock::now,
     config::SWEEP_GRACE,
     error::KassandraError,
-    processor::guards::{assert_key, load_oracle, load_protocol},
+    processor::guards::{assert_key, load_oracle, load_protocol, verify_oracle_pda},
     state::Phase,
 };
 
@@ -118,15 +118,9 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
         _ => return Err(KassandraError::WrongPhase.into()),
     }
 
-    // Re-derive the oracle PDA (the vault's token authority) from the nonce using
-    // the oracle's OWN stored bump — one create_program_address instead of a
-    // looping find_program_address — then bind the vault + rent recipient.
-    let nonce_le = nonce.to_le_bytes();
-    let derived = create_program_address(&[b"oracle", &nonce_le, &[oracle.bump]], program_id)
-        .map_err(|_| KassandraError::InvalidAccount)?;
-    if &derived != oracle_ai.key() {
-        return Err(KassandraError::InvalidAccount.into());
-    }
+    // The oracle PDA is the vault's token authority; verify it, then bind the
+    // vault + rent recipient.
+    verify_oracle_pda(program_id, oracle_ai, &oracle, nonce)?;
     assert_key(stake_vault_ai, &oracle.stake_vault)?;
     assert_key(creator_ai, &oracle.creator)?;
 

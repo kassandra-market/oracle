@@ -3,7 +3,7 @@ import NavBar from '../landing/NavBar'
 import SiteFooter from '../landing/SiteFooter'
 
 /**
- * Shared app shell — the Delphi NavBar (with the real wallet connect + cluster
+ * Shared app shell — the Auros NavBar (with the real wallet connect + cluster
  * selector) above the routed page, with the SiteFooter beneath. Wraps every
  * route so the chrome is consistent across the landing, styleguide, and the
  * oracle browse views.

@@ -12,7 +12,7 @@ import { Chip } from './Chip'
 
 /**
  * The progress at which the FAIL TWAP is treated as "near" the disqualify margin
- * and the single ember accent lights up (the one Delphi punctuation moment for
+ * and the single ember accent lights up (the one Auros punctuation moment for
  * this panel). `>= 1` means it has cleared the margin (would disqualify).
  */
 const NEAR_MARGIN = 0.85
@@ -73,7 +73,7 @@ function PoolColumn({ label, amm }: { label: string; amm: AmmV04 | null }) {
 /**
  * The live challenge-market visualization (read-only, CU1) — rendered inside the
  * detail's Challenge-market section when a Market exists, ENRICHING the existing
- * market card. Shows the pass vs fail spot price + TWAP, a flat Delphi
+ * market card. Shows the pass vs fail spot price + TWAP, a flat Auros
  * TWAP→margin progress bar (how close FAIL is to clearing the disqualify margin
  * over PASS — the ONE ember accent lights when near/over), a countdown to the
  * TWAP window close, the challenger's escrowed USDC, and each pool's raw

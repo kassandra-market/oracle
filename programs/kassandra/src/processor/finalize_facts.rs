@@ -80,7 +80,7 @@ use pinocchio::{
     account_info::AccountInfo,
     instruction::{Seed, Signer},
     program_error::ProgramError,
-    pubkey::{create_program_address, Pubkey},
+    pubkey::Pubkey,
     ProgramResult,
 };
 use pinocchio_token::instructions::Burn;
@@ -88,7 +88,9 @@ use pinocchio_token::instructions::Burn;
 use crate::{
     clock::{now, require_after_end, require_phase},
     error::KassandraError,
-    processor::guards::{assert_key, load_fact, load_oracle, load_proposer},
+    processor::guards::{
+        assert_key, load_fact, load_oracle, load_proposer, require_distinct, verify_oracle_pda,
+    },
     state::{Fact, Oracle, Phase, Proposer},
 };
 
@@ -110,16 +112,6 @@ fn is_agreed(
     approve_stake > duplicate_stake
         && (approve_stake as u128) * (threshold_den as u128)
             >= (dispute_bond_total as u128) * (threshold_num as u128)
-}
-
-/// Reject if `key` appears in `prior` (distinctness within the call).
-fn require_distinct(prior: &[AccountInfo], key: &Pubkey) -> ProgramResult {
-    for a in prior {
-        if a.key() == key {
-            return Err(KassandraError::InvalidAccount.into());
-        }
-    }
-    Ok(())
 }
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) -> ProgramResult {
@@ -147,14 +139,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
         return Err(ProgramError::InvalidInstructionData);
     }
     let nonce = u64::from_le_bytes(payload[0..8].try_into().unwrap());
-    // Validate the oracle account via its OWN stored bump — one
-    // create_program_address instead of a looping find_program_address.
-    let nonce_le = nonce.to_le_bytes();
-    let derived = create_program_address(&[b"oracle", &nonce_le, &[oracle.bump]], program_id)
-        .map_err(|_| KassandraError::InvalidAccount)?;
-    if &derived != oracle_ai.key() {
-        return Err(KassandraError::InvalidAccount.into());
-    }
+    verify_oracle_pda(program_id, oracle_ai, &oracle, nonce)?;
 
     // Fixed burn accounts (canonical mint + vault + token program). Required on
     // both paths; only the no-facts terminal transition actually burns.

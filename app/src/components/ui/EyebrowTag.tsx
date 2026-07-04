@@ -7,7 +7,7 @@ export interface EyebrowTagProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 /**
- * Delphi section eyebrow. Small saffron Inter ~12px uppercase label, centered
+ * Auros section eyebrow. Small saffron Inter ~12px uppercase label, centered
  * above a heading. Optionally wrapped in a hairline pebble pill (8px radius).
  */
 export function EyebrowTag({ children, pill = false, className = '', ...rest }: EyebrowTagProps) {

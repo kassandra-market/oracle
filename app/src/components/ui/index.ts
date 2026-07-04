@@ -1,4 +1,4 @@
-// Delphi design-system primitives barrel.
+// Auros design-system primitives barrel.
 export { Button } from './Button'
 export type { ButtonProps, ButtonVariant } from './Button'
 export { Card } from './Card'

@@ -5,7 +5,7 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Delphi content card. Pure-card #ffffff surface, 16px radius, 24px padding,
+ * Auros content card. Pure-card surface, 16px radius, 24px padding,
  * a single 1px pebble hairline border. Flat — NO heavy drop shadow (the only
  * shadow in the system is the chestnut button's peach bloom).
  */

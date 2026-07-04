@@ -1,7 +1,7 @@
 /**
  * The `/oracles` dashboard strip + filter toolbar (RU1). Pure presentation over
  * the already-fetched oracle list — {@link DashboardStats} renders the derived
- * {@link OracleStats} as a quiet Delphi strip (by-phase count tiles, the
+ * {@link OracleStats} as a quiet Auros strip (by-phase count tiles, the
  * bonds-at-risk headline — the ONE ember punctuation moment, the resolved
  * count); {@link OracleFilters} is the accessible search + phase-filter + sort
  * toolbar. No data fetching here; the page passes decoded data down.

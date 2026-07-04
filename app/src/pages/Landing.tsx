@@ -4,7 +4,7 @@ import WhyKassandra from '../components/landing/WhyKassandra'
 import TrustPanel from '../components/landing/TrustPanel'
 
 /**
- * The Kassandra landing page — composed entirely from the U1 Delphi primitives.
+ * The Kassandra landing page — composed entirely from the U1 Auros primitives.
  * The NavBar + SiteFooter chrome is provided by the shared Layout shell; this
  * page renders the editorial main content:
  * hero constellation → how it works → why → trust portrait.

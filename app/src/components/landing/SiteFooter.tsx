@@ -10,7 +10,7 @@ const linkFocus =
   'focus-visible:ring-sepia/40 focus-visible:ring-offset-2 focus-visible:ring-offset-soft-cream'
 
 /**
- * Delphi footer — soft-cream with a single hairline top border. Serif wordmark,
+ * Auros footer — soft-cream with a single hairline top border. Serif wordmark,
  * minimal link columns (placeholder hrefs), and one low-key editorial line.
  */
 export default function SiteFooter() {

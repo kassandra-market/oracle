@@ -53,7 +53,7 @@ const MOCK_KASS = 'So11111111111111111111111111111111111111112'
 const MOCK_USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 
 /**
- * The create-oracle page at `/oracles/new` — a Delphi form that opens a new
+ * The create-oracle page at `/oracles/new` — a Auros form that opens a new
  * optimistic-oracle dispute. Hashes the question into the on-chain `prompt_hash`,
  * defaults the mints from the on-chain Protocol singleton (pasteable override),
  * and on a confirmed create navigates to the new oracle's detail. Gated on a

@@ -28,9 +28,9 @@
 //!
 //! # CONTRACT: `proposer_count` must stay finalizable
 //! finalize_oracle is one-shot, so the WHOLE proposer set must fit in a single
-//! transaction's account-lock budget. The future propose/registration processor
-//! (NOT built here) MUST cap `proposer_count` at a value that fits one finalize
-//! transaction — see [`MAX_PROPOSERS`]. The `tail.len() > MAX_PROPOSERS` check
+//! transaction's account-lock budget. The `propose` processor caps
+//! `proposer_count` at a value that fits one finalize transaction — see
+//! [`MAX_PROPOSERS`]. The `tail.len() > MAX_PROPOSERS` check
 //! below is a DEFENSIVE backstop against buffer overflow, NOT the liveness
 //! guarantee: without a registration cap, an oversized proposer set could never
 //! be finalized and would brick the oracle in [`Phase::Challenge`]. Task 13's
@@ -76,11 +76,11 @@
 //! `slashed_amount` over the slashed accounts, and any `kass_fee` already paid OUT
 //! to a challenger by `settle_challenge` was recorded as `bond − kass_fee` (so it
 //! is NOT in `bond_pool` and is not double-burned). AiClaim-account rent
-//! reclamation (the design's "close AiClaim accounts on resolution") — is a
-//! DEFERRED later task. Account closure, when built, will be a
-//! SEPARATE permissionless per-claim instruction (callable post-resolution): it
-//! has the same one-tx capacity concern as finalize, so it must not be crammed
-//! into this recompute, and finalize must not block on it.
+//! reclamation (the design's "close AiClaim accounts on resolution") is a
+//! SEPARATE permissionless per-claim instruction ([`crate::processor::close_ai_claim`],
+//! callable post-resolution): it has the same one-tx capacity concern as
+//! finalize, so it is not crammed into this recompute, and finalize does not
+//! block on it.
 //!
 //! # Accounts
 //! 0. oracle        — writable, owned by this program (mutated; signs the burn-back).
@@ -106,7 +106,7 @@ use pinocchio::{
     account_info::AccountInfo,
     instruction::{Seed, Signer},
     program_error::ProgramError,
-    pubkey::{create_program_address, Pubkey},
+    pubkey::Pubkey,
     ProgramResult,
 };
 use pinocchio_token::instructions::Burn;
@@ -115,7 +115,7 @@ use crate::{
     clock::{now, require_after_end, require_phase},
     error::KassandraError,
     plurality::{plurality, Plurality},
-    processor::guards::{assert_key, load_oracle, load_proposer},
+    processor::guards::{assert_key, load_oracle, load_proposer, require_distinct, verify_oracle_pda},
     state::{Oracle, Phase, CLAIM_OPTION_NONE},
 };
 
@@ -129,16 +129,6 @@ const PAYLOAD_LEN: usize = 8;
 /// keeps the fixed `votes` buffer from overflowing) share one constant. See the
 /// config doc + module-level CONTRACT note. Task 13's fuzzer must stay within it.
 const MAX_PROPOSERS: usize = crate::config::MAX_PROPOSERS as usize;
-
-/// Reject if `key` appears in `prior` (distinctness within the call).
-fn require_distinct(prior: &[AccountInfo], key: &Pubkey) -> ProgramResult {
-    for a in prior {
-        if a.key() == key {
-            return Err(KassandraError::InvalidAccount.into());
-        }
-    }
-    Ok(())
-}
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) -> ProgramResult {
     let [oracle_ai, rest @ ..] = accounts else {
@@ -166,16 +156,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
         return Err(ProgramError::InvalidInstructionData);
     }
     let nonce = u64::from_le_bytes(payload[0..8].try_into().unwrap());
-    // Validate the oracle account is the canonical PDA using its OWN stored bump
-    // (written at create_oracle time) — one `create_program_address` instead of a
-    // looping `find_program_address`. The account is program-owned + type-checked
-    // by `load_oracle`, so `oracle.bump` is the canonical bump.
-    let nonce_le = nonce.to_le_bytes();
-    let derived = create_program_address(&[b"oracle", &nonce_le, &[oracle.bump]], program_id)
-        .map_err(|_| KassandraError::InvalidAccount)?;
-    if &derived != oracle_ai.key() {
-        return Err(KassandraError::InvalidAccount.into());
-    }
+    verify_oracle_pda(program_id, oracle_ai, &oracle, nonce)?;
 
     // Fixed burn accounts (canonical mint + vault + token program), then the
     // FULL proposer set as the read-only tail.

@@ -20,7 +20,7 @@ export interface PhaseView {
 /**
  * Map an on-chain {@link Phase} to a readable label + an on-brand chip tone.
  * Ember is used ONLY for the active Challenge (the 1–2 status punctuation
- * moments per the Delphi rules); resolution is a calm "confirmed" chestnut,
+ * moments per the Auros rules); resolution is a calm "confirmed" chestnut,
  * dead-ends are muted stone, everything mid-flight is neutral sepia/bronze.
  */
 export function phaseView(phase: Phase | undefined): PhaseView {

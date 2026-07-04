@@ -18,7 +18,7 @@ export interface SectionHeaderProps {
 }
 
 /**
- * Delphi section headline block. Centered: eyebrow + a two-line Cormorant-300
+ * Auros section headline block. Centered: eyebrow + a two-line Cormorant-300
  * display headline (line 2 lighter + italic for two-tone contrast) at the
  * `heading` scale with negative tracking + one bronze Inter paragraph.
  * Constrained to ~640px so it reads like editorial column copy.

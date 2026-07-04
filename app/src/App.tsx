@@ -15,7 +15,7 @@ const StyleGuide = lazy(() => import('./pages/StyleGuide.tsx'))
 const Admin = lazy(() => import('./pages/Admin.tsx'))
 
 /**
- * Quiet Delphi placeholder shown while a route chunk streams in. On-brand
+ * Quiet Auros placeholder shown while a route chunk streams in. On-brand
  * parchment tone (matches the "Reading the chain…" loading affordance) — a
  * transient, accessible status that the page replaces once loaded. Rendered
  * INSIDE the Layout's <Outlet>, so the NavBar/shell stays instant and only the
@@ -33,7 +33,7 @@ function RouteFallback() {
   )
 }
 
-/** Wrap a lazily-loaded page in the shared Delphi Suspense fallback. */
+/** Wrap a lazily-loaded page in the shared Auros Suspense fallback. */
 function lazyRoute(element: React.ReactNode) {
   return <Suspense fallback={<RouteFallback />}>{element}</Suspense>
 }

@@ -8,8 +8,7 @@
  *
  * All futarchy + conditional_vault instructions are `#[event_cpi]`: the two
  * trailing accounts (event_authority PDA, program id) are appended by the
- * builders. Meteora DAMM v2 builders are intentionally absent — see NOTES.md
- * ("DEFERRED / STOP-REPORTED").
+ * builders. The Meteora DAMM v2 builders live in the sibling `../meteora` module.
  */
 import { Address, TransactionInstruction } from "@solana/web3.js";
 import type { AccountMeta } from "@solana/web3.js";

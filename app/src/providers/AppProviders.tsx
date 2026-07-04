@@ -11,7 +11,7 @@ import { isMockMode, isE2eMode } from '../data/mockOracles'
 import { MockWalletProvider } from '../lib/mockWallet'
 import { E2eWalletProvider } from '../lib/e2eWallet'
 
-// Wallet-adapter base styles are imported + overridden to the Delphi look in
+// Wallet-adapter base styles are imported + overridden to the Auros look in
 // index.css (no default purple/dark leaks through — we never render the
 // adapter's own connect button; the NavPill drives the modal).
 

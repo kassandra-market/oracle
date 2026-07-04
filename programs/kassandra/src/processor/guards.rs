@@ -6,7 +6,7 @@ use pinocchio::{
     account_info::AccountInfo,
     instruction::{Seed, Signer},
     program_error::ProgramError,
-    pubkey::Pubkey,
+    pubkey::{create_program_address, Pubkey},
     ProgramResult,
 };
 use pinocchio_system::instructions::CreateAccount;
@@ -149,9 +149,10 @@ pub fn load_ai_claim(account: &AccountInfo, program_id: &Pubkey) -> Result<AiCla
 /// Load and validate the [`Protocol`] singleton: its address must be the
 /// canonical `[b"protocol"]` PDA, owned by `program_id`, large enough, and
 /// tagged [`AccountType::Protocol`] (the type-confusion guard, mirroring
-/// [`load_oracle`]). Re-deriving + pinning the singleton address here means a
-/// future second Protocol-typed account can never be substituted for the real
-/// one — every caller (H1 `create_oracle`, H2) gets that defense for free.
+/// [`load_oracle`]). Pinning the singleton address against the precomputed
+/// [`PROTOCOL_PDA`] means a future second Protocol-typed account can never be
+/// substituted for the real one — every caller (`create_oracle` et al.) gets
+/// that defense for free.
 /// Returns an owned, alignment-safe copy.
 pub fn load_protocol(account: &AccountInfo, program_id: &Pubkey) -> Result<Protocol, ProgramError> {
     // Compare against the precomputed singleton address — the `[b"protocol"]` PDA
@@ -191,4 +192,34 @@ pub fn create_pda(
         owner,
     }
     .invoke_signed(&[signer])
+}
+
+/// Reject if `key` already appears in `prior` — enforces distinctness within a
+/// single instruction's account tail (no proposer/fact counted twice).
+pub fn require_distinct(prior: &[AccountInfo], key: &Pubkey) -> ProgramResult {
+    for a in prior {
+        if a.key() == key {
+            return Err(KassandraError::InvalidAccount.into());
+        }
+    }
+    Ok(())
+}
+
+/// Validate that `oracle_ai` is the canonical `[b"oracle", nonce_le]` PDA, using
+/// the oracle's OWN stored bump (written at creation) — one
+/// `create_program_address` instead of a looping `find_program_address`. The PDA
+/// is the SPL authority of the oracle's vaults, so its seeds sign token moves.
+pub fn verify_oracle_pda(
+    program_id: &Pubkey,
+    oracle_ai: &AccountInfo,
+    oracle: &Oracle,
+    nonce: u64,
+) -> ProgramResult {
+    let nonce_le = nonce.to_le_bytes();
+    let derived = create_program_address(&[b"oracle", &nonce_le, &[oracle.bump]], program_id)
+        .map_err(|_| KassandraError::InvalidAccount)?;
+    if &derived != oracle_ai.key() {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    Ok(())
 }

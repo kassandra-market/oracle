@@ -25,7 +25,7 @@ const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sepia/40 ' +
   'focus-visible:ring-offset-2 focus-visible:ring-offset-parchment'
 
-/** One oracle rendered as a clickable Delphi card. */
+/** One oracle rendered as a clickable Auros card. */
 function OracleCard({ summary, search }: { summary: OracleSummary; search: string }) {
   const { pubkey, oracle } = summary
   const { label } = phaseView(oracle.phase)
@@ -129,7 +129,7 @@ const gridClass = 'mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3'
 
 /**
  * The oracle browser at `/oracles` — a `SectionHeader` intro over a responsive
- * grid of Delphi cards, one per decoded oracle. Read-only: consumes the FA2
+ * grid of Auros cards, one per decoded oracle. Read-only: consumes the FA2
  * data layer via `useOracles` (over FA1's connection). Loading / error / empty.
  */
 export default function Oracles() {

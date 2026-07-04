@@ -56,7 +56,7 @@ use pinocchio::{
 use crate::{
     clock::{now, require_after_end, require_phase},
     error::KassandraError,
-    processor::guards::{load_oracle, load_proposer},
+    processor::guards::{load_oracle, load_proposer, require_distinct},
     state::{Oracle, Phase},
 };
 
@@ -65,16 +65,6 @@ use crate::{
 /// real liveness guarantee) and the finalizers share one constant. Mirrors
 /// `finalize_oracle`'s backstop against an oversized, unfinalizable set.
 const MAX_PROPOSERS: usize = crate::config::MAX_PROPOSERS as usize;
-
-/// Reject if `key` appears in `prior` (distinctness within the call).
-fn require_distinct(prior: &[AccountInfo], key: &Pubkey) -> ProgramResult {
-    for a in prior {
-        if a.key() == key {
-            return Err(KassandraError::InvalidAccount.into());
-        }
-    }
-    Ok(())
-}
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], _payload: &[u8]) -> ProgramResult {
     let [oracle_ai, tail @ ..] = accounts else {

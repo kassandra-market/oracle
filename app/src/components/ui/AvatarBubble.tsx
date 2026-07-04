@@ -5,7 +5,7 @@ export interface AvatarBubbleProps extends HTMLAttributes<HTMLDivElement> {
   src?: string
   /** Name used for alt text + initials fallback. */
   name: string
-  /** Diameter in px. Delphi avatars are 70px. */
+  /** Diameter in px. Auros avatars are 70px. */
   size?: number
   /** Overlay a cobalt VerifiedDot in the lower-right — the only true blue on the page. */
   verified?: boolean
@@ -19,7 +19,7 @@ function initials(name: string): string {
 }
 
 /**
- * Delphi verified check. A cobalt (#1da1f2) circle with a white check, pinned
+ * Auros verified check. A cobalt circle with a white check, pinned
  * lower-right. This is the ONLY true blue permitted in the system.
  */
 export function VerifiedDot({ size = 22 }: { size?: number }) {
@@ -43,7 +43,7 @@ export function VerifiedDot({ size = 22 }: { size?: number }) {
 }
 
 /**
- * Delphi avatar bubble. A 70px circle (radius token `avatar`), no border. Shows
+ * Auros avatar bubble. A 70px circle (radius token `avatar`), no border. Shows
  * an image when `src` is given, otherwise an offline-safe initials-on-warm-
  * gradient placeholder. Optional cobalt VerifiedDot overlay.
  */

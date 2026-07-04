@@ -106,7 +106,7 @@ function QuestionCard({ card }: { card: QuestionCardData }) {
 }
 
 /**
- * Hero — the signature Delphi constellation. A centered two-line serif display
+ * Hero — the signature Auros constellation. A centered two-line serif display
  * headline surrounded by scattered white question cards ("orbiting voices").
  * Desktop: cards are absolutely positioned around the headline. Mobile: the
  * whole thing collapses to a vertical stack (headline first) + a 1/2-col grid

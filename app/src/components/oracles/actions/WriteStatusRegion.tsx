@@ -11,7 +11,7 @@ const BUSY_LABEL: Record<'building' | 'signing' | 'confirming', string> = {
 /**
  * The per-form status region under a submit button. `aria-live="polite"` so the
  * transition (building → signing → confirming → success/error) is announced.
- * Delphi: quiet bronze for in-flight + success, ember reserved for the error
+ * Auros: quiet bronze for in-flight + success, ember reserved for the error
  * accent only. On-chain fields (a program log, the signature) are rendered as
  * inert text — never linked/executed except the explicit explorer link.
  */

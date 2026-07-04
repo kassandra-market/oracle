@@ -68,7 +68,7 @@ function ClusterSelector() {
 }
 
 /**
- * Real wallet connect control — the Delphi NavPill (never the adapter's purple
+ * Real wallet connect control — the Auros NavPill (never the adapter's purple
  * button). Disconnected → opens the wallet-adapter modal. Connected → shows the
  * truncated address; click to disconnect. Read-only: no transactions.
  */
@@ -103,7 +103,7 @@ function ConnectControl() {
 }
 
 /**
- * Delphi top bar — soft-cream, a single hairline bottom border, not sticky.
+ * Auros top bar — soft-cream, a single hairline bottom border, not sticky.
  * Left links · centered serif wordmark · right actions (cluster selector +
  * the real wallet connect control).
  */

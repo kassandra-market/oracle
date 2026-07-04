@@ -2,7 +2,7 @@ import type { HTMLAttributes, ReactNode } from 'react'
 
 /**
  * On-brand chip tones. `ember` is the single reserved punctuation accent
- * (the Delphi rule: ember/saffron only 1–2 moments per viewport) — used for the
+ * (the Auros rule: ember/saffron only 1–2 moments per viewport) — used for the
  * active "Challenged" status; everything else stays achromatic-warm.
  */
 export type ChipTone = 'neutral' | 'ember' | 'confirmed' | 'muted'

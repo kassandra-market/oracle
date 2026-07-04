@@ -360,15 +360,7 @@ impl FactFetcher for MockFactFetcher {
 }
 
 /// Lowercase hex of a byte slice (for error messages). Deterministic, no locale.
-fn to_hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for &b in bytes {
-        s.push(HEX[(b >> 4) as usize] as char);
-        s.push(HEX[(b & 0x0f) as usize] as char);
-    }
-    s
-}
+use crate::hashing::to_hex;
 
 /// `sha256(bytes)` as 32 bytes — the `content_hash` derivation (plain SHA-256,
 /// no framing), matching the off-chain convention the program stores opaquely.

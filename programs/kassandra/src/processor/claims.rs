@@ -87,14 +87,14 @@ use pinocchio::{
     account_info::AccountInfo,
     instruction::{Seed, Signer},
     program_error::ProgramError,
-    pubkey::{create_program_address, Pubkey},
+    pubkey::Pubkey,
     ProgramResult,
 };
 use pinocchio_token::instructions::Transfer;
 
 use crate::{
     error::KassandraError,
-    processor::guards::{assert_key, load_fact, load_oracle},
+    processor::guards::{assert_key, load_fact, load_oracle, verify_oracle_pda},
     reward,
     state::{AccountType, Fact, FactVote, Oracle, Phase, Proposer, VOTE_DUPLICATE},
 };
@@ -162,26 +162,6 @@ fn require_terminal(oracle: &Oracle) -> Result<bool, ProgramError> {
         Phase::InvalidDeadend => Ok(false),
         _ => Err(KassandraError::WrongPhase.into()),
     }
-}
-
-/// Re-derive the oracle PDA from `nonce` and verify it matches `oracle_ai` +
-/// `oracle.bump`, exactly like `settle_challenge`. The PDA is the SPL authority
-/// of `stake_vault`; the returned nonce bytes seed the program signature.
-fn verify_oracle_pda(
-    program_id: &Pubkey,
-    oracle_ai: &AccountInfo,
-    oracle: &Oracle,
-    nonce: u64,
-) -> ProgramResult {
-    // Validate via the oracle's OWN stored bump (canonical, written at creation)
-    // — one create_program_address instead of a looping find_program_address.
-    let nonce_le = nonce.to_le_bytes();
-    let derived = create_program_address(&[b"oracle", &nonce_le, &[oracle.bump]], program_id)
-        .map_err(|_| KassandraError::InvalidAccount)?;
-    if &derived != oracle_ai.key() {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    Ok(())
 }
 
 /// Transfer `amount` KASS from `stake_vault` → `dest`, program-signed by the

@@ -13,7 +13,7 @@ export interface TriggerPreviewCardProps {
 }
 
 /**
- * Delphi trigger preview — a nested sub-card (8px radius, cream fill) that reads
+ * Auros trigger preview — a nested sub-card (8px radius, cream fill) that reads
  * like a rule snippet: a driftwood "When" label, an Inter 14px condition line
  * with a monospace variable slot highlighted in ember orange, and a subdued
  * stone "+ Add Action" row.

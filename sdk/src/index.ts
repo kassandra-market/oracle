@@ -16,7 +16,7 @@
  *  - **PDAs** — all derivation fns (`oracle(nonce)`, `proposer`, `fact`, …); each
  *    is also reachable under the {@link pda} namespace (e.g. `pda.oracle(1n)`).
  *  - **account decoders** — `decodeProtocol` / `decodeOracle` / … and their types.
- *  - **instruction builders** — all 22 builders + their `*Args` param types, plus
+ *  - **instruction builders** — all 23 builders + their `*Args` param types, plus
  *    the low-level payload helpers.
  *  - **litesvm interop** — {@link toLiteSvmTransaction}, the web3.js-v3 → litesvm
  *    bridge (types-only import of litesvm; safe to import without it installed —
@@ -31,7 +31,7 @@ export * as pda from "./pda.js";
 // The 7 Pod account decoders + their decoded types.
 export * from "./accounts/index.js";
 
-// The 22 instruction builders, their `*Args` param types, + payload helpers.
+// The 23 instruction builders, their `*Args` param types, + payload helpers.
 export * from "./instructions/index.js";
 
 // web3.js v3 ↔ litesvm transaction bridge (for local testing).

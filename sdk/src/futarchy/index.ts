@@ -6,8 +6,8 @@
  * are under the `pda` namespace (e.g. `futarchy.pda.dao(creator, nonce)`).
  *
  * See `./NOTES.md` for the authoritative layout map + the CONFIRMED
- * `create_key == Dao PDA` finding. Meteora DAMM v2 builders are intentionally
- * absent (DEFERRED / STOP-REPORTED).
+ * `create_key == Dao PDA` finding. The Meteora DAMM v2 builders live in the
+ * sibling `../meteora` module, not here.
  */
 export * from "./constants.js";
 export * from "./instructions.js";
