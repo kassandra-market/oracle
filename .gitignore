@@ -24,3 +24,6 @@ app/e2e/screenshots/
 app/test-results/
 app/playwright-report/
 app/blob-report/
+
+# Rust indexer build output
+indexer/target/

@@ -1,0 +1,24 @@
+[workspace]
+
+[package]
+name = "kassandra-indexer"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1.0.103"
+axum = "0.8.9"
+base64 = "0.22.1"
+carbon-core = "1.0.0"
+carbon-rpc-transaction-crawler-datasource = "1.0.0"
+env_logger = "0.11.11"
+log = "0.4.33"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+solana-commitment-config = "3.1.1"
+solana-instruction = "3"
+solana-pubkey = "3"
+solana-signature = "3"
+tokio = { version = "1.52.3", features = ["full"] }
+tokio-postgres = { version = "0.7.18", features = ["with-serde_json-1"] }

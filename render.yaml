@@ -13,7 +13,17 @@
 # The site auto-deploys on every push to `master` that touches app/**, sdk/**, or
 # the lockfile (see buildFilter). Pull requests get an ephemeral preview URL.
 #
+# It also provisions the Kassandra INDEXER — a Rust (Carbon) service that crawls
+# the program's transactions into Postgres and exposes a read API. The crawler
+# resumes from a durable cursor, so it catches up on anything missed during
+# downtime. Set its RPC_URL after the first deploy.
+#
 # Docs: https://render.com/docs/blueprint-spec  ·  https://render.com/docs/static-sites
+
+databases:
+  - name: kassandra-indexer-db
+    plan: free
+    postgresMajorVersion: "16"
 
 services:
   - type: web
@@ -58,3 +68,38 @@ services:
       # set it to your own RPC URL to point "Localnet" at a custom validator.
       - key: VITE_RPC_URL
         sync: false
+
+  # ---- Indexer: Carbon RPC-crawler → Postgres, with a read API ----
+  - type: web
+    name: kassandra-indexer
+    runtime: rust
+    # The indexer is a self-contained Cargo crate (its own lockfile), so Render
+    # builds only it — it does NOT pull in the program's pinned Solana workspace.
+    rootDir: indexer
+    plan: free
+    buildFilter:
+      paths:
+        - indexer/**
+        - render.yaml
+    buildCommand: cargo build --release --locked
+    startCommand: ./target/release/kassandra-indexer
+    healthCheckPath: /health
+    envVars:
+      # Managed Postgres connection string, injected by Render.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kassandra-indexer-db
+          property: connectionString
+      # The Solana RPC to crawl (a mainnet/devnet endpoint). Set after first deploy.
+      - key: RPC_URL
+        sync: false
+      - key: COMMITMENT
+        value: finalized
+      - key: POLL_INTERVAL_MS
+        value: "10000"
+      - key: PROMOTE_INTERVAL_MS
+        value: "30000"
+      - key: RUST_LOG
+        value: info
+      # Optional: pin the initial backfill to a known signature by pre-seeding the
+      # indexer_cursor row; otherwise the first run backfills the full history.
