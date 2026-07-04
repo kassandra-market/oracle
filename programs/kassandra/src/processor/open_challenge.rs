@@ -110,7 +110,7 @@ use crate::{
     price::kass_price,
     processor::guards::{
         assert_key, assert_owned_by_program, assert_signer, assert_token_account, create_pda,
-        load_ai_claim, load_oracle, load_proposer, load_protocol,
+        load_ai_claim, load_oracle, load_proposer, load_protocol, verify_oracle_pda,
     },
     state::{AccountType, Market, Oracle, Phase},
 };
@@ -149,13 +149,9 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     let now = now()?;
     require_before_end(&oracle, now)?;
 
-    // Re-derive the oracle PDA from the supplied nonce and verify it matches
-    // the passed oracle account + stored bump (the split signer seeds).
-    let (derived_oracle, derived_bump) =
-        find_program_address(&[b"oracle", &oracle_nonce.to_le_bytes()], program_id);
-    if &derived_oracle != oracle_ai.key() || derived_bump != oracle.bump {
-        return Err(KassandraError::InvalidAccount.into());
-    }
+    // The oracle PDA (whose seeds sign the bond split below) must match the
+    // passed account.
+    verify_oracle_pda(program_id, oracle_ai, &oracle, oracle_nonce)?;
 
     // --- claim binding ------------------------------------------------------
     let mut ai_claim = load_ai_claim(ai_claim_ai, program_id)?;

@@ -47,7 +47,7 @@ use pinocchio::{
     account_info::AccountInfo,
     instruction::Signer,
     program_error::ProgramError,
-    pubkey::{find_program_address, Pubkey},
+    pubkey::Pubkey,
     ProgramResult,
 };
 use pinocchio_token::instructions::CloseAccount;
@@ -55,7 +55,9 @@ use pinocchio_token::state::TokenAccount;
 
 use crate::{
     error::KassandraError,
-    processor::guards::{assert_key, assert_owned_by_program, load_oracle, require_terminal},
+    processor::guards::{
+        assert_key, assert_owned_by_program, load_oracle, require_terminal, verify_oracle_pda,
+    },
     state::{AccountType, Market, Oracle},
 };
 
@@ -78,11 +80,8 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     let oracle = load_oracle(oracle_ai, program_id)?;
     require_terminal(&oracle)?;
 
-    // Re-derive the oracle PDA (the escrow's token authority) from the nonce.
-    let (derived, bump) = find_program_address(&[b"oracle", &nonce.to_le_bytes()], program_id);
-    if &derived != oracle_ai.key() || bump != oracle.bump {
-        return Err(KassandraError::InvalidAccount.into());
-    }
+    // The oracle PDA is the escrow's token authority; verify it.
+    verify_oracle_pda(program_id, oracle_ai, &oracle, nonce)?;
 
     // Load + bind the Market.
     assert_owned_by_program(market_ai, program_id)?;

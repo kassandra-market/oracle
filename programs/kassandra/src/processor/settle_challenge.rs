@@ -111,7 +111,7 @@ use pinocchio::{
     account_info::AccountInfo,
     instruction::{AccountMeta, Signer},
     program_error::ProgramError,
-    pubkey::{find_program_address, Pubkey},
+    pubkey::Pubkey,
     ProgramResult,
 };
 use pinocchio_token::instructions::Transfer;
@@ -122,7 +122,7 @@ use crate::{
     error::KassandraError,
     processor::guards::{
         assert_key, assert_owned_by_program, assert_token_account, load_ai_claim, load_oracle,
-        load_proposer,
+        load_proposer, verify_oracle_pda,
     },
     state::{Market, Oracle, Phase},
 };
@@ -207,13 +207,9 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     let mut oracle: Oracle = load_oracle(oracle_ai, program_id)?;
     require_phase(&oracle, Phase::Challenge)?;
 
-    // Re-derive the oracle PDA from the supplied nonce; it is the question's
-    // resolver, signed below with `[b"oracle", nonce_le, [bump]]`.
-    let (derived_oracle, derived_bump) =
-        find_program_address(&[b"oracle", &oracle_nonce.to_le_bytes()], program_id);
-    if &derived_oracle != oracle_ai.key() || derived_bump != oracle.bump {
-        return Err(KassandraError::InvalidAccount.into());
-    }
+    // The oracle PDA is the question's resolver, signed below with
+    // `[b"oracle", nonce_le, [bump]]`.
+    verify_oracle_pda(program_id, oracle_ai, &oracle, oracle_nonce)?;
 
     // --- market load + binding ---------------------------------------------
     assert_owned_by_program(market_ai, program_id)?;
