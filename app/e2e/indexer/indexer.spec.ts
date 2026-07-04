@@ -25,6 +25,18 @@ test.beforeEach(async ({ page }) => {
   }, fixture.secretKey)
 })
 
+test('RPC gateway: POST /rpc forwards JSON-RPC to the backend RPC', async ({ request }) => {
+  // The backend crawls surfpool; its /rpc gateway forwards to that same RPC — so
+  // the app performs chain work through the backend, never holding an RPC URL.
+  const res = await request.post(`${fixture.indexerUrl}/rpc`, {
+    headers: { 'content-type': 'application/json' },
+    data: { jsonrpc: '2.0', id: 1, method: 'getHealth' },
+  })
+  expect(res.ok()).toBeTruthy()
+  const body = (await res.json()) as { result?: string }
+  expect(body.result).toBe('ok')
+})
+
 test('indexer API: /accounts/:oracle/events returns the seeded instructions', async ({
   request,
 }) => {

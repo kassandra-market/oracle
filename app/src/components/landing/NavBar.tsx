@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { Button } from '../ui'
-import { useCluster, CLUSTER_LABELS, type Cluster } from '../../lib/cluster'
+import { useCluster, CLUSTER_LABELS, isGatewayMode, type Cluster } from '../../lib/cluster'
 
 // Left-side primary links. "Oracles" is a real route; the rest are landing
 // section anchors (they resolve on the landing page).
@@ -24,9 +24,25 @@ function truncateAddress(addr: string): string {
   return `${addr.slice(0, 4)}…${addr.slice(-4)}`
 }
 
-/** Small Delphi cluster selector (soft-cream chip, sepia text). */
+/**
+ * The cluster control. In gateway mode (production) the app talks to a fixed
+ * backend, so there's nothing to switch — a static label is shown. In direct mode
+ * (dev / e2e) the full RPC selector is available.
+ */
 function ClusterSelector() {
   const { cluster, setCluster, clusters } = useCluster()
+
+  if (isGatewayMode()) {
+    return (
+      <span
+        className="hidden items-center rounded-button border border-pebble bg-soft-cream px-3 py-2 font-inter text-[13px] text-sepia sm:inline-flex"
+        aria-label="RPC cluster"
+      >
+        {CLUSTER_LABELS[cluster]}
+      </span>
+    )
+  }
+
   return (
     <label className="hidden items-center sm:inline-flex">
       <span className="sr-only">RPC cluster</span>

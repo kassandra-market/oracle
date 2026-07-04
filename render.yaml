@@ -54,12 +54,15 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
-      # OPTIONAL build-time override for the "Localnet" cluster's RPC endpoint
-      # (Vite inlines VITE_* at build time). Leave unset to ship the built-in
-      # Devnet / Mainnet endpoints the in-app cluster switcher already offers.
-      - key: VITE_RPC_URL
-        sync: false
-      # The app calls the indexer at its OWN origin under this prefix; the server
+      # NOTE: no VITE_RPC_URL here on purpose. Unset → the app runs in GATEWAY
+      # mode: it performs ALL chain work (reads, blockhash, sendRawTransaction)
+      # against the SAME-ORIGIN /indexer/rpc path, which the server proxies to the
+      # private backend. The real RPC endpoint never ships in the browser bundle.
+      #
+      # Cluster label for explorer links only (NOT an RPC URL): devnet | mainnet-beta.
+      - key: VITE_CLUSTER
+        value: mainnet-beta
+      # The app calls the backend at its OWN origin under this prefix; the server
       # proxies it to the private indexer. Same-origin, so it is inlined at build.
       - key: VITE_INDEXER_URL
         value: /indexer

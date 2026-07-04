@@ -61,9 +61,14 @@ async fn main() -> Result<()> {
             .unwrap_or_else(|| "<none — full backfill>".into())
     );
 
-    // Read-only API.
+    // Read API + the RPC gateway.
     {
-        let state = ApiState { client: client.clone(), program_id: program_id_str() };
+        let state = ApiState {
+            client: client.clone(),
+            program_id: program_id_str(),
+            rpc_url: rpc_url.clone(),
+            http: reqwest::Client::new(),
+        };
         let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
         log::info!("[indexer] API listening on :{port}");
         tokio::spawn(async move {

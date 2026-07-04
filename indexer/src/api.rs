@@ -3,10 +3,11 @@
 use std::sync::Arc;
 
 use axum::{
+    body::Bytes,
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{header, StatusCode},
     response::{IntoResponse, Json},
-    routing::get,
+    routing::{get, post},
     Router,
 };
 use serde::Deserialize;
@@ -19,6 +20,10 @@ use crate::db;
 pub struct ApiState {
     pub client: Arc<Client>,
     pub program_id: String,
+    /// The upstream Solana RPC — the gateway forwards to it. Never leaves the
+    /// backend (the app has no RPC endpoint of its own).
+    pub rpc_url: String,
+    pub http: reqwest::Client,
 }
 
 #[derive(Deserialize)]
@@ -40,8 +45,37 @@ pub fn router(state: ApiState) -> Router {
         .route("/status", get(status))
         .route("/events", get(events))
         .route("/accounts/{pubkey}/events", get(account_events))
+        // JSON-RPC gateway: the app performs ALL its chain work (reads, blockhash
+        // for building txs, sendRawTransaction) through here, so the browser never
+        // holds a Solana RPC endpoint.
+        .route("/rpc", post(rpc_gateway))
         .layer(cors)
         .with_state(state)
+}
+
+/// Forward a JSON-RPC request body to the upstream RPC and relay the response.
+async fn rpc_gateway(State(s): State<ApiState>, body: Bytes) -> impl IntoResponse {
+    match s
+        .http
+        .post(&s.rpc_url)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(body)
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+            match resp.bytes().await {
+                Ok(bytes) => (status, [(header::CONTENT_TYPE, "application/json")], bytes).into_response(),
+                Err(e) => err(e).into_response(),
+            }
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({ "error": format!("rpc upstream: {e}") })),
+        )
+            .into_response(),
+    }
 }
 
 fn err(e: impl std::fmt::Display) -> (StatusCode, Json<serde_json::Value>) {
