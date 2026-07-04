@@ -89,19 +89,25 @@ fn fabricate_token_account(
         .unwrap();
 }
 
-/// Fabricate a placeholder account OWNED BY THE AMM PROGRAM. `open_challenge`'s
-/// AMM binding is best-effort (program ownership only — the standalone v0.4 AMM
-/// layout is not re-derivable; deeper binding is deferred to Task 11), so an
-/// AMM-owned stub is exactly what it verifies.
-fn fabricate_amm_account(ctx: &mut TestCtx) -> Pubkey {
+/// Fabricate an `Amm`-program-owned account carrying the `Amm` account
+/// discriminator and the given `base`/`quote` conditional mints at the layout
+/// offsets `open_challenge` (and `settle_challenge`) bind against. The TWAP
+/// fields are left zero — irrelevant to open_challenge's mint-pair binding.
+fn fabricate_amm_account(ctx: &mut TestCtx, base: Pubkey, quote: Pubkey) -> Pubkey {
     let addr = Pubkey::new_unique();
-    let lamports = ctx.svm.minimum_balance_for_rent_exemption(64);
+    let mut data = vec![0u8; metadao::AMM_MIN_LEN];
+    data[..8].copy_from_slice(&metadao::AMM_ACCOUNT_DISCRIMINATOR);
+    data[metadao::AMM_BASE_MINT_OFFSET..metadao::AMM_BASE_MINT_OFFSET + 32]
+        .copy_from_slice(&base.to_bytes());
+    data[metadao::AMM_QUOTE_MINT_OFFSET..metadao::AMM_QUOTE_MINT_OFFSET + 32]
+        .copy_from_slice(&quote.to_bytes());
+    let lamports = ctx.svm.minimum_balance_for_rent_exemption(data.len());
     ctx.svm
         .set_account(
             addr,
             Account {
                 lamports,
-                data: vec![0u8; 64],
+                data,
                 owner: amm_id(),
                 executable: false,
                 rent_epoch: 0,
@@ -241,8 +247,8 @@ fn setup_market(ctx: &mut TestCtx, resolver: Pubkey) -> (MarketAccounts, Pubkey,
     ctx.send_many(&cu(ix_uv), &[])
         .expect("init USDC vault failed");
 
-    let pass_amm = fabricate_amm_account(ctx);
-    let fail_amm = fabricate_amm_account(ctx);
+    let pass_amm = fabricate_amm_account(ctx, pass_mint, usdc_pass);
+    let fail_amm = fabricate_amm_account(ctx, fail_mint, usdc_fail);
 
     // Oracle-PDA-owned destinations for the minted pass/fail conditional KASS.
     let oracle_pass_kass = Pubkey::new_unique();
@@ -593,6 +599,94 @@ fn open_challenge_zero_escrow_fails() {
         "zero-escrow reject must not leave a Market account"
     );
     assert_eq!(ctx.ai_claim(f.ai_claim).challenged, 0);
+}
+
+/// Regression: an AMM that can't bind to this market's conditional (KASS, USDC)
+/// mint pair must be REJECTED at open — never recorded on the Market. Recording
+/// an unbindable AMM would make `settle_challenge` (which pins to the recorded
+/// address) revert forever: `open_challenge_count` would stay > 0, blocking
+/// `finalize_oracle` and permanently locking every stake in the oracle.
+#[test]
+fn open_challenge_unbindable_amm_rejected() {
+    let (mut ctx, mut f) = fixture();
+    // An AMM owned by the AMM program with the right discriminator but the WRONG
+    // (base, quote) mints: passes the owner check the old code relied on, fails
+    // the mint-pair binding the fix now enforces at open.
+    let bogus = fabricate_amm_account(&mut ctx, Pubkey::new_unique(), Pubkey::new_unique());
+    f.m.pass_amm = bogus;
+
+    let ix = open_challenge_ix(
+        &ctx,
+        f.oracle,
+        f.ai_claim,
+        f.proposer,
+        f.market,
+        f.challenger.pubkey(),
+        &f.m,
+        f.stake_vault,
+        f.oracle_pass_kass,
+        f.oracle_fail_kass,
+        f.kass_dao,
+        f.challenger_usdc_src,
+        f.nonce,
+    );
+    let err = ctx.send_many(&cu(ix), &[&f.challenger]).unwrap_err().err;
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(
+            1,
+            InstructionError::Custom(KassandraError::InvalidAccount as u32),
+        ),
+    );
+    // The brick precondition must be impossible: no Market, claim not flipped.
+    assert!(
+        ctx.svm.get_account(&f.market).is_none(),
+        "an unbindable AMM must not create a Market"
+    );
+    assert_eq!(
+        ctx.ai_claim(f.ai_claim).challenged,
+        0,
+        "claim must not be flipped to challenged"
+    );
+}
+
+/// Regression: `pass_amm == fail_amm` must be rejected at open — a challenger
+/// cannot collapse the two outcome pools into one it steers. A single pool
+/// cannot bind to both outcomes' (KASS, USDC) mint pairs, and the explicit
+/// `pass_amm != fail_amm` guard backs it up. (Previously only `settle` caught
+/// this — too late, after the Market was already recorded.)
+#[test]
+fn open_challenge_aliased_amms_rejected() {
+    let (mut ctx, mut f) = fixture();
+    f.m.fail_amm = f.m.pass_amm;
+
+    let ix = open_challenge_ix(
+        &ctx,
+        f.oracle,
+        f.ai_claim,
+        f.proposer,
+        f.market,
+        f.challenger.pubkey(),
+        &f.m,
+        f.stake_vault,
+        f.oracle_pass_kass,
+        f.oracle_fail_kass,
+        f.kass_dao,
+        f.challenger_usdc_src,
+        f.nonce,
+    );
+    let err = ctx.send_many(&cu(ix), &[&f.challenger]).unwrap_err().err;
+    assert_eq!(
+        err,
+        TransactionError::InstructionError(
+            1,
+            InstructionError::Custom(KassandraError::InvalidAccount as u32),
+        ),
+    );
+    assert!(
+        ctx.svm.get_account(&f.market).is_none(),
+        "aliased AMMs must not create a Market"
+    );
 }
 
 #[test]

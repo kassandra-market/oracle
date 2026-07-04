@@ -151,22 +151,12 @@ fn verify_and_read_twap(
     expected_base: &Pubkey,
     expected_quote: &Pubkey,
 ) -> Result<u128, ProgramError> {
-    assert_owned_by_program(amm, &metadao::AMM_ID)?;
+    // Bind the AMM to this market's conditional (base, quote) pair (owner +
+    // length + `Amm` discriminator + exact mint pair). Shared with
+    // `open_challenge`, which now enforces the SAME binding at open so an
+    // unbindable AMM can never be recorded (see `metadao::assert_amm_bound`).
+    metadao::assert_amm_bound(amm, expected_base, expected_quote)?;
     let data = amm.try_borrow()?;
-    if data.len() < metadao::AMM_MIN_LEN {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    // Defense-in-depth: the 8-byte Anchor account discriminator must be `Amm`'s
-    // (on top of the owner + conditional mint-pair binding below).
-    if data[..8] != metadao::AMM_ACCOUNT_DISCRIMINATOR {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    let base_mint = metadao::read_pubkey(&data, metadao::AMM_BASE_MINT_OFFSET)?;
-    let quote_mint = metadao::read_pubkey(&data, metadao::AMM_QUOTE_MINT_OFFSET)?;
-    if &base_mint != expected_base || &quote_mint != expected_quote {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-
     let created_at = metadao::read_u64(&data, metadao::AMM_CREATED_AT_SLOT_OFFSET)?;
     let last_updated = metadao::read_u64(&data, metadao::AMM_LAST_UPDATED_SLOT_OFFSET)?;
     let aggregator = metadao::read_u128(&data, metadao::AMM_AGGREGATOR_OFFSET)?;

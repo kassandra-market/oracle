@@ -184,6 +184,37 @@ pub const AMM_MIN_LEN: usize = AMM_START_DELAY_SLOTS_OFFSET + 8;
 // to `KassandraError::InvalidAccount`.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Verify `amm` is a bound MetaDAO v0.4 `Amm` account for a specific conditional
+/// pair: owned by the AMM program, long enough, carrying the `Amm` Anchor
+/// discriminator, and whose recorded base/quote mints are EXACTLY
+/// `expected_base`/`expected_quote` (this market's conditional (KASS, USDC) mint
+/// pair for one outcome).
+///
+/// Shared by BOTH `open_challenge` and `settle_challenge`. Binding at open is
+/// load-bearing: a `Market` recorded with an AMM that can't bind here could
+/// never settle (`settle_challenge` pins to the RECORDED address), so
+/// `open_challenge_count` would never return to 0, `finalize_oracle` would be
+/// blocked forever, and every stake in the oracle would be permanently locked.
+pub fn assert_amm_bound(
+    amm: &AccountInfo,
+    expected_base: &Pubkey,
+    expected_quote: &Pubkey,
+) -> ProgramResult {
+    if !amm.owned_by(&AMM_ID) {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    let data = amm.try_borrow()?;
+    if data.len() < AMM_MIN_LEN || data[..8] != AMM_ACCOUNT_DISCRIMINATOR {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    let base_mint = read_pubkey(&data, AMM_BASE_MINT_OFFSET)?;
+    let quote_mint = read_pubkey(&data, AMM_QUOTE_MINT_OFFSET)?;
+    if &base_mint != expected_base || &quote_mint != expected_quote {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    Ok(())
+}
+
 /// Read a 32-byte pubkey out of `data` at byte `off`, or `InvalidAccount`.
 pub fn read_pubkey(data: &[u8], off: usize) -> Result<Pubkey, ProgramError> {
     data.get(off..off + 32)

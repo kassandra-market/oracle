@@ -112,36 +112,6 @@ fn fabricate_token_account(
         .unwrap();
 }
 
-/// Fabricate an account OWNED BY THE AMM PROGRAM with a valid `Amm`
-/// discriminator but `base_mint`/`quote_mint` set to `base`/`quote` (which will
-/// NOT match a real market's conditional mints). Used by the binding-attack
-/// test: `open_challenge` records it (it only checks `owner == AMM_ID`), and
-/// `settle` must reject it on the conditional mint-pair binding (the valid disc
-/// proves the rejection is the MINT check, not the disc check).
-fn fabricate_rogue_amm(ctx: &mut TestCtx, base: Pubkey, quote: Pubkey) -> Pubkey {
-    let addr = Pubkey::new_unique();
-    let mut data = vec![0u8; 256];
-    data[..8].copy_from_slice(&metadao::AMM_ACCOUNT_DISCRIMINATOR);
-    data[metadao::AMM_BASE_MINT_OFFSET..metadao::AMM_BASE_MINT_OFFSET + 32]
-        .copy_from_slice(&base.to_bytes());
-    data[metadao::AMM_QUOTE_MINT_OFFSET..metadao::AMM_QUOTE_MINT_OFFSET + 32]
-        .copy_from_slice(&quote.to_bytes());
-    let lamports = ctx.svm.minimum_balance_for_rent_exemption(256);
-    ctx.svm
-        .set_account(
-            addr,
-            Account {
-                lamports,
-                data,
-                owner: amm_id(),
-                executable: false,
-                rent_epoch: 0,
-            },
-        )
-        .unwrap();
-    addr
-}
-
 struct MarketAccounts {
     question: Pubkey,
     kass_vault: Pubkey,
@@ -612,10 +582,6 @@ impl Fixture {
 enum AmmAttack {
     /// Record the canonical real pass/fail pools (honest path).
     None,
-    /// Record a rogue AMM-owned account (wrong mints) as pass_amm.
-    RoguePass,
-    /// Record the SAME real pool as both pass_amm and fail_amm.
-    AliasPassAsFail,
     /// Real pools, but the PASS pool is never cranked (pass_twap == 0). Used to
     /// prove an un-cranked pass side makes the claim survive regardless of fail.
     PassUncranked,
@@ -679,16 +645,9 @@ fn fixture_with_attack(pass_quote: u64, fail_quote: u64, attack: AmmAttack) -> (
         fail_quote,
         true,
     );
-    let (pass_amm, fail_amm) = match attack {
-        AmmAttack::None | AmmAttack::PassUncranked => (real_pass, real_fail),
-        AmmAttack::RoguePass => (
-            fabricate_rogue_amm(&mut ctx, Pubkey::new_unique(), Pubkey::new_unique()),
-            real_fail,
-        ),
-        // Record the SAME pool for both sides (open_challenge does not forbid it;
-        // settle must, via its pass != fail guard).
-        AmmAttack::AliasPassAsFail => (real_pass, real_pass),
-    };
+    // Both remaining attack modes record the real pools (PassUncranked just
+    // leaves the pass side un-cranked); AMM-binding attacks are rejected at open.
+    let (pass_amm, fail_amm) = (real_pass, real_fail);
 
     let (market, _) =
         Pubkey::find_program_address(&[b"market", ai_claim.as_ref()], &ctx.program_id);
@@ -1011,69 +970,6 @@ fn settle_twice_is_already_settled() {
         TransactionError::InstructionError(
             1,
             InstructionError::Custom(KassandraError::AlreadySettled as u32),
-        ),
-    );
-}
-
-#[test]
-fn settle_with_unbound_amm_fails() {
-    // REQUIRED binding-attack test: the recorded pass_amm is a rogue AMM-owned
-    // account whose base/quote mints are NOT this market's conditional mints
-    // (e.g. a pool the challenger controls). open_challenge records it (it only
-    // checks owner == AMM_ID); settle MUST reject it on the hard mint binding.
-    let (mut ctx, f) = fixture_with_attack(QUOTE_LOW, QUOTE_HIGH, AmmAttack::RoguePass);
-    ctx.warp(TWAP_WINDOW + 1);
-
-    let ix = settle_ix(
-        &ctx,
-        f.oracle,
-        f.market,
-        f.ai_claim,
-        f.proposer,
-        f.m.question,
-        f.pass_amm,
-        f.fail_amm,
-        &f.extras(),
-        f.nonce,
-    );
-    let err = ctx.send_many(&cu(ix), &[]).unwrap_err().err;
-    assert_eq!(
-        err,
-        TransactionError::InstructionError(
-            1,
-            InstructionError::Custom(KassandraError::InvalidAccount as u32),
-        ),
-        "settle must reject an AMM not bound to this market's conditional mints",
-    );
-}
-
-#[test]
-fn settle_with_aliased_amms_fails() {
-    // pass_amm == fail_amm must be rejected (a challenger cannot collapse the two
-    // pools into one they steer). open_challenge recorded the SAME pool for both
-    // sides; settle's `pass_amm != fail_amm` guard rejects it.
-    let (mut ctx, f) = fixture_with_attack(QUOTE_LOW, QUOTE_HIGH, AmmAttack::AliasPassAsFail);
-    assert_eq!(f.pass_amm, f.fail_amm, "fixture recorded aliased pools");
-    ctx.warp(TWAP_WINDOW + 1);
-
-    let ix = settle_ix(
-        &ctx,
-        f.oracle,
-        f.market,
-        f.ai_claim,
-        f.proposer,
-        f.m.question,
-        f.pass_amm,
-        f.fail_amm,
-        &f.extras(),
-        f.nonce,
-    );
-    let err = ctx.send_many(&cu(ix), &[]).unwrap_err().err;
-    assert_eq!(
-        err,
-        TransactionError::InstructionError(
-            1,
-            InstructionError::Custom(KassandraError::InvalidAccount as u32),
         ),
     );
 }
