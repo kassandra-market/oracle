@@ -50,7 +50,8 @@ services:
     # Serve dist/ + proxy /indexer/* to the private indexer (app/server.mjs).
     startCommand: node app/server.mjs
     healthCheckPath: /
-    pullRequestPreviewsEnabled: true
+    previews:
+      generation: automatic
     envVars:
       - key: NODE_VERSION
         value: "20"
@@ -86,23 +87,32 @@ services:
     # A self-contained Cargo crate (own lockfile), so Render builds only it — no
     # pull-in of the program's pinned Solana workspace.
     rootDir: indexer
-    plan: free
+    # Private services can't use the free plan (Render restricts free to web
+    # services + databases), so the indexer runs on the cheapest paid tier.
+    plan: starter
     buildFilter:
       paths:
         - indexer/**
         - render.yaml
     buildCommand: cargo build --release --locked
     startCommand: ./target/release/kassandra-indexer
-    healthCheckPath: /health
+    # NOTE: private services (pserv) don't support healthCheckPath — Render only
+    # health-checks public web services. The indexer still serves /health; the
+    # app-server proxy is what actually reaches it.
     envVars:
       # Managed Postgres connection string, injected by Render.
       - key: DATABASE_URL
         fromDatabase:
           name: kassandra-indexer-db
           property: connectionString
-      # The Solana RPC to crawl (a mainnet/devnet endpoint). Set after first deploy.
-      - key: RPC_URL
-        sync: false
+      # Solana RPC endpoint (`RPC_URL`) — pulled from the SHARED `kassandra-solana-rpc`
+      # env group, which is DEFINED by the sibling kassandra-market Blueprint
+      # (programs/kassandra-market/render.yaml) and referenced here so the mainnet
+      # RPC endpoint is set ONCE and shared across both deploys. The group also
+      # carries SOLANA_RPC_URL/SOLANA_WS_URL for that indexer; this crawler only
+      # reads RPC_URL. Sync the kassandra-market Blueprint first (or pre-create the
+      # group in the Dashboard) so this reference resolves.
+      - fromGroup: kassandra-solana-rpc
       # Fixed internal port the indexer binds — the app proxy resolves it via the
       # `port` fromService property above.
       - key: PORT
