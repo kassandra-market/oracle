@@ -126,8 +126,21 @@ pub fn process(
     let agreed_option = first_option.ok_or(KassandraError::NoProposals)?;
 
     if all_agree {
-        // Uncontested: the single shared value is the oracle's answer.
+        // Uncontested: the single shared value is the oracle's answer. Every
+        // proposer agreed on the winning option, so ALL of them are "correct" —
+        // distribute the pre-minted `reward_emission` to them pro-rata by bond
+        // via the S2 `claim_proposer`, exactly as the disputed `finalize_oracle`
+        // Resolved path rewards the correct cohort. Without stamping the pool +
+        // denominator here the emission would strand in the vault and be swept to
+        // the DAO treasury. No facts/votes exist on this path, so
+        // `total_oracle_stake == Σ proposer bonds` == the correct cohort, and
+        // `bond_pool == 0`.
         oracle.resolved_option = agreed_option;
+        oracle.reward_pool = oracle
+            .bond_pool
+            .checked_add(oracle.reward_emission)
+            .ok_or(ProgramError::ArithmeticOverflow)?;
+        oracle.total_correct_proposer_stake = oracle.total_oracle_stake;
         oracle.set_phase(Phase::Resolved);
     } else {
         // Conflict: open the dispute. Snapshot Σ bonds as the fixed fact-quorum

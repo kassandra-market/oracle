@@ -36,8 +36,9 @@ use std::collections::{BTreeMap, HashMap};
 use bytemuck::Zeroable;
 use kassandra_program::config::{
     CHALLENGE_FAIL_USDC_FEE_DEN, CHALLENGE_FAIL_USDC_FEE_NUM, CHALLENGE_SUCCESS_KASS_FEE_DEN,
-    CHALLENGE_SUCCESS_KASS_FEE_NUM, FLIP_SLASH_DEN, FLIP_SLASH_NUM, MARKET_THRESHOLD_DEN,
-    MARKET_THRESHOLD_NUM, PHASE_WINDOW, PROPOSAL_WINDOW, THRESHOLD_DEN, THRESHOLD_NUM,
+    CHALLENGE_SUCCESS_KASS_FEE_NUM, EMISSION_DEN, EMISSION_NUM, FLIP_SLASH_DEN, FLIP_SLASH_NUM,
+    MARKET_THRESHOLD_DEN, MARKET_THRESHOLD_NUM, PHASE_WINDOW, PROPOSAL_WINDOW, THRESHOLD_DEN,
+    THRESHOLD_NUM, TOTAL_SUPPLY_CAP,
 };
 use kassandra_program::cpi::metadao_v06 as md6;
 use kassandra_program::instruction::Ix;
@@ -1502,6 +1503,22 @@ impl TestCtx {
     /// Increase an existing fabricated mint's `supply` by `delta`, rewriting its
     /// account data in place. Keeps fabricated token balances backed by supply
     /// so a real `Burn` does not underflow.
+    /// Current SPL supply of the canonical KASS mint.
+    pub fn kass_supply(&self) -> u64 {
+        let acc = self.svm.get_account(&self.kass_mint).expect("kass mint");
+        Mint::unpack(&acc.data).expect("not a mint").supply
+    }
+
+    /// The `reward_emission` `create_oracle` would mint RIGHT NOW: `(cap −
+    /// supply)·EMISSION_NUM / EMISSION_DEN` (u128 floor), mirroring the program's
+    /// `compute_reward_emission`. Emission is ON by default, so create-oracle
+    /// tests use this to size the vault/pool/supply deltas. Call BEFORE the
+    /// create (supply changes after the mint).
+    pub fn expected_creation_emission(&self) -> u64 {
+        let reservoir = TOTAL_SUPPLY_CAP.saturating_sub(self.kass_supply());
+        ((reservoir as u128) * (EMISSION_NUM as u128) / (EMISSION_DEN as u128)) as u64
+    }
+
     fn add_mint_supply(&mut self, mint: Pubkey, delta: u64) {
         let acc = self
             .svm

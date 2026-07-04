@@ -9,17 +9,27 @@ use kassandra_program::config::{FEE_EMA_HALFLIFE_SECS, FEE_EMA_INCREMENT, FEE_EM
 use kassandra_program::fee::{bumped_fee_ema, decay_fee_ema, fee_for_ema};
 
 /// Helper: create an oracle with a fresh future deadline and report
-/// `(fee_burned, supply_delta)` measured from the creator's KASS balance and
-/// the mint supply.
+/// `(fee_burned, emission_minted)`. The fee is measured from the creator's KASS
+/// balance (unaffected by emission); the emission is read from the new oracle.
+/// Emission is ON by default, so `create_oracle` BURNS `fee` from the creator
+/// AND MINTS `emission` into the oracle vault — the net mint-supply delta is
+/// `emission − fee` (not just `−fee`). That money-flow identity is asserted here.
 fn create_and_measure(ctx: &mut TestCtx, nonce: u64) -> (u64, u64) {
     let bal_before = ctx.token_balance(ctx.payer_kass);
     let sup_before = ctx.mint_supply(ctx.kass_mint);
     let deadline = ctx.now() + 1_000_000;
-    let (_o, res) = ctx.create_oracle(nonce, 2, deadline, 600, [0x33; 32]);
+    let (oracle, res) = ctx.create_oracle(nonce, 2, deadline, 600, [0x33; 32]);
     assert!(res.is_ok(), "create_oracle should succeed: {res:?}");
     let bal_after = ctx.token_balance(ctx.payer_kass);
     let sup_after = ctx.mint_supply(ctx.kass_mint);
-    (bal_before - bal_after, sup_before - sup_after)
+    let fee = bal_before - bal_after;
+    let emission = ctx.oracle(oracle).reward_emission;
+    assert_eq!(
+        sup_after,
+        sup_before - fee + emission,
+        "supply delta == emission minted − fee burned"
+    );
+    (fee, emission)
 }
 
 #[test]
@@ -32,18 +42,19 @@ fn genesis_create_is_free() {
     let sup_before = ctx.mint_supply(ctx.kass_mint);
     let now = ctx.now();
 
-    let (fee, supply_delta) = create_and_measure(&mut ctx, 0);
+    let (fee, emission) = create_and_measure(&mut ctx, 0);
     assert_eq!(fee, 0, "genesis creation must be free");
-    assert_eq!(supply_delta, 0, "no burn at genesis → supply unchanged");
     assert_eq!(
         ctx.token_balance(ctx.payer_kass),
         bal_before,
-        "creator KASS unchanged at genesis"
+        "creator KASS unchanged at genesis (fee 0; emission is minted into the vault, not from the creator)"
     );
+    // Emission is ON by default: the genesis fee is 0 (no burn), so the mint
+    // supply rose by EXACTLY the minted emission.
     assert_eq!(
         ctx.mint_supply(ctx.kass_mint),
-        sup_before,
-        "mint supply unchanged at genesis"
+        sup_before + emission,
+        "mint supply rose by the minted emission (fee 0 at genesis)"
     );
 
     let p = ctx.protocol(protocol_pda);
@@ -65,10 +76,13 @@ fn rapid_creates_fee_grows_and_burns() {
     // Four rapid creations with no clock advance between them: decay is 0, so
     // each adds a full FEE_EMA_INCREMENT and the fee strictly increases.
     let mut fees = Vec::new();
+    let mut emissions = Vec::new();
     for nonce in 0..4u64 {
-        let (fee, supply_delta) = create_and_measure(&mut ctx, nonce);
-        assert_eq!(supply_delta, fee, "each burn reduces supply by the fee");
+        // create_and_measure asserts the per-create money-flow identity
+        // (supply delta == emission − fee) internally.
+        let (fee, emission) = create_and_measure(&mut ctx, nonce);
         fees.push(fee);
+        emissions.push(emission);
     }
 
     assert_eq!(fees[0], 0, "first (genesis) creation is free");
@@ -82,10 +96,16 @@ fn rapid_creates_fee_grows_and_burns() {
     // The 2nd creation sees fee_ema == 1.0 unit → fee == FEE_PER_EMA_UNIT.
     assert_eq!(fees[1], fee_for_ema(FEE_EMA_INCREMENT));
 
-    // Conservation: creator balance AND mint supply both dropped by Σ fees.
+    // Conservation: the creator balance dropped by Σ fees; the mint supply
+    // dropped by Σ fees (the burns) but ROSE by Σ emissions (emission is ON by
+    // default), so its net delta is `Σ emissions − Σ fees`.
     let total: u64 = fees.iter().sum();
+    let total_emission: u64 = emissions.iter().sum();
     assert_eq!(ctx.token_balance(ctx.payer_kass), bal_start - total);
-    assert_eq!(ctx.mint_supply(ctx.kass_mint), sup_start - total);
+    assert_eq!(
+        ctx.mint_supply(ctx.kass_mint),
+        sup_start - total + total_emission
+    );
 }
 
 #[test]

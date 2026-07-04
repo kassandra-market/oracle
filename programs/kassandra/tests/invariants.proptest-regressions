@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc d8a97c0262e8d21e3617784617fe100601c0c424b41bfa368e8f70c8d8f71aeb # shrinks to s = ProposalScenario { options_count: 2, proposers: [(0, 1000)] }

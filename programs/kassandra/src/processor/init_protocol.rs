@@ -128,14 +128,14 @@ pub fn process(
     protocol.governance_set = 0;
     // dao_authority / kass_dao stay zeroed (set by `set_governance`).
     //
-    // Governable monetary params: default to the current `config.rs` consts so
-    // behavior is UNCHANGED (F1 only adds the fields; F2 wires create_oracle to
-    // read them). `emission_*` / `total_supply_cap` are settlement-era and have
-    // no const yet — reserved as 0 (with `emission_den = 1` so a future divisor
-    // is never zero).
-    protocol.emission_num = 0;
-    protocol.emission_den = 1;
-    protocol.total_supply_cap = 0;
+    // Emission is ON by default (config consts). `create_oracle` mints
+    // `reward_emission = (total_supply_cap − kass_supply)·num/den` into each new
+    // oracle's stake_vault, program-signed by the mint-authority PDA (which MUST
+    // be the kass_mint's SPL authority). Resolved oracles distribute it to the
+    // correct proposer cohort; InvalidDeadend burns it back to the reservoir.
+    protocol.emission_num = crate::config::EMISSION_NUM;
+    protocol.emission_den = crate::config::EMISSION_DEN;
+    protocol.total_supply_cap = crate::config::TOTAL_SUPPLY_CAP;
     protocol.fee_ema_halflife = crate::config::FEE_EMA_HALFLIFE_SECS;
     protocol.fee_per_ema_unit = crate::config::FEE_PER_EMA_UNIT;
     protocol.fee_ema_increment = crate::config::FEE_EMA_INCREMENT;

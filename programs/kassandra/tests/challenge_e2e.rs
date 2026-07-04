@@ -888,7 +888,11 @@ fn e2e_honest_full_lifecycle_survives() {
         "escrow funded"
     );
 
-    let total_before = ctx.oracle(c.oracle).total_oracle_stake;
+    // Emission is ON by default: the real-flow oracle's stake_vault also holds
+    // the creation-time `reward_emission` (untouched until finalize_oracle). The
+    // KASS-conservation baseline must therefore include it alongside Σ stakes.
+    let total_before =
+        ctx.oracle(c.oracle).total_oracle_stake + ctx.oracle(c.oracle).reward_emission;
     let bond_pool_before = ctx.oracle(c.oracle).bond_pool;
     let stake_before = ctx.token_balance(c.stake_vault);
 
@@ -1009,7 +1013,11 @@ fn e2e_fraud_full_lifecycle_swap_driven_disqualifies() {
     let payouts = fabricate_payouts(&mut ctx, market, c.proposer_authority, challenger.pubkey());
     let escrow = required_escrow_usdc(BOND);
 
-    let total_before = ctx.oracle(c.oracle).total_oracle_stake;
+    // Emission is ON by default: the real-flow oracle's stake_vault also holds
+    // the creation-time `reward_emission` (untouched until finalize_oracle). The
+    // KASS-conservation baseline must therefore include it alongside Σ stakes.
+    let total_before =
+        ctx.oracle(c.oracle).total_oracle_stake + ctx.oracle(c.oracle).reward_emission;
     let bond_pool_before = ctx.oracle(c.oracle).bond_pool;
     let surviving_before = ctx.oracle(c.oracle).surviving_count;
     let stake_before = ctx.token_balance(c.stake_vault);

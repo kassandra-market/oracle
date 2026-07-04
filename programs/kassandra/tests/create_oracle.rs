@@ -35,6 +35,9 @@ fn create_oracle_happy_path() {
     let deadline = ctx.now() + 1_000;
     let twap_window = 600;
     let prompt_hash = [0x42; 32];
+    // Emission is ON by default: create mints `reward_emission` into the vault.
+    let emission = ctx.expected_creation_emission();
+    assert!(emission > 0, "default config emits at genesis supply");
     let (oracle_pda, res) = ctx.create_oracle(7, 3, deadline, twap_window, prompt_hash);
     assert!(res.is_ok(), "create_oracle should succeed: {res:?}");
 
@@ -58,14 +61,17 @@ fn create_oracle_happy_path() {
     assert_eq!(o.settled_count, 0);
     assert_eq!(o.ai_finalized_count, 0);
     assert_eq!(o.open_challenge_count, 0);
+    // The pre-minted emission is recorded on the oracle and sits in the vault.
+    assert_eq!(o.reward_emission, emission);
 
-    // The stake vault is a KASS token account, authority == oracle PDA, empty.
+    // The stake vault is a KASS token account, authority == oracle PDA, holding
+    // exactly the minted emission (no proposer bonds yet).
     let (vault_pda, _) = TestCtx::stake_vault_pda(&ctx.program_id, &oracle_pda);
     assert_eq!(o.stake_vault, vault_pda.to_bytes().into());
     let (mint, owner, amount) = ctx.token_account(vault_pda);
     assert_eq!(mint, ctx.kass_mint.to_bytes());
     assert_eq!(owner, oracle_pda.to_bytes());
-    assert_eq!(amount, 0);
+    assert_eq!(amount, emission);
 }
 
 #[test]

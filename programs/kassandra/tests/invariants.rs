@@ -828,6 +828,9 @@ fn run_proposal_phase(s: &ProposalScenario) -> Result<(), TestCaseError> {
 
     let mut ctx = TestCtx::new();
     let oracle = ctx.create_real_oracle(s.options_count, TWAP_WINDOW);
+    // Emission is ON by default: create_oracle mints `reward_emission` into the
+    // vault, so the vault holds Σ bonds PLUS the emission (never counted as stake).
+    let emission = ctx.oracle(oracle).reward_emission;
     for (option, bond) in &s.proposers {
         ctx.propose_real(oracle, *option, *bond);
     }
@@ -844,13 +847,13 @@ fn run_proposal_phase(s: &ProposalScenario) -> Result<(), TestCaseError> {
     );
     prop_assert_eq!(
         ctx.token_balance(vault),
-        sum_bonds,
-        "stake_vault balance == Σ bonds"
+        sum_bonds + emission,
+        "stake_vault balance == Σ bonds + emission"
     );
     prop_assert_eq!(
         ctx.token_balance(vault),
-        pre.total_oracle_stake,
-        "stake_vault balance == total_oracle_stake"
+        pre.total_oracle_stake + emission,
+        "stake_vault balance == total_oracle_stake + emission"
     );
 
     // ---- finalize_proposals (cap never bricks: n <= 8 <= MAX_PROPOSERS) ----
@@ -879,8 +882,9 @@ fn run_proposal_phase(s: &ProposalScenario) -> Result<(), TestCaseError> {
         );
     }
 
-    // Conservation still holds after finalize (no token CPI in either branch).
-    prop_assert_eq!(ctx.token_balance(vault), o.total_oracle_stake);
+    // Conservation still holds after finalize (no token CPI in either branch):
+    // the vault is Σ bonds + the (untouched) emission.
+    prop_assert_eq!(ctx.token_balance(vault), o.total_oracle_stake + emission);
     prop_assert_eq!(o.total_oracle_stake, sum_bonds);
     Ok(())
 }

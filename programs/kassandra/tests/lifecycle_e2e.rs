@@ -20,6 +20,7 @@ use common::*;
 
 use kassandra_program::{
     config::PHASE_WINDOW,
+    reward,
     state::{Phase, VOTE_APPROVE},
 };
 use solana_instruction::Instruction;
@@ -59,6 +60,11 @@ fn e2e_happy_uncontested_resolves() {
     // init_protocol (once) + create_oracle + warp to the open proposal window.
     let oracle = ctx.create_real_oracle(3, 600);
 
+    // Emission is ON by default: create_oracle mints `reward_emission` into the
+    // oracle's stake_vault. The creation FEE (burned from the creator) is still 0
+    // at genesis, but the mint supply now ROSE by exactly the minted emission.
+    let emission = ctx.oracle(oracle).reward_emission;
+    assert!(emission > 0, "genesis create mints a positive emission");
     assert_eq!(
         ctx.token_balance(payer_kass),
         bal_before,
@@ -66,8 +72,8 @@ fn e2e_happy_uncontested_resolves() {
     );
     assert_eq!(
         ctx.mint_supply(kass_mint),
-        supply_before,
-        "genesis creation fee is 0: KASS mint supply unchanged"
+        supply_before + emission,
+        "genesis fee is 0, so supply rose by exactly the minted emission"
     );
     assert_eq!(ctx.oracle(oracle).phase, Phase::Proposal.as_u8());
 
@@ -85,17 +91,18 @@ fn e2e_happy_uncontested_resolves() {
     assert_eq!(o.surviving_count, 3);
     assert_eq!(
         o.total_oracle_stake, sum_bonds,
-        "total_oracle_stake == Σ bonds"
+        "total_oracle_stake == Σ bonds (emission is NOT counted as proposer stake)"
+    );
+    // The vault physically holds Σ bonds PLUS the creation-time emission.
+    assert_eq!(
+        ctx.token_balance(vault),
+        sum_bonds + emission,
+        "stake_vault balance == Σ bonds + emission"
     );
     assert_eq!(
         ctx.token_balance(vault),
-        sum_bonds,
-        "stake_vault balance == Σ bonds"
-    );
-    assert_eq!(
-        ctx.token_balance(vault),
-        o.total_oracle_stake,
-        "stake_vault balance == total_oracle_stake"
+        o.total_oracle_stake + emission,
+        "stake_vault balance == total_oracle_stake + emission"
     );
 
     // finalize_proposals: all agree => Resolved with the agreed option.
@@ -106,11 +113,75 @@ fn e2e_happy_uncontested_resolves() {
     assert_eq!(o.phase, Phase::Resolved.as_u8(), "all-agree => Resolved");
     assert_eq!(o.resolved_option, 1, "resolved_option == agreed option");
     assert_eq!(o.dispute_bond_total, 0, "no dispute opened");
-    // No token CPI on the resolve path: the vault is untouched.
+    // No token CPI on the resolve path: the vault is untouched (still Σ bonds +
+    // the emission that will fund the uncontested reward distribution).
     assert_eq!(
         ctx.token_balance(vault),
-        sum_bonds,
-        "vault untouched on resolve"
+        sum_bonds + emission,
+        "vault untouched on resolve (Σ bonds + emission)"
+    );
+
+    // --- change #2: the uncontested (all-agree) Resolved DISTRIBUTES the emission
+    // Every proposer agreed on the winning option, so ALL of them are "correct":
+    // finalize_proposals folded the emission into `reward_pool` and stamped the
+    // whole proposer stake as the correct cohort. No facts/votes exist here, so
+    // bond_pool == 0 and the pool is pure emission.
+    assert_eq!(
+        o.reward_pool,
+        o.bond_pool + emission,
+        "reward_pool folds the emission in"
+    );
+    assert_eq!(o.bond_pool, 0, "no slash on the uncontested path");
+    assert_eq!(o.reward_pool, emission, "pool is pure emission");
+    assert_eq!(
+        o.total_correct_proposer_stake, sum_bonds,
+        "every agreeing proposer counts as correct"
+    );
+
+    // Each uncontested-correct proposer now claims `bond + pro-rata emission share`
+    // via the real S2 claim_proposer (previously they got only their bond back).
+    let nonce = ctx.seeded(oracle).nonce;
+    let (pbucket, _) = reward::reward_buckets(
+        o.reward_pool,
+        o.reward_proposer_weight,
+        o.reward_fact_weight,
+        o.total_correct_proposer_stake,
+        o.total_approved_fact_stake,
+    );
+    let handles: Vec<(Keypair, Pubkey, u64)> = ctx
+        .proposers(oracle)
+        .iter()
+        .map(|p| (p.authority.insecure_clone(), p.pda, p.bond))
+        .collect();
+    let mut total_reward = 0u64;
+    for (auth, pda, pbond) in &handles {
+        let expected_reward =
+            reward::proposer_reward(*pbond, pbucket, o.total_correct_proposer_stake);
+        assert!(
+            expected_reward > 0,
+            "emission funds a positive uncontested reward"
+        );
+        let dest = ctx.fund_kass(auth, 0);
+        let ix = ctx.claim_proposer_ix(oracle, nonce, *pda, dest, vault, auth.pubkey());
+        ctx.send(ix, &[]).expect("claim_proposer (uncontested)");
+        assert_eq!(
+            ctx.token_balance(dest),
+            pbond + expected_reward,
+            "uncontested claim == bond + emission-funded reward"
+        );
+        total_reward += expected_reward;
+    }
+
+    // Conservation: Σ (bond + reward) + floor dust == vault (Σ bonds + emission).
+    let dust = ctx.token_balance(vault);
+    assert_eq!(
+        sum_bonds + total_reward + dust,
+        sum_bonds + emission,
+        "Σ claims + dust == Σ bonds + emission"
+    );
+    assert!(
+        dust <= emission,
+        "dust is only the floor-division remainder"
     );
 }
 
@@ -130,16 +201,20 @@ fn e2e_second_oracle_fee_is_burned() {
     let supply_before = ctx.mint_supply(kass_mint);
 
     // Second oracle in the same context: fee_ema is now positive => fee burned.
-    let _second = ctx.create_real_oracle(2, 600);
+    let second = ctx.create_real_oracle(2, 600);
 
     let bal_after = ctx.token_balance(payer_kass);
     let supply_after = ctx.mint_supply(kass_mint);
     let burned = bal_before - bal_after;
     assert!(burned > 0, "second creation must charge a positive fee");
+    // Emission is ON by default: the same create_oracle ALSO mints an emission
+    // into the vault, so the net supply delta is `emission − burned`, not `−burned`.
+    // The fee is still exactly the creator's balance drop.
+    let emission = ctx.oracle(second).reward_emission;
     assert_eq!(
-        supply_before - supply_after,
-        burned,
-        "the fee was BURNED: mint supply dropped by exactly the creator's balance drop"
+        supply_after,
+        supply_before - burned + emission,
+        "supply delta == emission minted − fee burned"
     );
 }
 
@@ -162,6 +237,9 @@ fn e2e_dispute_through_dispute_core_to_resolved() {
     // --- KASS conservation at the proposal boundary (BEFORE any submit_fact) -
     let sum_bonds = 2 * bond;
     let o = ctx.oracle(oracle);
+    // Emission is ON by default: the vault also holds the creation-time emission,
+    // which is NOT counted in the bond/stake totals.
+    let emission = o.reward_emission;
     assert_eq!(
         o.phase,
         Phase::FactProposal.as_u8(),
@@ -178,13 +256,13 @@ fn e2e_dispute_through_dispute_core_to_resolved() {
     );
     assert_eq!(
         ctx.token_balance(vault),
-        sum_bonds,
-        "stake_vault == Σ bonds"
+        sum_bonds + emission,
+        "stake_vault == Σ bonds + emission"
     );
     assert_eq!(
         ctx.token_balance(vault),
-        o.total_oracle_stake,
-        "stake_vault == total_oracle_stake"
+        o.total_oracle_stake + emission,
+        "stake_vault == total_oracle_stake + emission"
     );
 
     // Capture proposer handles for the dispute core.

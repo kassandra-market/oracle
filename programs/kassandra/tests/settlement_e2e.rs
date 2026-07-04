@@ -7,11 +7,14 @@
 //! floor dust, and KASS conservation sourced ONLY from the stake vault.
 //!
 //! # What is REAL vs SEEDED (honest split)
-//! * **Tests 1-2 (no emission)** drive the dispute core through the GENUINE front
-//!   door — `create_oracle → propose×2 (conflict) → finalize_proposals →
-//!   submit_fact → advance_phase → vote_fact → finalize_facts → submit_ai_claim×2
-//!   → finalize_ai_claims → finalize_oracle` (no `set_phase`; only `warp` moves
-//!   time) — then run REAL claims + closes. Everything is a real instruction.
+//! * **Tests 1-2** drive the dispute core through the GENUINE front door —
+//!   `create_oracle → propose×2 (conflict) → finalize_proposals → submit_fact →
+//!   advance_phase → vote_fact → finalize_facts → submit_ai_claim×2 →
+//!   finalize_ai_claims → finalize_oracle` (no `set_phase`; only `warp` moves
+//!   time) — then run REAL claims + closes. Everything is a real instruction,
+//!   including the creation-time emission the real `create_oracle` MINTS into the
+//!   vault (ON by default): test 1 (Resolved) folds it into `reward_pool`, test 2
+//!   (InvalidDeadend) burns it back.
 //! * **Tests 3-5 (emission)** SEED the disputed oracle (the dispute mechanics are
 //!   exhaustively covered by `lifecycle_e2e` / `invariants` Arm A) but keep the
 //!   emission MOVEMENT + settlement REAL: the creation-time `reward_emission` is
@@ -72,7 +75,9 @@ struct Driven {
 /// Drive the REAL dispute core to a terminal state, with one AGREED fact (one
 /// approve voter clearing the 2/3 quorum) and both proposers submitting the AI
 /// claim options in `claim_options` (so the caller picks Resolved-with-a-winner
-/// vs a tie → InvalidDeadend). No emission (genesis default).
+/// vs a tie → InvalidDeadend). The real `create_oracle` mints the creation-time
+/// emission into the vault (ON by default); the terminal `finalize_oracle` then
+/// folds it into `reward_pool` (Resolved) or burns it back (InvalidDeadend).
 fn drive_real_dispute(ctx: &mut TestCtx, claim_options: [u8; 2]) -> Driven {
     let bond = 1_000u64;
     // create_oracle → propose×2 (DISTINCT options 0/1) → finalize_proposals.
@@ -228,10 +233,19 @@ fn e2e_resolved_full_settlement_real_dispute() {
     let o = ctx.oracle(d.oracle);
     assert_eq!(o.phase, Phase::Resolved as u8, "terminal: Resolved");
     assert_eq!(o.resolved_option, 0);
-    // No emission at genesis: reward_pool is purely the physical bond_pool (the
-    // flip slash on P1), and the vault holds exactly Σ stakes.
-    assert_eq!(o.reward_emission, 0);
-    assert_eq!(o.reward_pool, o.bond_pool);
+    // Emission is ON by default: the real create_oracle minted a `reward_emission`
+    // into the vault, and the Resolved finalize folds it ON TOP of the physical
+    // bond_pool (the flip slash on P1). Both terms are positive, and the vault
+    // still holds Σ stakes + the emission (it is distributed via the claims below).
+    assert!(
+        o.reward_emission > 0,
+        "genesis create minted a real emission"
+    );
+    assert_eq!(
+        o.reward_pool,
+        o.bond_pool + o.reward_emission,
+        "reward_pool == bond_pool + folded emission"
+    );
     assert!(o.bond_pool > 0, "the flipper funded bond_pool");
     let vault_initial = ctx.token_balance(d.vault);
 
@@ -819,10 +833,11 @@ fn floor_slash(value: u64, num: u64, den: u64) -> u64 {
 }
 
 /// Drive a REAL dispute to a Tie dead-end carrying one AGREED + one REJECTED fact
-/// (the rejected fact has a SLASHED approve-voter), with `emission` folded into
-/// the vault before the terminal `finalize_oracle` (which burns it). Snapshots
-/// supply + bond_pool just before the burn. The oracle ends in InvalidDeadend.
-fn drive_real_fact_vote_deadend(ctx: &mut TestCtx, emission: u64) -> DrivenFactVoteDeadend {
+/// (the rejected fact has a SLASHED approve-voter). The creation-time emission
+/// (minted by the real `create_oracle`, ON by default) sits in the vault and is
+/// burned by the terminal `finalize_oracle`. Snapshots supply + bond_pool just
+/// before the burn. The oracle ends in InvalidDeadend.
+fn drive_real_fact_vote_deadend(ctx: &mut TestCtx) -> DrivenFactVoteDeadend {
     // create_oracle → propose×2 (DISTINCT options 0/1) → finalize_proposals.
     let oracle = ctx.dispute_via_real_flow(&[
         ProposerSpec {
@@ -988,11 +1003,11 @@ fn drive_real_fact_vote_deadend(ctx: &mut TestCtx, emission: u64) -> DrivenFactV
         .expect("finalize_ai_claims");
     assert_eq!(ctx.oracle(oracle).phase, Phase::Challenge.as_u8());
 
-    // ---- fold the creation-time emission into the vault (genesis emission is
-    // disabled, so this is a clean add), then snapshot supply + bond_pool ----
-    if emission > 0 {
-        ctx.set_reward_emission(oracle, emission);
-    }
+    // ---- the creation-time emission is ALREADY in the vault (emission is ON by
+    // default: the real create_oracle minted it), so capture the REAL amount
+    // rather than seeding one. Then snapshot supply + bond_pool before the burn.
+    let emission = ctx.oracle(oracle).reward_emission;
+    assert!(emission > 0, "genesis create minted a real emission");
     let sum_stakes =
         2 * FVD_BOND + FVD_AGREED_SUB + FVD_AGREED_VOTE + FVD_REJECTED_SUB + FVD_REJECTED_VOTE;
     assert_eq!(
@@ -1189,8 +1204,7 @@ fn assert_fact_vote_deadend_drains(ctx: &mut TestCtx, d: &DrivenFactVoteDeadend)
 #[test]
 fn e2e_fact_vote_deadend_burns_and_drains_real_dispute() {
     let mut ctx = TestCtx::new();
-    let emission = 600u64;
-    let d = drive_real_fact_vote_deadend(&mut ctx, emission);
+    let d = drive_real_fact_vote_deadend(&mut ctx);
     assert_eq!(
         ctx.oracle(d.oracle).resolved_option,
         CLAIM_OPTION_NONE,
@@ -1208,8 +1222,7 @@ fn e2e_fact_vote_deadend_burns_and_drains_real_dispute() {
 #[test]
 fn e2e_fact_vote_deadend_governance_resolved_pays_identically() {
     let mut ctx = TestCtx::new();
-    let emission = 600u64;
-    let d = drive_real_fact_vote_deadend(&mut ctx, emission);
+    let d = drive_real_fact_vote_deadend(&mut ctx);
 
     // Governance force-resolves the dead-end to option 1 → Resolved (the burn
     // already happened at finalize; resolve_deadend moves no tokens).

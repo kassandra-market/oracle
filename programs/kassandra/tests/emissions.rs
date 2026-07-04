@@ -34,9 +34,10 @@ fn emission_for(supply: u64, cap: u64, num: u64, den: u64) -> u64 {
 }
 
 /// init_protocol + governance handoff (dao_authority = payer) + a `set_config`
-/// that ENABLES emission (a non-zero cap + rate). `init_protocol` leaves the cap
-/// 0 (emission disabled at genesis), so emission is a deliberate governance
-/// switch — this is how a test turns it on.
+/// that OVERWRITES the emission params with a chosen `(cap, num, den)`.
+/// `init_protocol` now enables emission by default (the `config.rs` consts); this
+/// helper lets a test pin an EXACT curve for deterministic emission sizing (or
+/// DISABLE emission by passing `cap == 0` / `num == 0`).
 fn enable_emission(ctx: &mut TestCtx, cap: u64, num: u64, den: u64) {
     let (_p, res) = ctx.init_protocol();
     assert!(res.is_ok(), "init_protocol: {res:?}");
@@ -256,12 +257,13 @@ fn mint_authority_mismatch_rejected() {
 
 #[test]
 fn cap_zero_emits_nothing() {
-    // The genesis default: total_supply_cap == 0 → emission disabled (harmless).
-    // The mint-authority guard is never reached (no mint), so this also proves a
+    // Emission is ON by default now, so the DISABLED path must be configured
+    // explicitly: governance `set_config` with total_supply_cap == 0 →
+    // `compute_reward_emission` short-circuits to 0 (harmless). The
+    // mint-authority guard is never reached (no mint), so this also proves a
     // disabled-emission create_oracle is unaffected by the PDA mint authority.
     let mut ctx = TestCtx::new();
-    let (_p, res) = ctx.init_protocol();
-    assert!(res.is_ok(), "init_protocol: {res:?}");
+    enable_emission(&mut ctx, 0, NUM, DEN);
 
     let supply_before = ctx.mint_supply(ctx.kass_mint);
     let deadline = ctx.now() + 1_000;

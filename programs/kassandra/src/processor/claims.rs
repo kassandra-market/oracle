@@ -96,7 +96,9 @@ use crate::{
         verify_oracle_pda,
     },
     reward,
-    state::{AccountType, Fact, FactVote, Oracle, Phase, Proposer, VOTE_DUPLICATE},
+    state::{
+        AccountType, Fact, FactVote, Oracle, Phase, Proposer, CLAIM_OPTION_NONE, VOTE_DUPLICATE,
+    },
 };
 
 /// Exact payload length: `oracle_nonce[8]`.
@@ -229,10 +231,16 @@ pub fn claim_proposer(
     } else {
         proposer.bond.saturating_sub(proposer.slashed_amount)
     };
-    let reward = if resolved
-        && !proposer.is_disqualified()
-        && proposer.claim_option == oracle.resolved_option
-    {
+    // "Correct" = the proposer backed the resolved option. On the disputed path
+    // that is the AI `claim_option`; on the uncontested (all-agree) path proposers
+    // never submitted an AI claim (`claim_option == CLAIM_OPTION_NONE`), so fall
+    // back to their `original_option`. A no-show in a DISPUTED oracle also carries
+    // `claim_option == NONE`, but it is always disqualified (excluded below), so
+    // this fallback rewards ONLY the uncontested cohort.
+    let backed_resolved = proposer.claim_option == oracle.resolved_option
+        || (proposer.claim_option == CLAIM_OPTION_NONE
+            && proposer.original_option == oracle.resolved_option);
+    let reward = if resolved && !proposer.is_disqualified() && backed_resolved {
         let (proposer_bucket, _) = reward::reward_buckets(
             oracle.reward_pool,
             oracle.reward_proposer_weight,
