@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "node server.mjs",
     "build": "tsc -b && vite build && node scripts/verify-css.mjs",
     "verify-css": "node scripts/verify-css.mjs",
     "typecheck": "tsc -b",

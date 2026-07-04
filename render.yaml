@@ -1,24 +1,26 @@
-# Render Blueprint — deploy the Kassandra dApp (app/) as a static site.
+# Render Blueprint — the Kassandra dApp + a PRIVATE indexer backend.
 #
-# The app is a Vite + React SPA that talks directly to a Solana RPC from the
-# browser (no backend). This blueprint builds it from the pnpm monorepo and
-# serves the static `app/dist` bundle from Render's global CDN.
+# ARCHITECTURE
+#   kassandra-app       (public web service, Node) — serves the Vite SPA AND
+#                       reverse-proxies /indexer/* to the indexer over Render's
+#                       private network. This is the ONLY thing that can reach the
+#                       indexer.
+#   kassandra-indexer   (PRIVATE service, Rust/Carbon) — crawls the program's
+#                       transactions into Postgres and serves a read API. It has
+#                       NO public URL; only kassandra-app reaches it, at its
+#                       internal host:port. The crawler resumes from a durable
+#                       cursor, so it catches up on anything missed during downtime.
+#   kassandra-indexer-db (managed Postgres).
 #
-# DEPLOY
-#   1. Push this file to the repo's default branch.
-#   2. Render Dashboard → New → Blueprint → pick this repo. Render reads render.yaml
-#      and provisions the `kassandra-app` static site.
-#   3. (Optional) set VITE_RPC_URL — see the env var note below.
+# The app used to be a static CDN site that fetched the indexer straight from the
+# browser — which forced the indexer to be public. Serving the app from a Node
+# process instead lets the browser call the app's OWN origin (/indexer/...), which
+# the server proxies internally, so the indexer can be locked down as private.
 #
-# The site auto-deploys on every push to `master` that touches app/**, sdk/**, or
-# the lockfile (see buildFilter). Pull requests get an ephemeral preview URL.
+# DEPLOY: push to the default branch, then Render Dashboard → New → Blueprint →
+# this repo. After the first deploy, set RPC_URL on the indexer.
 #
-# It also provisions the Kassandra INDEXER — a Rust (Carbon) service that crawls
-# the program's transactions into Postgres and exposes a read API. The crawler
-# resumes from a durable cursor, so it catches up on anything missed during
-# downtime. Set its RPC_URL after the first deploy.
-#
-# Docs: https://render.com/docs/blueprint-spec  ·  https://render.com/docs/static-sites
+# Docs: https://render.com/docs/blueprint-spec
 
 databases:
   - name: kassandra-indexer-db
@@ -26,61 +28,60 @@ databases:
     postgresMajorVersion: "16"
 
 services:
+  # ---- App: public Node web service (SPA + private-indexer proxy) ----
   - type: web
     name: kassandra-app
-    runtime: static
-    # Rebuild only when the app, the SDK it bundles, the lockfile, or this file
-    # change — not on unrelated program/runner/docs commits.
+    runtime: node
+    plan: free
     buildFilter:
       paths:
         - app/**
         - sdk/**
         - pnpm-lock.yaml
         - render.yaml
-    # Pin pnpm via corepack (the lockfile is v9 → pnpm 10), install the workspace,
-    # build the SDK (the app bundles its dist/) then the app. `pnpm --filter app
-    # build` runs `tsc -b && vite build && verify-css`.
+    # Pin pnpm via corepack (lockfile v9 → pnpm 10), install the workspace, build
+    # the SDK (the app bundles its dist/) then the app.
     buildCommand: >-
       corepack enable &&
       corepack prepare pnpm@10.28.1 --activate &&
       pnpm install --frozen-lockfile &&
       pnpm --filter sdk build &&
       pnpm --filter app build
-    staticPublishPath: app/dist
+    # Serve dist/ + proxy /indexer/* to the private indexer (app/server.mjs).
+    startCommand: node app/server.mjs
+    healthCheckPath: /
     pullRequestPreviewsEnabled: true
-    # SPA fallback: React Router owns client-side routes, so every unmatched path
-    # must serve index.html (a hard refresh on /oracles/… should not 404).
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    # Vite fingerprints asset filenames, so they are safe to cache forever.
-    headers:
-      - path: /assets/*
-        name: Cache-Control
-        value: public, max-age=31536000, immutable
     envVars:
       - key: NODE_VERSION
         value: "20"
       # OPTIONAL build-time override for the "Localnet" cluster's RPC endpoint
       # (Vite inlines VITE_* at build time). Leave unset to ship the built-in
-      # Devnet / Mainnet endpoints the in-app cluster switcher already offers;
-      # set it to your own RPC URL to point "Localnet" at a custom validator.
+      # Devnet / Mainnet endpoints the in-app cluster switcher already offers.
       - key: VITE_RPC_URL
         sync: false
-      # The indexer's public URL — the app renders an on-chain activity feed from
-      # it when set (absent → the feature is simply not shown). Vite inlines this
-      # at BUILD time, so a change requires a rebuild. Point it at the
-      # kassandra-indexer service's URL (e.g. https://kassandra-indexer.onrender.com).
+      # The app calls the indexer at its OWN origin under this prefix; the server
+      # proxies it to the private indexer. Same-origin, so it is inlined at build.
       - key: VITE_INDEXER_URL
-        sync: false
+        value: /indexer
+      # The private indexer's internal address, injected by Render — the app
+      # server's proxy target. Not reachable from the public internet.
+      - key: INDEXER_HOST
+        fromService:
+          type: pserv
+          name: kassandra-indexer
+          property: host
+      - key: INDEXER_PORT
+        fromService:
+          type: pserv
+          name: kassandra-indexer
+          property: port
 
-  # ---- Indexer: Carbon RPC-crawler → Postgres, with a read API ----
-  - type: web
+  # ---- Indexer: PRIVATE Carbon RPC-crawler → Postgres, read API ----
+  - type: pserv
     name: kassandra-indexer
     runtime: rust
-    # The indexer is a self-contained Cargo crate (its own lockfile), so Render
-    # builds only it — it does NOT pull in the program's pinned Solana workspace.
+    # A self-contained Cargo crate (own lockfile), so Render builds only it — no
+    # pull-in of the program's pinned Solana workspace.
     rootDir: indexer
     plan: free
     buildFilter:
@@ -99,6 +100,10 @@ services:
       # The Solana RPC to crawl (a mainnet/devnet endpoint). Set after first deploy.
       - key: RPC_URL
         sync: false
+      # Fixed internal port the indexer binds — the app proxy resolves it via the
+      # `port` fromService property above.
+      - key: PORT
+        value: "10000"
       - key: COMMITMENT
         value: finalized
       - key: POLL_INTERVAL_MS
@@ -107,5 +112,3 @@ services:
         value: "30000"
       - key: RUST_LOG
         value: info
-      # Optional: pin the initial backfill to a known signature by pre-seeding the
-      # indexer_cursor row; otherwise the first run backfills the full history.

@@ -69,9 +69,18 @@ the cursor-promotion predicate.
 ## Deploy (Render)
 
 Provisioned by the repo's `render.yaml`: a managed Postgres
-(`kassandra-indexer-db`) + this service (`kassandra-indexer`, `runtime: rust`,
-`rootDir: indexer`). `DATABASE_URL` is injected from the database; set `RPC_URL`
-in the dashboard after the first deploy. `/health` is the health check.
+(`kassandra-indexer-db`) + this service as a **PRIVATE service** (`type: pserv`,
+`runtime: rust`, `rootDir: indexer`) — it has **no public URL**. Only the
+`kassandra-app` web service reaches it, over Render's private network, and
+reverse-proxies `/indexer/*` to it (`app/server.mjs`); the browser calls the
+app's own origin, never the indexer directly. `DATABASE_URL` is injected from the
+database; set `RPC_URL` in the dashboard after the first deploy; it binds a fixed
+internal `PORT` (10000) that the app's proxy resolves via `fromService`. `/health`
+is the health check.
+
+(The read API's CORS layer is only exercised in local dev/e2e, where the app dev
+server points straight at the indexer cross-origin — in production the same-origin
+proxy makes CORS moot.)
 
 The crate is a **self-contained Cargo workspace** (its own `Cargo.lock`) so
 Render builds only the indexer and does not pull in the program's pinned Solana
