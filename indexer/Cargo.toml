@@ -13,6 +13,7 @@ base64 = "0.22.1"
 carbon-core = "1.0.0"
 carbon-rpc-transaction-crawler-datasource = "1.0.0"
 env_logger = "0.11.11"
+kassandra-sdk = { version = "0.1.0", path = "../sdk-rs" }
 log = "0.4.33"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"

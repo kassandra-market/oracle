@@ -31,7 +31,7 @@ impl<'a> Processor<InstructionProcessorInputType<'a, KassandraIx>> for Kassandra
         let event = Event {
             signature: signature.clone(),
             ix_index: data.metadata.index as i32,
-            ix_type: ix.name.to_string(),
+            ix_type: ix.name.clone(),
             discriminant: ix.discriminant as i16,
             slot,
             block_time: tx.block_time,

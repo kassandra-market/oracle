@@ -23,7 +23,7 @@ use solana_commitment_config::CommitmentConfig;
 use solana_signature::Signature;
 
 use crate::api::ApiState;
-use crate::decoder::{program_id, KassandraDecoder, PROGRAM_ID_STR};
+use crate::decoder::{program_id, program_id_str, KassandraDecoder};
 use crate::processor::KassandraProcessor;
 
 #[tokio::main]
@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
 
     // Read-only API.
     {
-        let state = ApiState { client: client.clone(), program_id: PROGRAM_ID_STR.to_string() };
+        let state = ApiState { client: client.clone(), program_id: program_id_str() };
         let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
         log::info!("[indexer] API listening on :{port}");
         tokio::spawn(async move {
@@ -125,7 +125,7 @@ async fn main() -> Result<()> {
         )
         .build()?;
 
-    log::info!("[indexer] program {PROGRAM_ID_STR}; crawler starting");
+    log::info!("[indexer] program {}; crawler starting", program_id_str());
     tokio::select! {
         r = pipeline.run() => { r.map_err(|e| anyhow::anyhow!("pipeline: {e}"))?; }
         _ = tokio::signal::ctrl_c() => { log::info!("[indexer] SIGINT — shutting down"); }
