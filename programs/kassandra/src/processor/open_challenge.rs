@@ -38,15 +38,17 @@
 //!   `underlying_token_mint:Pubkey` @40, `underlying_token_account:Pubkey` @72,
 //!   `conditional_token_mints: Vec<Pubkey>` @104.
 //!
-//! # AMM binding (here: owner-only; full mint-pair binding in `settle_challenge`)
-//! At open time we verify only that `pass_amm`/`fail_amm` are **owned by the AMM
-//! program** and record their addresses on the `Market`. The HARD binding — each
-//! AMM's `base_mint`/`quote_mint` must equal this market's pass/fail conditional
-//! (KASS, USDC) mints, `pass_amm != fail_amm`, and the `Amm` account
-//! discriminator — is enforced in `settle_challenge`, which reads the (now
-//! pinned, delayed-twap v0.4.2) `Amm` layout when it consumes the TWAP. Recording
-//! the addresses here and binding them there is safe: the recorded address can
-//! only resolve to a pool bound to this market's mints, else settle rejects it.
+//! # AMM binding (enforced HERE, at open)
+//! Each `pass_amm`/`fail_amm` is fully bound before it is recorded on the
+//! `Market` (via [`metadao::assert_amm_bound`]): owned by the AMM program,
+//! carrying the `Amm` account discriminator, and whose `base_mint`/`quote_mint`
+//! equal this market's pass/fail conditional (KASS, USDC) mints for that outcome;
+//! and `pass_amm != fail_amm`. `settle_challenge` re-checks the SAME binding
+//! before reading each TWAP. Binding at open is load-bearing: settle pins each
+//! AMM to the address recorded here, so a market recorded with an unbindable AMM
+//! could never settle — `open_challenge_count` would never return to 0,
+//! `finalize_oracle` would be blocked forever, and every stake in the oracle
+//! would be permanently locked.
 //!
 //! # Accounts
 //! 0.  oracle              — writable, owned by this program; also the split
@@ -220,20 +222,27 @@ pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]
         }
     }
 
-    // --- verify the AMMs -----------------------------------------------------
-    // DEFERRED-MUST-VERIFY-IN-TASK-11: only owner==AMM_ID is checked here; the
-    // standalone v0.4 AMM layout is not re-derivable from current MetaDAO
-    // source. settle_challenge MUST verify each AMM is bound to this market's
-    // pass/fail conditional (KASS,USDC) mint pair and that pass_amm != fail_amm
-    // before reading its TWAP.
-    assert_owned_by_program(pass_amm_ai, &metadao::AMM_ID)?;
-    assert_owned_by_program(fail_amm_ai, &metadao::AMM_ID)?;
-
     // --- verify the conditional KASS mints derive from the KASS vault -------
     let (expect_pass_mint, _) = metadao::conditional_token_mint_pda(kass_vault_ai.address(), 0);
     let (expect_fail_mint, _) = metadao::conditional_token_mint_pda(kass_vault_ai.address(), 1);
     assert_key(pass_mint_ai, &expect_pass_mint)?;
     assert_key(fail_mint_ai, &expect_fail_mint)?;
+
+    // --- bind the pass/fail AMMs NOW (owner + `Amm` disc + exact conditional
+    //     (KASS,USDC) mint pair per outcome), and require pass_amm != fail_amm.
+    // This MUST happen at open, not only at settle: settle pins each AMM to the
+    // address RECORDED here, so a market recorded with an unbindable AMM (wrong
+    // mints, or the same account twice) could never settle. That would leave
+    // `open_challenge_count > 0` forever, blocking `finalize_oracle` and locking
+    // every stake in the oracle permanently. (Same binding `settle_challenge`
+    // re-checks before reading each TWAP.)
+    let (expect_pass_usdc, _) = metadao::conditional_token_mint_pda(usdc_vault_ai.address(), 0);
+    let (expect_fail_usdc, _) = metadao::conditional_token_mint_pda(usdc_vault_ai.address(), 1);
+    metadao::assert_amm_bound(pass_amm_ai, &expect_pass_mint, &expect_pass_usdc)?;
+    metadao::assert_amm_bound(fail_amm_ai, &expect_fail_mint, &expect_fail_usdc)?;
+    if pass_amm_ai.address() == fail_amm_ai.address() {
+        return Err(KassandraError::InvalidAccount.into());
+    }
 
     // --- verify the conditional-KASS split DESTINATIONS (defense-in-depth) --
     // The vault enforces these too, but a clean InvalidAccount here beats a
