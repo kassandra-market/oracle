@@ -58,6 +58,7 @@ use pinocchio::{
     ProgramResult,
 };
 use pinocchio_token::instructions::{Burn, InitializeAccount3, MintTo};
+use pinocchio_token::state::TokenAccount;
 
 use crate::{
     clock::now,
@@ -72,8 +73,6 @@ use crate::{
 /// deadline[8] ++ twap_window[8].
 const PAYLOAD_LEN: usize = 57;
 
-/// SPL token account size (`spl_token::state::Account::LEN`).
-const SPL_TOKEN_ACCOUNT_LEN: usize = 165;
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) -> ProgramResult {
     // --- payload parse (exact length) --------------------------------------
@@ -174,7 +173,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     // (the vault + the Oracle) — the rent parameters are constant within a tx, so
     // a second `Rent::get()` syscall would be pure overhead.
     let rent = Rent::get()?;
-    let vault_rent = rent.minimum_balance(SPL_TOKEN_ACCOUNT_LEN);
+    let vault_rent = rent.minimum_balance(TokenAccount::LEN);
     let vault_bump_seed = [vault_bump];
     let vault_seeds = [
         Seed::from(b"vault".as_ref()),
@@ -186,7 +185,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
         stake_vault_ai,
         &vault_seeds,
         vault_rent,
-        SPL_TOKEN_ACCOUNT_LEN,
+        TokenAccount::LEN,
         &pinocchio_token::ID,
     )?;
     InitializeAccount3 {
@@ -233,11 +232,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     // --- create + initialize the Oracle (program-signed) -------------------
     let oracle_rent = rent.minimum_balance(Oracle::LEN);
     let oracle_bump_seed = [oracle_bump];
-    let oracle_seeds = [
-        Seed::from(b"oracle".as_ref()),
-        Seed::from(nonce_le.as_ref()),
-        Seed::from(&oracle_bump_seed),
-    ];
+    let oracle_seeds = Oracle::signer_seeds(&nonce_le, &oracle_bump_seed);
     create_pda(
         creator_ai,
         oracle_ai,

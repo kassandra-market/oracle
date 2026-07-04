@@ -100,6 +100,7 @@ use pinocchio::{
     ProgramResult,
 };
 use pinocchio_token::instructions::{InitializeAccount3, Transfer};
+use pinocchio_token::state::TokenAccount;
 
 use crate::{
     clock::{now, require_before_end, require_phase},
@@ -108,8 +109,8 @@ use crate::{
     error::KassandraError,
     price::kass_price,
     processor::guards::{
-        assert_key, assert_owned_by_program, assert_signer, create_pda, load_ai_claim, load_oracle,
-        load_proposer, load_protocol,
+        assert_key, assert_owned_by_program, assert_signer, assert_token_account, create_pda,
+        load_ai_claim, load_oracle, load_proposer, load_protocol,
     },
     state::{AccountType, Market, Oracle, Phase},
 };
@@ -117,38 +118,12 @@ use crate::{
 /// Exact payload length: oracle_nonce[8].
 const PAYLOAD_LEN: usize = 8;
 
-/// Minimum size of an SPL token account (`spl_token::state::Account::LEN`).
-const SPL_TOKEN_ACCOUNT_LEN: usize = 165;
-/// `spl_token::state::Account.mint` byte offset.
-const SPL_TOKEN_MINT_OFFSET: usize = 0;
-/// `spl_token::state::Account.owner` byte offset.
-const SPL_TOKEN_OWNER_OFFSET: usize = 32;
-
 /// Assert `account` is an SPL token account owned (token authority) by
 /// `oracle_key` on `expected_mint`, else [`KassandraError::InvalidAccount`].
 /// Defense-in-depth on the conditional-KASS split destinations: the
 /// conditional_vault enforces the same constraints, but a clean local error is
 /// clearer than a downstream MetaDAO custom error and pins the recorded
 /// `Market.oracle_{pass,fail}_kass` contract for Task 11.
-fn assert_oracle_owned_token(
-    account: &AccountInfo,
-    expected_mint: &Pubkey,
-    oracle_key: &Pubkey,
-) -> ProgramResult {
-    if !account.is_owned_by(&pinocchio_token::ID) {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    let data = account.try_borrow_data()?;
-    if data.len() < SPL_TOKEN_ACCOUNT_LEN {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    let mint = metadao::read_pubkey(&data, SPL_TOKEN_MINT_OFFSET)?;
-    let owner = metadao::read_pubkey(&data, SPL_TOKEN_OWNER_OFFSET)?;
-    if &mint != expected_mint || &owner != oracle_key {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    Ok(())
-}
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) -> ProgramResult {
     if payload.len() != PAYLOAD_LEN {
@@ -269,8 +244,8 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     // downstream MetaDAO custom error and locks the contract the docstring
     // claims: each dest is an SPL token account owned by the oracle PDA on the
     // matching conditional KASS mint. Task 11 redeems from exactly these.
-    assert_oracle_owned_token(oracle_pass_kass_ai, &expect_pass_mint, oracle_ai.key())?;
-    assert_oracle_owned_token(oracle_fail_kass_ai, &expect_fail_mint, oracle_ai.key())?;
+    assert_token_account(oracle_pass_kass_ai, &expect_pass_mint, oracle_ai.key())?;
+    assert_token_account(oracle_fail_kass_ai, &expect_fail_mint, oracle_ai.key())?;
 
     // --- market PDA derivation + uninit check -------------------------------
     let (expected_market, market_bump) =
@@ -321,11 +296,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     ];
     let nonce_le = oracle_nonce.to_le_bytes();
     let bump_seed = [oracle.bump];
-    let oracle_seeds = [
-        Seed::from(b"oracle".as_ref()),
-        Seed::from(nonce_le.as_ref()),
-        Seed::from(&bump_seed),
-    ];
+    let oracle_seeds = Oracle::signer_seeds(&nonce_le, &bump_seed);
     let oracle_signer = Signer::from(&oracle_seeds);
     metadao::invoke_conditional_vault_signed(
         &split_data,
@@ -403,7 +374,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     let (expected_escrow, escrow_bump) =
         find_program_address(&[b"challenge_usdc", market_ai.key().as_ref()], program_id);
     assert_key(escrow_vault_ai, &expected_escrow)?;
-    let escrow_rent = Rent::get()?.minimum_balance(SPL_TOKEN_ACCOUNT_LEN);
+    let escrow_rent = Rent::get()?.minimum_balance(TokenAccount::LEN);
     let escrow_bump_seed = [escrow_bump];
     let escrow_seeds = [
         Seed::from(b"challenge_usdc".as_ref()),
@@ -415,7 +386,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
         escrow_vault_ai,
         &escrow_seeds,
         escrow_rent,
-        SPL_TOKEN_ACCOUNT_LEN,
+        TokenAccount::LEN,
         &pinocchio_token::ID,
     )?;
     InitializeAccount3 {

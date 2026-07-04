@@ -109,7 +109,7 @@
 
 use pinocchio::{
     account_info::AccountInfo,
-    instruction::{AccountMeta, Seed, Signer},
+    instruction::{AccountMeta, Signer},
     program_error::ProgramError,
     pubkey::{find_program_address, Pubkey},
     ProgramResult,
@@ -121,7 +121,8 @@ use crate::{
     cpi::metadao,
     error::KassandraError,
     processor::guards::{
-        assert_key, assert_owned_by_program, load_ai_claim, load_oracle, load_proposer,
+        assert_key, assert_owned_by_program, assert_token_account, load_ai_claim, load_oracle,
+        load_proposer,
     },
     state::{Market, Oracle, Phase},
 };
@@ -129,36 +130,6 @@ use crate::{
 /// Exact payload length: `oracle_nonce[8]`.
 const PAYLOAD_LEN: usize = 8;
 
-/// Minimum size of an SPL token account (`spl_token::state::Account::LEN`).
-const SPL_TOKEN_ACCOUNT_LEN: usize = 165;
-/// `spl_token::state::Account.mint` byte offset.
-const SPL_TOKEN_MINT_OFFSET: usize = 0;
-/// `spl_token::state::Account.owner` byte offset.
-const SPL_TOKEN_OWNER_OFFSET: usize = 32;
-
-/// Assert `account` is an SPL token account on `expected_mint` whose token
-/// authority is `expected_owner`, else [`KassandraError::InvalidAccount`]. Binds
-/// the proposer/challenger payout destinations so a settle cranker cannot
-/// redirect the directional fees / escrow return to an account they control.
-fn assert_token_account(
-    account: &AccountInfo,
-    expected_mint: &Pubkey,
-    expected_owner: &Pubkey,
-) -> ProgramResult {
-    if !account.is_owned_by(&pinocchio_token::ID) {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    let data = account.try_borrow_data()?;
-    if data.len() < SPL_TOKEN_ACCOUNT_LEN {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    let mint = metadao::read_pubkey(&data, SPL_TOKEN_MINT_OFFSET)?;
-    let owner = metadao::read_pubkey(&data, SPL_TOKEN_OWNER_OFFSET)?;
-    if &mint != expected_mint || &owner != expected_owner {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    Ok(())
-}
 
 /// `value × num / den` in u128, checked back into `u64`. `den == 0` (a malformed
 /// fee config) is rejected as [`KassandraError::InvalidConfig`]. Used for both
@@ -419,11 +390,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     let resolve_infos = [question_ai, oracle_ai, cv_event_auth_ai, cv_prog_ai];
     let nonce_le = oracle_nonce.to_le_bytes();
     let bump_seed = [oracle.bump];
-    let oracle_seeds = [
-        Seed::from(b"oracle".as_ref()),
-        Seed::from(nonce_le.as_ref()),
-        Seed::from(&bump_seed),
-    ];
+    let oracle_seeds = Oracle::signer_seeds(&nonce_le, &bump_seed);
     metadao::invoke_conditional_vault_signed(
         &resolve_data,
         &resolve_metas,

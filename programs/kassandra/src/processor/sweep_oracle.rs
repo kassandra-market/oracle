@@ -69,29 +69,28 @@
 
 use pinocchio::{
     account_info::AccountInfo,
-    instruction::{Seed, Signer},
+    instruction::Signer,
     program_error::ProgramError,
     pubkey::{find_program_address, Pubkey},
     ProgramResult,
 };
 use pinocchio_pubkey::pubkey;
 use pinocchio_token::instructions::{CloseAccount, Transfer};
+use pinocchio_token::state::TokenAccount;
 
 use crate::{
     clock::now,
     config::SWEEP_GRACE,
     error::KassandraError,
-    processor::guards::{assert_key, load_oracle, load_protocol, verify_oracle_pda},
-    state::Phase,
+    processor::guards::{
+        assert_key, load_oracle, load_protocol, require_terminal, verify_oracle_pda,
+    },
+    state::Oracle,
 };
 
 /// Exact payload length: `oracle_nonce[8]`.
 const PAYLOAD_LEN: usize = 8;
 
-/// Minimum size of an SPL token account (`spl_token::state::Account::LEN`).
-const SPL_TOKEN_ACCOUNT_LEN: usize = 165;
-/// `spl_token::state::Account.amount` byte offset.
-const SPL_TOKEN_AMOUNT_OFFSET: usize = 64;
 
 /// SPL Associated Token Account program id. The DAO treasury is the canonical
 /// KASS ATA of `dao_authority`, derived under this program from the standard
@@ -113,10 +112,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
 
     // Oracle must be owned by this program and TERMINAL.
     let oracle = load_oracle(oracle_ai, program_id)?;
-    match oracle.phase().ok_or(KassandraError::InvalidAccount)? {
-        Phase::Resolved | Phase::InvalidDeadend => {}
-        _ => return Err(KassandraError::WrongPhase.into()),
-    }
+    require_terminal(&oracle)?;
 
     // The oracle PDA is the vault's token authority; verify it, then bind the
     // vault + rent recipient.
@@ -153,31 +149,16 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
         return Err(KassandraError::InvalidTreasury.into());
     }
 
-    // Read the residual vault balance (SPL token account, amount at offset 64).
-    if !stake_vault_ai.is_owned_by(&pinocchio_token::ID) {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    let amount = {
-        let data = stake_vault_ai.try_borrow_data()?;
-        if data.len() < SPL_TOKEN_ACCOUNT_LEN {
-            return Err(KassandraError::InvalidAccount.into());
-        }
-        u64::from_le_bytes(
-            data[SPL_TOKEN_AMOUNT_OFFSET..SPL_TOKEN_AMOUNT_OFFSET + 8]
-                .try_into()
-                .unwrap(),
-        )
-    };
+    // Read the residual vault balance from the canonical SPL token account.
+    let amount = TokenAccount::from_account_info(stake_vault_ai)
+        .map_err(|_| KassandraError::InvalidAccount)?
+        .amount();
 
     // Oracle-PDA signer seeds (`[b"oracle", nonce_le, [bump]]`), reused for the
     // Transfer + CloseAccount.
     let nonce_le = nonce.to_le_bytes();
     let bump_seed = [oracle.bump];
-    let seeds = [
-        Seed::from(b"oracle".as_ref()),
-        Seed::from(nonce_le.as_ref()),
-        Seed::from(&bump_seed),
-    ];
+    let seeds = Oracle::signer_seeds(&nonce_le, &bump_seed);
 
     // 1. Sweep the ENTIRE residual balance → treasury (dust, or a no-show's
     //    forfeited principal). A zero balance is a no-op.

@@ -78,7 +78,7 @@
 
 use pinocchio::{
     account_info::AccountInfo,
-    instruction::{Seed, Signer},
+    instruction::Signer,
     program_error::ProgramError,
     pubkey::Pubkey,
     ProgramResult,
@@ -245,11 +245,7 @@ fn finalize_no_facts(
         if burn_amount > 0 {
             let nonce_le = nonce.to_le_bytes();
             let bump_seed = [oracle.bump];
-            let seeds = [
-                Seed::from(b"oracle".as_ref()),
-                Seed::from(nonce_le.as_ref()),
-                Seed::from(&bump_seed),
-            ];
+            let seeds = Oracle::signer_seeds(&nonce_le, &bump_seed);
             Burn {
                 account: stake_vault_ai,
                 mint: kass_mint_ai,

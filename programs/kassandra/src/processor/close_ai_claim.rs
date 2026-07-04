@@ -34,8 +34,7 @@ use pinocchio::{
 
 use crate::{
     error::KassandraError,
-    processor::guards::{assert_key, load_ai_claim, load_oracle},
-    state::Phase,
+    processor::guards::{assert_key, load_ai_claim, load_oracle, require_terminal},
 };
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) -> ProgramResult {
@@ -49,10 +48,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
 
     // Oracle must be owned by this program and TERMINAL.
     let oracle = load_oracle(oracle_ai, program_id)?;
-    match oracle.phase().ok_or(KassandraError::InvalidAccount)? {
-        Phase::Resolved | Phase::InvalidDeadend => {}
-        _ => return Err(KassandraError::WrongPhase.into()),
-    }
+    require_terminal(&oracle)?;
 
     // Bind the AiClaim to this oracle; pay rent to its stamped authority.
     let ai_claim = load_ai_claim(ai_claim_ai, program_id)?;

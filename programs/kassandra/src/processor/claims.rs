@@ -85,7 +85,7 @@
 
 use pinocchio::{
     account_info::AccountInfo,
-    instruction::{Seed, Signer},
+    instruction::Signer,
     program_error::ProgramError,
     pubkey::Pubkey,
     ProgramResult,
@@ -94,7 +94,9 @@ use pinocchio_token::instructions::Transfer;
 
 use crate::{
     error::KassandraError,
-    processor::guards::{assert_key, load_fact, load_oracle, verify_oracle_pda},
+    processor::guards::{
+        assert_key, assert_token_account, load_fact, load_oracle, require_terminal, verify_oracle_pda,
+    },
     reward,
     state::{AccountType, Fact, FactVote, Oracle, Phase, Proposer, VOTE_DUPLICATE},
 };
@@ -102,44 +104,7 @@ use crate::{
 /// Exact payload length: `oracle_nonce[8]`.
 const PAYLOAD_LEN: usize = 8;
 
-/// Minimum size of an SPL token account (`spl_token::state::Account::LEN`).
-const SPL_TOKEN_ACCOUNT_LEN: usize = 165;
-/// `spl_token::state::Account.owner` byte offset.
-const SPL_TOKEN_OWNER_OFFSET: usize = 32;
-
-/// Read a 32-byte pubkey at `offset` from `data`.
-fn read_pubkey(data: &[u8], offset: usize) -> Result<Pubkey, ProgramError> {
-    data.get(offset..offset + 32)
-        .and_then(|s| s.try_into().ok())
-        .ok_or(KassandraError::InvalidAccount.into())
-}
-
-/// Assert `account` is an SPL token account on `expected_mint` whose token
-/// authority is `expected_owner`, else [`KassandraError::InvalidAccount`]. Binds
-/// the payout destination to the claimant's authority so a cranker cannot
-/// redirect the entitlement to an account they control.
-fn assert_token_account(
-    account: &AccountInfo,
-    expected_mint: &Pubkey,
-    expected_owner: &Pubkey,
-) -> ProgramResult {
-    if !account.is_owned_by(&pinocchio_token::ID) {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    let data = account.try_borrow_data()?;
-    if data.len() < SPL_TOKEN_ACCOUNT_LEN {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    let mint = read_pubkey(&data, 0)?;
-    let owner = read_pubkey(&data, SPL_TOKEN_OWNER_OFFSET)?;
-    if &mint != expected_mint || &owner != expected_owner {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    Ok(())
-}
-
-/// Decode the terminal phase, rejecting any non-terminal oracle with
-/// [`KassandraError::WrongPhase`]. Returns `true` iff the oracle is
+/// Require a terminal oracle ([`require_terminal`]) and report whether it is
 /// [`Phase::Resolved`] (so the caller knows whether rewards apply).
 ///
 /// # `resolve_deadend` (F4) oracles — no special-casing
@@ -156,12 +121,9 @@ fn assert_token_account(
 /// or not governance later flips the phase to `Resolved`. No marker / no
 /// claim-path branch on "resolved-from-dead-end" is needed — the `reward_pool ==
 /// 0` stamp already makes both terminal phases pay identically.
-fn require_terminal(oracle: &Oracle) -> Result<bool, ProgramError> {
-    match oracle.phase().ok_or(KassandraError::InvalidAccount)? {
-        Phase::Resolved => Ok(true),
-        Phase::InvalidDeadend => Ok(false),
-        _ => Err(KassandraError::WrongPhase.into()),
-    }
+fn is_resolved(oracle: &Oracle) -> Result<bool, ProgramError> {
+    require_terminal(oracle)?;
+    Ok(oracle.phase() == Some(Phase::Resolved))
 }
 
 /// Transfer `amount` KASS from `stake_vault` → `dest`, program-signed by the
@@ -183,11 +145,7 @@ fn payout_and_close(
     if amount > 0 {
         let nonce_le = nonce.to_le_bytes();
         let bump_seed = [bump];
-        let seeds = [
-            Seed::from(b"oracle".as_ref()),
-            Seed::from(nonce_le.as_ref()),
-            Seed::from(&bump_seed),
-        ];
+        let seeds = Oracle::signer_seeds(&nonce_le, &bump_seed);
         Transfer {
             from: stake_vault,
             to: dest,
@@ -253,7 +211,7 @@ pub fn claim_proposer(
     assert_key(token_prog_ai, &pinocchio_token::ID)?;
 
     let oracle = load_oracle(oracle_ai, program_id)?;
-    let resolved = require_terminal(&oracle)?;
+    let resolved = is_resolved(&oracle)?;
     verify_oracle_pda(program_id, oracle_ai, &oracle, nonce)?;
     assert_key(stake_vault_ai, &oracle.stake_vault)?;
 
@@ -351,7 +309,7 @@ pub fn claim_fact(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8])
     assert_key(token_prog_ai, &pinocchio_token::ID)?;
 
     let oracle = load_oracle(oracle_ai, program_id)?;
-    let resolved = require_terminal(&oracle)?;
+    let resolved = is_resolved(&oracle)?;
     verify_oracle_pda(program_id, oracle_ai, &oracle, nonce)?;
     assert_key(stake_vault_ai, &oracle.stake_vault)?;
 
@@ -442,7 +400,7 @@ pub fn claim_fact_vote(
     assert_key(token_prog_ai, &pinocchio_token::ID)?;
 
     let oracle = load_oracle(oracle_ai, program_id)?;
-    let resolved = require_terminal(&oracle)?;
+    let resolved = is_resolved(&oracle)?;
     verify_oracle_pda(program_id, oracle_ai, &oracle, nonce)?;
     assert_key(stake_vault_ai, &oracle.stake_vault)?;
 

@@ -6,6 +6,7 @@
 //! This lets us read/write them straight out of account data with `bytemuck`.
 
 use bytemuck::{Pod, Zeroable};
+use pinocchio::instruction::Seed;
 
 /// 32-byte Solana public key, kept as a plain byte array so it is `Pod`.
 pub type Pubkey = [u8; 32];
@@ -197,6 +198,9 @@ pub struct Oracle {
 impl Oracle {
     pub const LEN: usize = core::mem::size_of::<Oracle>();
 
+    /// The oracle PDA seed prefix: the account lives at `[SEED_PREFIX, nonce_le]`.
+    pub const SEED_PREFIX: &'static [u8] = b"oracle";
+
     /// Decode the stored phase discriminant.
     pub fn phase(&self) -> Option<Phase> {
         Phase::from_u8(self.phase)
@@ -205,6 +209,18 @@ impl Oracle {
     /// Write the phase discriminant.
     pub fn set_phase(&mut self, p: Phase) {
         self.phase = p as u8;
+    }
+
+    /// The oracle PDA's program-signer seeds `[b"oracle", nonce_le, [bump]]` — the
+    /// single source of truth every processor uses to sign token moves out of the
+    /// oracle's vaults. The caller owns the `nonce_le` + `bump` buffers (they must
+    /// outlive the returned `Seed`s).
+    pub fn signer_seeds<'a>(nonce_le: &'a [u8; 8], bump: &'a [u8; 1]) -> [Seed<'a>; 3] {
+        [
+            Seed::from(Self::SEED_PREFIX),
+            Seed::from(nonce_le.as_ref()),
+            Seed::from(bump.as_ref()),
+        ]
     }
 }
 

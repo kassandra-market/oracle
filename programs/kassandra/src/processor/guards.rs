@@ -10,10 +10,11 @@ use pinocchio::{
     ProgramResult,
 };
 use pinocchio_system::instructions::CreateAccount;
+use pinocchio_token::state::TokenAccount;
 
 use crate::{
     error::KassandraError,
-    state::{AccountType, AiClaim, Fact, Oracle, Proposer, Protocol},
+    state::{AccountType, AiClaim, Fact, Oracle, Phase, Proposer, Protocol},
 };
 
 /// The canonical `[b"protocol"]` singleton PDA (bump 255) for this program id.
@@ -222,4 +223,31 @@ pub fn verify_oracle_pda(
         return Err(KassandraError::InvalidAccount.into());
     }
     Ok(())
+}
+
+/// Assert `account` is an SPL token account on `expected_mint` owned by
+/// `expected_owner`. Loads it via [`TokenAccount::from_account_info`] (which pins
+/// the token-program owner + the 165-byte length), then compares the mint/owner —
+/// the canonical SPL layout, not hand-rolled byte offsets.
+pub fn assert_token_account(
+    account: &AccountInfo,
+    expected_mint: &Pubkey,
+    expected_owner: &Pubkey,
+) -> ProgramResult {
+    let token = TokenAccount::from_account_info(account)
+        .map_err(|_| KassandraError::InvalidAccount)?;
+    if token.mint() != expected_mint || token.owner() != expected_owner {
+        return Err(KassandraError::InvalidAccount.into());
+    }
+    Ok(())
+}
+
+/// Require the oracle to be in a TERMINAL phase ([`Phase::Resolved`] or
+/// [`Phase::InvalidDeadend`]) — the gate every post-resolution instruction
+/// (claims, sweep, closes) shares. Non-terminal → [`KassandraError::WrongPhase`].
+pub fn require_terminal(oracle: &Oracle) -> ProgramResult {
+    match oracle.phase().ok_or(KassandraError::InvalidAccount)? {
+        Phase::Resolved | Phase::InvalidDeadend => Ok(()),
+        _ => Err(KassandraError::WrongPhase.into()),
+    }
 }

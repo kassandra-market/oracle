@@ -45,26 +45,23 @@
 
 use pinocchio::{
     account_info::AccountInfo,
-    instruction::{Seed, Signer},
+    instruction::Signer,
     program_error::ProgramError,
     pubkey::{find_program_address, Pubkey},
     ProgramResult,
 };
 use pinocchio_token::instructions::CloseAccount;
+use pinocchio_token::state::TokenAccount;
 
 use crate::{
     error::KassandraError,
-    processor::guards::{assert_key, assert_owned_by_program, load_oracle},
-    state::{AccountType, Market, Phase},
+    processor::guards::{assert_key, assert_owned_by_program, load_oracle, require_terminal},
+    state::{AccountType, Market, Oracle},
 };
 
 /// Exact payload length: `oracle_nonce[8]`.
 const PAYLOAD_LEN: usize = 8;
 
-/// Minimum size of an SPL token account (`spl_token::state::Account::LEN`).
-const SPL_TOKEN_ACCOUNT_LEN: usize = 165;
-/// `spl_token::state::Account.amount` byte offset.
-const SPL_TOKEN_AMOUNT_OFFSET: usize = 64;
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) -> ProgramResult {
     if payload.len() != PAYLOAD_LEN {
@@ -79,10 +76,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
 
     // Oracle must be owned by this program and TERMINAL.
     let oracle = load_oracle(oracle_ai, program_id)?;
-    match oracle.phase().ok_or(KassandraError::InvalidAccount)? {
-        Phase::Resolved | Phase::InvalidDeadend => {}
-        _ => return Err(KassandraError::WrongPhase.into()),
-    }
+    require_terminal(&oracle)?;
 
     // Re-derive the oracle PDA (the escrow's token authority) from the nonce.
     let (derived, bump) = find_program_address(&[b"oracle", &nonce.to_le_bytes()], program_id);
@@ -111,35 +105,21 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], payload: &[u8]) ->
     assert_key(escrow_ai, &market.challenger_usdc_vault)?;
     assert_key(rent_recipient_ai, &market.challenger)?;
 
-    // The escrow is an SPL token account; assert it is empty before closing it
-    // (settle_challenge drained it). SPL would reject a non-empty close anyway.
-    if !escrow_ai.is_owned_by(&pinocchio_token::ID) {
-        return Err(KassandraError::InvalidAccount.into());
-    }
-    {
-        let data = escrow_ai.try_borrow_data()?;
-        if data.len() < SPL_TOKEN_ACCOUNT_LEN {
-            return Err(KassandraError::InvalidAccount.into());
-        }
-        let amount = u64::from_le_bytes(
-            data[SPL_TOKEN_AMOUNT_OFFSET..SPL_TOKEN_AMOUNT_OFFSET + 8]
-                .try_into()
-                .unwrap(),
-        );
-        if amount != 0 {
-            return Err(KassandraError::EscrowNotEmpty.into());
-        }
+    // The escrow is a canonical SPL token account; assert it is empty before
+    // closing it (settle_challenge drained it). SPL would reject a non-empty
+    // close anyway.
+    let escrow_amount = TokenAccount::from_account_info(escrow_ai)
+        .map_err(|_| KassandraError::InvalidAccount)?
+        .amount();
+    if escrow_amount != 0 {
+        return Err(KassandraError::EscrowNotEmpty.into());
     }
 
     // 1. Close the escrow token account via SPL CloseAccount, program-signed by
     //    the oracle PDA (its token authority). Rent → rent_recipient.
     let nonce_le = nonce.to_le_bytes();
     let bump_seed = [oracle.bump];
-    let seeds = [
-        Seed::from(b"oracle".as_ref()),
-        Seed::from(nonce_le.as_ref()),
-        Seed::from(&bump_seed),
-    ];
+    let seeds = Oracle::signer_seeds(&nonce_le, &bump_seed);
     CloseAccount {
         account: escrow_ai,
         destination: rent_recipient_ai,
