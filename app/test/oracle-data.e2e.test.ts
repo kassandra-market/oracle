@@ -266,7 +266,6 @@ async function createOracleReal(f: Fixture, nonce: bigint, optionsCount: number)
     f,
     await createOracle({
       nonce,
-      promptHash: new Uint8Array(32).fill(Number(nonce)),
       optionsCount,
       deadline: nowUnix + 1_000n + nonce * 100n,
       twapWindow: 600n,

@@ -4,10 +4,11 @@
  * A mock {@link Connection} reports the creator's KASS ATA absent or present.
  * We assert `buildCreateOracleIxs`:
  *   - emits a `createOracle` ix whose `data` + `keys` byte-for-byte match the SDK
- *     builder for the SAME inputs (with the promptHash == sha256(question), the
- *     derived creator ATA as `creatorKassToken`, and the derived Oracle PDA);
+ *     builder for the SAME inputs (the derived creator ATA as `creatorKassToken`
+ *     and the derived Oracle PDA), and appends `writeOracleMeta` when options are
+ *     given;
  *   - prepends the idempotent create-ATA ix ONLY when the ATA is absent;
- *   - returns the resolved nonce + Oracle PDA + promptHash;
+ *   - returns the resolved nonce + Oracle PDA + extended metadata;
  *   - rejects bad input (optionsCount 1, past deadline, empty question) with a
  *     typed `ValidationError`.
  */

@@ -591,7 +591,7 @@ async function createOracleReal(f: Fixture, nonce: bigint, optionsCount: number)
   const creatorKass = await fundKass(f, f.payer.publicKey, 10n ** 15n);
   const nowUnix = await f.harness.clockUnixTimestamp();
   await sendIx(f, await createOracle({
-    nonce, promptHash: new Uint8Array(32).fill(0x42), optionsCount,
+    nonce, optionsCount,
     deadline: nowUnix + 1_000n, twapWindow: 600n,
     creator: f.payer.publicKey, creatorKassToken: creatorKass,
     kassMint: f.kassMint.publicKey, usdcMint: f.usdcMint.publicKey,
