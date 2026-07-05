@@ -23,6 +23,18 @@ import { E2eWalletProvider } from '../lib/e2eWallet'
  *         > app
  * Read-only: the wallet connects but nothing is ever signed or sent.
  */
+/**
+ * Surface the REAL cause of a wallet error. `WalletError` wraps the underlying
+ * error in `.error` and defaults its message to "Unexpected error", which hides
+ * what actually failed (e.g. a wallet-adapter ↔ web3.js incompatibility on
+ * connect). Log both so the console shows the true cause.
+ */
+function logWalletError(err: Error): void {
+  const cause = (err as { error?: unknown }).error
+  // eslint-disable-next-line no-console
+  console.error(`[wallet] ${err.name}: ${err.message}`, cause ? { cause } : '', err)
+}
+
 export function AppProviders({ children }: { children: ReactNode }) {
   // Standard-wallet wallets (Phantom, Solflare, Backpack, …) are auto-detected
   // by WalletProvider; these explicit adapters cover the non-standard fallback.
@@ -39,7 +51,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     : isE2eMode()
       ? ({ children: c }: { children: ReactNode }) => <E2eWalletProvider>{c}</E2eWalletProvider>
       : ({ children: c }: { children: ReactNode }) => (
-          <WalletProvider wallets={wallets} autoConnect>
+          <WalletProvider wallets={wallets} autoConnect onError={logWalletError}>
             {c}
           </WalletProvider>
         )
