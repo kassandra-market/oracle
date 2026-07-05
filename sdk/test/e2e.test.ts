@@ -28,11 +28,11 @@
  * own CPIs (create_oracle's `InitializeAccount3` on the vault, propose's
  * `Transfer`) run against the SPL Token program that `new LiteSVM()` loads by
  * default (`withDefaultPrograms`). The KASS mint authority is set to the
- * mint-authority PDA to mirror the harness bootstrap, though it is NOT
- * load-bearing here: emissions are default-disabled (emission_num == 0) so
- * create_oracle mints nothing and the BadMintAuthority guard is skipped (it only
- * fires when reward_emission > 0). The genesis creation fee is likewise 0
- * (fee_ema == 0), so no KASS is burned at create.
+ * mint-authority PDA to mirror the harness bootstrap; this IS load-bearing —
+ * emission is ON by default, so create_oracle mints `reward_emission` into the
+ * stake vault, program-signed by that PDA (a wrong authority would trip the
+ * BadMintAuthority guard). The genesis creation fee is 0 (fee_ema == 0), so no
+ * KASS is burned at create — only the emission is minted.
  *
  * --- clock warp ---
  * litesvm exposes `getClock()` / `setClock(Clock)`. The program's `now()` reads
@@ -331,15 +331,16 @@ describe("D4 litesvm end-to-end lifecycle via the SDK", () => {
       proposers.push(proposer);
     }
 
-    // KASS conservation at the proposal boundary (no facts yet): the stake vault
-    // holds exactly Σ bonds == total_oracle_stake (decoded via the SDK).
+    // KASS conservation at the proposal boundary (no facts yet): total_oracle_stake
+    // is exactly Σ bonds, and the stake vault holds Σ bonds PLUS the emission
+    // create_oracle mints into it (emission is ON by default).
     o = decodeOracle(fetchData(f.svm, oracle));
     expect(o.proposerCount).toBe(3);
     expect(o.survivingCount).toBe(3);
     const sumBonds = bond * 3n;
     expect(o.totalOracleStake).toBe(sumBonds);
     const stakeVault = await pda.stakeVault(oracle);
-    expect(tokenBalance(f.svm, stakeVault.address)).toBe(sumBonds);
+    expect(tokenBalance(f.svm, stakeVault.address)).toBe(sumBonds + o.rewardEmission);
 
     // 4. warp past the proposal window (deadline + PROPOSAL_WINDOW = +3600).
     warp(f.svm, 3_601n);
@@ -352,8 +353,9 @@ describe("D4 litesvm end-to-end lifecycle via the SDK", () => {
     expect(o.phase).toBe(Phase.Resolved);
     expect(o.resolvedOption).toBe(agreedOption);
     expect(o.disputeBondTotal).toBe(0n); // no dispute opened
-    // No token CPI on the resolve path: the vault is untouched.
-    expect(tokenBalance(f.svm, stakeVault.address)).toBe(sumBonds);
+    // No token CPI on the resolve path: the vault is untouched — still Σ bonds +
+    // the minted emission (the uncontested reward pool the S2 claims draw from).
+    expect(tokenBalance(f.svm, stakeVault.address)).toBe(sumBonds + o.rewardEmission);
   });
 
   it("dispute slice: propose×2 (distinct options) → finalize → FactProposal with dispute_bond_total set", async () => {
@@ -380,8 +382,9 @@ describe("D4 litesvm end-to-end lifecycle via the SDK", () => {
     const sumBonds = bond * 2n;
     expect(o.totalOracleStake).toBe(sumBonds);
     expect(o.disputeBondTotal).toBe(sumBonds);
-    // Vault still holds Σ bonds (no token CPI on the open-dispute path either).
+    // Vault still holds Σ bonds + the minted emission (no token CPI on the
+    // open-dispute path either).
     const stakeVault = await pda.stakeVault(oracle);
-    expect(tokenBalance(f.svm, stakeVault.address)).toBe(sumBonds);
+    expect(tokenBalance(f.svm, stakeVault.address)).toBe(sumBonds + o.rewardEmission);
   });
 });

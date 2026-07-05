@@ -486,7 +486,10 @@ describe("decode a REAL program-created Protocol (litesvm + init_protocol)", () 
     expect(p.feeEma).toBe(0n);
     expect(p.lastCreationUnix).toBe(0n);
     expect(p.governanceSet).toBe(false);
-    expect(p.emissionDen).toBe(1n);
+    // Emission ON by default (config.rs: EMISSION_NUM/DEN, TOTAL_SUPPLY_CAP).
+    expect(p.emissionNum).toBe(1n);
+    expect(p.emissionDen).toBe(1_000_000n);
+    expect(p.totalSupplyCap).toBe(1_000_000_000_000_000_000n);
     expect(p.thresholdNum).toBe(2n);
     expect(p.thresholdDen).toBe(3n);
     expect(p.challengeFailUsdcFeeDen).toBe(100n);

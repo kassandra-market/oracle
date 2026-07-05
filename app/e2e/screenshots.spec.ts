@@ -33,7 +33,11 @@ async function connected(page: Page): Promise<void> {
 }
 
 async function shot(page: Page, name: string): Promise<void> {
-  await page.waitForLoadState('networkidle').catch(() => {})
+  // Bound the network-idle wait: the app polls its RPC on an interval, so the
+  // network is never truly idle and an UNBOUNDED wait stalls each screenshot
+  // until the whole test hits its timeout. Give it a short window to settle,
+  // then capture regardless (the 600ms buffer + prior navigation cover render).
+  await page.waitForLoadState('networkidle', { timeout: 2_500 }).catch(() => {})
   await page.waitForTimeout(600)
   await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: true })
 }
