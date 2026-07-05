@@ -28,3 +28,6 @@ app/blob-report/
 # Rust indexer build output
 indexer/target/
 app/e2e/indexer/.wallet.json
+
+# runtime service logs from `make dev` (scripts/dev-full.sh)
+/logs/

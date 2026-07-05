@@ -99,7 +99,10 @@ chain: ## Boot surfpool + deploy + seed oracles, and HOLD (Ctrl-C to stop)
 app-local: ## Run the app dev server against the local surfpool (VITE_E2E funded wallet)
 	scripts/dev-up.sh app
 
-dev: ## Boot the seeded local chain AND the app dev server together
+dev: ## Full production-like local stack: surfpool + indexer + mock-runner + app (real wallet); logs/ + Ctrl-C teardown
+	scripts/dev-full.sh
+
+dev-e2e: ## Lighter dev: seeded chain + app in VITE_E2E mode (auto-connected scripted wallet, no indexer)
 	scripts/dev-up.sh all
 
 indexer-run: ## Run the indexer binary (needs RPC_URL + DATABASE_URL in the env)
