@@ -1,10 +1,50 @@
-import { defineConfig } from 'vite'
+import { existsSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+const rootDir = dirname(fileURLToPath(import.meta.url))
+
+/**
+ * Dev-only: under `VITE_E2E=1` (what `make dev` / dev-up.sh set), inject the
+ * funded local-dev keypair `dev-seed.ts` wrote to `e2e/.wallet.json` as
+ * `window.__E2E_WALLET_SECRET__` — the exact global the Playwright specs set via
+ * `addInitScript`, and the one `E2eWalletProvider` reads. Without this,
+ * interactive `make dev` (no Playwright) has no way to reach the funded wallet,
+ * so the app falls back to the empty wallet-adapter modal ("You'll need a wallet
+ * on Solana to continue"). Read per page-load, so it works even though the chain
+ * seeder writes the file concurrently with the dev server starting. `serve`-only
+ * (never runs in a production build) and gated on VITE_E2E; the injected secret
+ * is a throwaway keypair funded only on the local surfpool chain.
+ */
+function injectE2eWallet(): Plugin {
+  return {
+    name: 'inject-e2e-wallet',
+    apply: 'serve',
+    transformIndexHtml() {
+      if (process.env.VITE_E2E !== '1') return
+      const walletFile = resolve(rootDir, 'e2e/.wallet.json')
+      if (!existsSync(walletFile)) return
+      const { secretKey } = JSON.parse(readFileSync(walletFile, 'utf8')) as {
+        secretKey: number[]
+      }
+      if (!Array.isArray(secretKey) || secretKey.length === 0) return
+      return [
+        {
+          tag: 'script',
+          injectTo: 'head-prepend' as const,
+          children: `window.__E2E_WALLET_SECRET__ = ${JSON.stringify(secretKey)};`,
+        },
+      ]
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [injectE2eWallet(), react(), tailwindcss()],
   build: {
     rollupOptions: {
       output: {

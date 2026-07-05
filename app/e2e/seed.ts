@@ -215,13 +215,25 @@ export async function createOracleReal(
 }
 
 /**
- * Push an oracle's `phase_ends_at` (i64 at byte offset 144) to the far future so
- * its CURRENT phase window stays OPEN at test time — regardless of how far later
- * seeding advances the shared surfpool clock. surfpool's time-travel is
- * forward-only, so we cannot rewind the clock into a closed window; instead we
- * move the window's end past every future clock position. The phase itself is
- * unchanged, so the phase-gated action (submit fact / vote / submit AI claim) is
- * still legal.
+ * How far ahead of the current chain clock to push a kept-open window's
+ * `phase_ends_at`. It must clear every clock advance for the rest of seeding AND
+ * the ensuing browse/test session — but seeding only elapses a handful of ~1h
+ * phase windows (a few hours of chain time in practice), so a WEEK is ample
+ * headroom. It must NOT be absurdly large (the old value was 1e9 s ≈ 31 years),
+ * because the app renders the remaining time literally ("ends in …"): a 1e9-s
+ * window shows as "ends in 11574d", which reads as broken. A week shows a sane
+ * "ends in 7d".
+ */
+const KEEP_OPEN_AHEAD_SECS = 7n * 24n * 3600n
+
+/**
+ * Push an oracle's `phase_ends_at` (i64 at byte offset 144) into the near future
+ * (see {@link KEEP_OPEN_AHEAD_SECS}) so its CURRENT phase window stays OPEN at
+ * test/browse time — regardless of how far later seeding advances the shared
+ * surfpool clock. surfpool's time-travel is forward-only, so we cannot rewind
+ * the clock into a closed window; instead we move the window's end past every
+ * clock position seeding will reach. The phase itself is unchanged, so the
+ * phase-gated action (submit fact / vote / submit AI claim) is still legal.
  */
 export async function keepWindowOpen(ctx: SeedCtx, oracle: Address): Promise<void> {
   const { KASSANDRA_PROGRAM_ID } = await import('@kassandra/sdk')
@@ -229,7 +241,7 @@ export async function keepWindowOpen(ctx: SeedCtx, oracle: Address): Promise<voi
   if (!info) throw new Error(`oracle ${oracle} not found for window patch`)
   const data = Uint8Array.from(info.data as Uint8Array)
   const now = await ctx.harness.clockUnixTimestamp()
-  new DataView(data.buffer).setBigInt64(144, now + 1_000_000_000n, true)
+  new DataView(data.buffer).setBigInt64(144, now + KEEP_OPEN_AHEAD_SECS, true)
   await ctx.harness.setAccount(oracle.toString(), {
     lamports: Number((info as { lamports?: bigint | number }).lamports ?? 5_000_000),
     owner: KASSANDRA_PROGRAM_ID.toString(),
