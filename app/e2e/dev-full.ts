@@ -42,6 +42,7 @@ import {
   openProposals,
   submitOneFact,
 } from './seed.ts'
+import { seedMarkets } from './seed-market.ts'
 import { startEphemeralPg, type EphemeralPg } from './indexer/pg.ts'
 
 const SURFPOOL_PORT = 8899
@@ -194,6 +195,18 @@ async function main(): Promise<void> {
     oracles.resolved = { nonce: '4', address: o.toString() }
   }
 
+  // ── 1b) deploy the market program (+ MetaDAO fixtures) + seed demo markets ──
+  // Same surfpool node, same KASS mint — so the single indexer picks up both and
+  // the app's /markets section is populated. Best-effort: a market-seed failure
+  // must not sink the whole dev stack (the oracle side is already useful).
+  log('[dev] deploying the market program + seeding demo markets…')
+  let markets: Record<string, unknown> | null = null
+  try {
+    markets = await seedMarkets(ctx, oracles)
+  } catch (e) {
+    log(`[dev] ⚠ market seeding failed (oracle stack still up): ${(e as Error).message}`)
+  }
+
   // Keep the VITE_E2E fixture in sync too, so `make dev-e2e` / Playwright still work.
   writeFileSync(
     WALLET_FILE,
@@ -205,6 +218,7 @@ async function main(): Promise<void> {
         kassMint: ctx.kassMint.publicKey.toString(),
         usdcMint: ctx.usdcMint.publicKey.toString(),
         oracles,
+        markets,
       },
       null,
       2,
