@@ -19,7 +19,7 @@ import {
   decodeError,
 } from "../src/constants.js";
 
-describe("parity guard: Ix discriminants (instruction.rs 0..=22)", () => {
+describe("parity guard: Ix discriminants (instruction.rs 0..=23)", () => {
   // Pinned from programs/kassandra/src/instruction.rs.
   const PINNED: Record<string, number> = {
     SubmitFact: 0,
@@ -53,10 +53,10 @@ describe("parity guard: Ix discriminants (instruction.rs 0..=22)", () => {
     }
   });
 
-  it("has exactly 23 instructions (0..=22), no more, no fewer", () => {
+  it("has exactly 24 instructions (0..=23), no more, no fewer", () => {
     const numericValues = Object.values(Ix).filter((v) => typeof v === "number");
     expect(numericValues.sort((a, b) => (a as number) - (b as number))).toEqual(
-      Array.from({ length: 23 }, (_, i) => i),
+      Array.from({ length: 24 }, (_, i) => i),
     );
   });
 });
@@ -103,7 +103,7 @@ describe("parity guard: account sizes (tests/state_layout.rs)", () => {
   // Pinned absolute on-chain ABI sizes from `account_sizes_are_stable`.
   const PINNED = {
     Protocol: 368,
-    Oracle: 392,
+    Oracle: 360,
     Proposer: 96,
     Fact: 336,
     FactVote: 88,

@@ -65,6 +65,12 @@ export function stakeVault(oracleAddr: AddressInput, programId?: Address): Promi
   return derive([enc.encode("vault"), pubkeyBytes(oracleAddr)], programId);
 }
 
+/** Oracle-metadata PDA — seeds `[b"oracle_meta", oracle]`. Holds the plaintext
+ *  subject + option labels + uri/uri_hash written by `write_oracle_meta`. */
+export function oracleMeta(oracleAddr: AddressInput, programId?: Address): Promise<Pda> {
+  return derive([enc.encode("oracle_meta"), pubkeyBytes(oracleAddr)], programId);
+}
+
 /** Proposer PDA — seeds `[b"proposer", oracle, authority]`. */
 export function proposer(
   oracleAddr: AddressInput,

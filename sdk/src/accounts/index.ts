@@ -9,6 +9,7 @@
 export * from "./common.js";
 export * from "./protocol.js";
 export * from "./oracle.js";
+export * from "./oracleMeta.js";
 export * from "./proposer.js";
 export * from "./fact.js";
 export * from "./factVote.js";
