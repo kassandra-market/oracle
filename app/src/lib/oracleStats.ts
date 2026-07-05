@@ -40,6 +40,7 @@ export type PhaseFilter =
   | 'aiClaim'
   | 'challenge'
   | 'resolved'
+  | 'invalidDeadend'
 
 /** How the grid is ordered. */
 export type SortBy = 'deadline' | 'bondsAtRisk'
@@ -101,9 +102,17 @@ export interface OracleStats {
   counts: PhaseCounts
   /**
    * Sum of {@link oracleBonds} across NON-terminal (active) oracles — the capital
-   * still contestable on chain, in raw base units (unscaled).
+   * still contestable on chain, in raw base units (the UI scales it to KASS).
    */
   bondsAtRisk: bigint
+  /**
+   * The monetary breakdown of {@link bondsAtRisk} across active oracles — the
+   * surviving-proposer bond pool, the dispute bonds, and the total staked. Raw
+   * base units (the UI scales them to KASS). Sum == {@link bondsAtRisk}.
+   */
+  bondPoolActive: bigint
+  disputeBondsActive: bigint
+  stakedActive: bigint
   /** How many oracles are in the terminal `Resolved` phase. */
   resolvedCount: number
   /**
@@ -131,11 +140,19 @@ export function deriveStats(summaries: OracleSummary[]): OracleStats {
     total: 0,
   }
   let bondsAtRisk = 0n
+  let bondPoolActive = 0n
+  let disputeBondsActive = 0n
+  let stakedActive = 0n
 
   for (const { oracle } of summaries) {
     counts[phaseGroup(oracle.phase)] += 1
     counts.total += 1
-    if (!isTerminal(oracle.phase)) bondsAtRisk += oracleBonds(oracle)
+    if (!isTerminal(oracle.phase)) {
+      bondsAtRisk += oracleBonds(oracle)
+      bondPoolActive += oracle.bondPool
+      disputeBondsActive += oracle.disputeBondTotal
+      stakedActive += oracle.totalOracleStake
+    }
   }
 
   const recentResolved = summaries
@@ -145,7 +162,15 @@ export function deriveStats(summaries: OracleSummary[]): OracleStats {
     .slice(0, RECENT_RESOLVED_LIMIT)
     .map((s) => ({ pubkey: s.pubkey, resolvedOption: s.oracle.resolvedOption }))
 
-  return { counts, bondsAtRisk, resolvedCount: counts.resolved, recentResolved }
+  return {
+    counts,
+    bondsAtRisk,
+    bondPoolActive,
+    disputeBondsActive,
+    stakedActive,
+    resolvedCount: counts.resolved,
+    recentResolved,
+  }
 }
 
 /**

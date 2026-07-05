@@ -1,19 +1,25 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 
 /**
- * On-brand chip tones. `ember` is the single reserved punctuation accent
- * (the Auros rule: ember/saffron only 1–2 moments per viewport) — used for the
- * active "Challenged" status; everything else stays achromatic-warm.
+ * On-brand chip tones. `ember` is the reserved punctuation accent (the active
+ * "Challenged" moment). `info` (cyan) and `accent` (lavender) are SUBTLE, low-
+ * opacity phase hints — just enough color to let the eye distinguish the
+ * mid-flight phases at a glance, never loud. The label text is always present, so
+ * color is never the only signal (a11y `color-not-only`).
  */
-export type ChipTone = 'neutral' | 'ember' | 'confirmed' | 'muted'
+export type ChipTone = 'neutral' | 'info' | 'accent' | 'ember' | 'confirmed' | 'muted'
 
 const toneClass: Record<ChipTone, string> = {
-  // Mid-flight states — quiet sepia/bronze on soft-cream.
+  // Opening / quiet default — achromatic warm.
   neutral: 'border-pebble bg-soft-cream text-bronze',
-  // The single ember punctuation moment — the active challenge.
+  // Subtle cyan hint — evidence being staked/voted (in dispute).
+  info: 'border-cobalt/30 bg-cobalt/10 text-cyan-phosphor',
+  // Subtle lavender hint — AI adjudication in progress.
+  accent: 'border-lavender-phosphor/30 bg-lavender-phosphor/10 text-lavender-phosphor',
+  // The ember punctuation moment — the active challenge.
   ember: 'border-ember-orange/40 bg-ember-orange/10 text-ember-orange',
-  // A calm, grounded "confirmed" for resolution.
-  confirmed: 'border-pebble bg-soft-cream text-chestnut',
+  // A calm, grounded aqua "confirmed" for resolution.
+  confirmed: 'border-chestnut/30 bg-chestnut/10 text-chestnut',
   // Lowest-emphasis stone for dead-ends / disqualified.
   muted: 'border-pebble bg-transparent text-stone',
 }

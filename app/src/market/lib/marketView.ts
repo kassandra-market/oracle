@@ -15,17 +15,19 @@ export const RESOLVED_OPTION_NONE = 0xff;
 /** KASS mint decimals (raw base units → human amount). */
 export const KASS_DECIMALS = 9;
 
-/** On-brand chip tones (mirrors the sibling `Chip` vocabulary). */
-export type ChipTone = "neutral" | "ember" | "confirmed" | "muted";
+/** On-brand chip tones (mirrors the sibling oracle `Chip` vocabulary). */
+export type ChipTone = "neutral" | "info" | "ember" | "confirmed" | "muted";
 
 /** Tailwind class strings (Delphi tokens) per {@link ChipTone}. */
 export const CHIP_TONE_CLASSES: Record<ChipTone, string> = {
-  // Mid-flight states — quiet sepia/bronze on soft-cream.
+  // Quiet default — achromatic warm.
   neutral: "border-pebble bg-soft-cream text-bronze",
+  // Subtle cyan hint — crowdfunding in progress (Funding).
+  info: "border-cobalt/30 bg-cobalt/10 text-cyan-phosphor",
   // The single ember punctuation moment — the live/active market.
   ember: "border-ember-orange/40 bg-ember-orange/10 text-ember-orange",
-  // A calm, grounded "confirmed" for resolution.
-  confirmed: "border-pebble bg-soft-cream text-chestnut",
+  // A calm, grounded aqua "confirmed" for resolution.
+  confirmed: "border-chestnut/30 bg-chestnut/10 text-chestnut",
   // Lowest-emphasis stone for voided / cancelled.
   muted: "border-pebble bg-transparent text-stone",
 };
@@ -59,6 +61,7 @@ export function statusTone(status: MarketStatus): ChipTone {
     case MarketStatus.Cancelled:
       return "muted";
     case MarketStatus.Funding:
+      return "info";
     default:
       return "neutral";
   }

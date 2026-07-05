@@ -219,6 +219,7 @@ export default function Oracles() {
             onFilter={setFilter}
             sort={sort}
             onSort={setSort}
+            counts={stats.counts}
             shown={visible.length}
           />
           {visible.length === 0 ? (

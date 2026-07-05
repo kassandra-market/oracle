@@ -127,7 +127,8 @@ describe('verdictFor', () => {
     expect(v.kind).toBe('in-flight')
     expect(v.title).toBe('In fact voting')
     expect(v.detail.length).toBeGreaterThan(0)
-    expect(v.tone).toBe('neutral')
+    // Subtle cyan `info` hint for the fact-staking phases (see phaseView).
+    expect(v.tone).toBe('info')
   })
 
   it('Challenge → in-flight, reuses the ember tone from phaseView', () => {

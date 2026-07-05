@@ -19,9 +19,11 @@ export interface PhaseView {
 
 /**
  * Map an on-chain {@link Phase} to a readable label + an on-brand chip tone.
- * Ember is used ONLY for the active Challenge (the 1–2 status punctuation
- * moments per the Auros rules); resolution is a calm "confirmed" chestnut,
- * dead-ends are muted stone, everything mid-flight is neutral sepia/bronze.
+ * Subtle, low-opacity color hints track the lifecycle so the eye can tell the
+ * phases apart: neutral at the open (Created/Proposal), a cyan `info` hint while
+ * facts are staked/voted, a lavender `accent` while the AI adjudicates, the ember
+ * spark for the active Challenge, a calm aqua `confirmed` at resolution, and muted
+ * stone for dead-ends. The label text always names the phase (never color-only).
  */
 export function phaseView(phase: Phase | undefined): PhaseView {
   switch (phase) {
@@ -30,15 +32,15 @@ export function phaseView(phase: Phase | undefined): PhaseView {
     case Phase.Proposal:
       return { label: 'Proposal', tone: 'neutral' }
     case Phase.FactProposal:
-      return { label: 'Fact proposal', tone: 'neutral' }
+      return { label: 'Fact proposal', tone: 'info' }
     case Phase.FactVoting:
-      return { label: 'Fact voting', tone: 'neutral' }
+      return { label: 'Fact voting', tone: 'info' }
     case Phase.AiClaim:
-      return { label: 'AI claim', tone: 'neutral' }
+      return { label: 'AI claim', tone: 'accent' }
     case Phase.Challenge:
       return { label: 'Challenged', tone: 'ember' }
     case Phase.FinalRecompute:
-      return { label: 'Final recompute', tone: 'neutral' }
+      return { label: 'Final recompute', tone: 'accent' }
     case Phase.Resolved:
       return { label: 'Resolved', tone: 'confirmed' }
     case Phase.InvalidDeadend:
@@ -77,6 +79,29 @@ export function groupDigits(n: bigint): string {
   const neg = n < 0n
   const s = (neg ? -n : n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
   return neg ? `-${s}` : s
+}
+
+/** KASS mint decimals (raw base units → human amount). Mirrors the market SDK. */
+export const KASS_DECIMALS = 9
+
+/**
+ * Format a raw base-unit KASS amount ({@link KASS_DECIMALS} decimals) as a human,
+ * SCALED figure with grouped whole digits and a trimmed fraction: `1_500_000_000n`
+ * → `1.5`. KASS is ALWAYS shown scaled in the UI (never raw base units).
+ */
+export function formatKass(amount: bigint): string {
+  const neg = amount < 0n
+  const abs = neg ? -amount : amount
+  const scale = 10n ** BigInt(KASS_DECIMALS)
+  const whole = abs / scale
+  const frac = abs % scale
+  const wholeStr = groupDigits(whole)
+  let out = wholeStr
+  if (frac > 0n) {
+    const fracStr = frac.toString().padStart(KASS_DECIMALS, '0').replace(/0+$/, '')
+    out = `${wholeStr}.${fracStr}`
+  }
+  return neg ? `-${out}` : out
 }
 
 /** A coarse duration label for a non-negative number of seconds: `3d` / `4h` / `12m` / `30s`. */

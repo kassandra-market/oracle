@@ -5,14 +5,13 @@ import { useWalletMenu } from '../../lib/standardWallet'
 import { Button } from '../ui'
 import { useCluster, CLUSTER_LABELS, isGatewayMode, type Cluster } from '../../lib/cluster'
 
-// Left-side primary links. "Oracles" is a real route; the rest are landing
-// section anchors (they resolve on the landing page).
-const NAV_LINKS: { label: string; href: string; route?: boolean }[] = [
+// Left-side primary links: the two product routes, the Governance landing
+// section, and the (external) docs site.
+const NAV_LINKS: { label: string; href: string; route?: boolean; external?: boolean }[] = [
   { label: 'Oracles', href: '/oracles', route: true },
   { label: 'Markets', href: '/markets', route: true },
-  { label: 'How it works', href: '/#how-it-works' },
   { label: 'Governance', href: '/#why-kassandra' },
-  { label: 'Docs', href: '#' },
+  { label: 'Docs', href: 'https://dodecahedr0x.github.io/kassandra/', external: true },
 ]
 
 // On-brand focus ring (sepia, never default blue) for the plain text links.
@@ -20,13 +19,23 @@ const linkFocus =
   'rounded-sm focus-visible:outline-none focus-visible:ring-2 ' +
   'focus-visible:ring-sepia/40 focus-visible:ring-offset-2 focus-visible:ring-offset-soft-cream'
 
-const linkClass = `font-inter text-[14px] text-bronze transition-colors hover:text-sepia ${linkFocus}`
+const navBase = `font-inter text-[14px] transition-colors ${linkFocus}`
+const linkClass = `${navBase} text-bronze hover:text-sepia`
+// Active route link: brighter text + a subtle chestnut underline hint (aria-current
+// carries the semantic; color is never the only signal).
+const activeLinkClass = `${navBase} text-sepia underline decoration-chestnut/70 underline-offset-[6px]`
 
 // The mobile-menu row variant — a full-width, ≥44px-tall tap target (touch
 // guideline) with the same on-brand hover + focus treatment as the inline links.
-const mobileLinkClass =
-  `flex min-h-[44px] items-center font-inter text-[15px] text-bronze transition-colors ` +
-  `hover:text-sepia ${linkFocus}`
+const mobileBase = `flex min-h-[44px] items-center font-inter text-[15px] transition-colors ${linkFocus}`
+const mobileLinkClass = `${mobileBase} text-bronze hover:text-sepia`
+const mobileActiveLinkClass = `${mobileBase} text-sepia`
+
+/** True when a route link matches the current path (exact or a sub-route). */
+function isActiveLink(link: { href: string; route?: boolean }, pathname: string): boolean {
+  if (!link.route) return false
+  return pathname === link.href || pathname.startsWith(`${link.href}/`)
+}
 
 function truncateAddress(addr: string): string {
   return `${addr.slice(0, 4)}…${addr.slice(-4)}`
@@ -196,19 +205,30 @@ export default function NavBar() {
             {open ? <CloseIcon /> : <MenuIcon />}
           </button>
           <ul className="hidden flex-1 items-center gap-6 md:flex">
-            {NAV_LINKS.map((l) => (
-              <li key={l.label}>
-                {l.route ? (
-                  <Link to={l.href} className={linkClass}>
-                    {l.label}
-                  </Link>
-                ) : (
-                  <a href={l.href} className={linkClass}>
-                    {l.label}
-                  </a>
-                )}
-              </li>
-            ))}
+            {NAV_LINKS.map((l) => {
+              const active = isActiveLink(l, location.pathname)
+              return (
+                <li key={l.label}>
+                  {l.route ? (
+                    <Link
+                      to={l.href}
+                      className={active ? activeLinkClass : linkClass}
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      {l.label}
+                    </Link>
+                  ) : (
+                    <a
+                      href={l.href}
+                      className={linkClass}
+                      {...(l.external ? { target: '_blank', rel: 'noreferrer noopener' } : {})}
+                    >
+                      {l.label}
+                    </a>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </div>
 
@@ -232,19 +252,32 @@ export default function NavBar() {
       {open ? (
         <div id="mobile-nav-menu" className="border-t border-pebble md:hidden">
           <ul className="flex flex-col px-6 py-1">
-            {NAV_LINKS.map((l) => (
-              <li key={l.label}>
-                {l.route ? (
-                  <Link to={l.href} className={mobileLinkClass} onClick={() => setOpen(false)}>
-                    {l.label}
-                  </Link>
-                ) : (
-                  <a href={l.href} className={mobileLinkClass} onClick={() => setOpen(false)}>
-                    {l.label}
-                  </a>
-                )}
-              </li>
-            ))}
+            {NAV_LINKS.map((l) => {
+              const active = isActiveLink(l, location.pathname)
+              return (
+                <li key={l.label}>
+                  {l.route ? (
+                    <Link
+                      to={l.href}
+                      className={active ? mobileActiveLinkClass : mobileLinkClass}
+                      aria-current={active ? 'page' : undefined}
+                      onClick={() => setOpen(false)}
+                    >
+                      {l.label}
+                    </Link>
+                  ) : (
+                    <a
+                      href={l.href}
+                      className={mobileLinkClass}
+                      onClick={() => setOpen(false)}
+                      {...(l.external ? { target: '_blank', rel: 'noreferrer noopener' } : {})}
+                    >
+                      {l.label}
+                    </a>
+                  )}
+                </li>
+              )
+            })}
           </ul>
           <div className="border-t border-pebble px-6 py-4">
             <ClusterSelector mobile />
