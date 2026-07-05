@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Kassandra",
-  "description": "A decentralized, AI-assisted optimistic oracle on Solana.",
+  "description": "A decentralized, AI-assisted optimistic oracle on Solana — and the KASS prediction market resolved by it.",
   "colors": {
     "primary": "#00827c",
     "light": "#cbfffc",
@@ -25,7 +25,7 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Documentation",
+        "tab": "Oracle",
         "groups": [
           {
             "group": "Get started",
@@ -62,17 +62,6 @@
             ]
           },
           {
-            "group": "Prediction markets",
-            "pages": [
-              "market/overview",
-              "market/lifecycle",
-              "market/crowdfunding",
-              "market/activation",
-              "market/resolution",
-              "market/app"
-            ]
-          },
-          {
             "group": "dApp guide",
             "pages": [
               "app/run-locally",
@@ -85,30 +74,7 @@
             ]
           },
           {
-            "group": "Operations",
-            "pages": [
-              "ops/clusters-and-rpc",
-              "ops/deploy-program",
-              "ops/runner",
-              "ops/docs-site"
-            ]
-          },
-          {
-            "group": "Contributing",
-            "pages": [
-              "contributing/repo-layout",
-              "contributing/build-and-test",
-              "contributing/conventions",
-              "contributing/glossary"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Reference",
-        "groups": [
-          {
-            "group": "Protocol",
+            "group": "Protocol reference",
             "pages": [
               "protocol/overview",
               "protocol/instructions",
@@ -133,7 +99,63 @@
             ]
           },
           {
-            "group": "Market protocol",
+            "group": "SDK",
+            "pages": [
+              "sdk/overview",
+              "sdk/instruction-builders",
+              "sdk/account-decoders",
+              "sdk/pdas",
+              "sdk/amm-v04",
+              "sdk/futarchy",
+              "sdk/recipes"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "ops/clusters-and-rpc",
+              "ops/deploy-program",
+              "ops/runner",
+              "ops/docs-site"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "contributing/repo-layout",
+              "contributing/build-and-test",
+              "contributing/conventions",
+              "contributing/glossary"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Markets",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": [
+              "market/overview",
+              "market/lifecycle"
+            ]
+          },
+          {
+            "group": "Lifecycle guide",
+            "pages": [
+              "market/crowdfunding",
+              "market/activation",
+              "market/resolution"
+            ]
+          },
+          {
+            "group": "dApp guide",
+            "pages": [
+              "market/app"
+            ]
+          },
+          {
+            "group": "Protocol reference",
             "pages": [
               "market-protocol/overview",
               "market-protocol/instructions",
@@ -145,13 +167,6 @@
           {
             "group": "SDK",
             "pages": [
-              "sdk/overview",
-              "sdk/instruction-builders",
-              "sdk/account-decoders",
-              "sdk/pdas",
-              "sdk/amm-v04",
-              "sdk/futarchy",
-              "sdk/recipes",
               "sdk/market"
             ]
           }
