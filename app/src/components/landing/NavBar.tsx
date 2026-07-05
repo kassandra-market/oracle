@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useWallet } from '@solana/wallet-adapter-react'
-import { useWalletModal } from '@solana/wallet-adapter-react-ui'
+import { useWalletMenu } from '../../lib/standardWallet'
 import { Button } from '../ui'
 import { useCluster, CLUSTER_LABELS, isGatewayMode, type Cluster } from '../../lib/cluster'
 
@@ -74,7 +74,7 @@ function ClusterSelector() {
  */
 function ConnectControl() {
   const { publicKey, connected, connecting, disconnect } = useWallet()
-  const { setVisible } = useWalletModal()
+  const { setOpen } = useWalletMenu()
 
   if (connected && publicKey) {
     const addr = publicKey.toBase58()
@@ -95,7 +95,7 @@ function ConnectControl() {
       variant="NavPill"
       aria-label="Connect wallet"
       disabled={connecting}
-      onClick={() => setVisible(true)}
+      onClick={() => setOpen(true)}
     >
       {connecting ? 'Connecting…' : 'Connect wallet'}
     </Button>
