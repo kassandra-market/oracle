@@ -78,7 +78,14 @@ export default function CreateOracle() {
   const [nonce] = useState<bigint>(() => randomNonce())
 
   const [question, setQuestion] = useState('')
-  const [optionsCount, setOptionsCount] = useState(2)
+  // Option LABELS (min 2). These drive options_count AND are published (with the
+  // subject) as a memo so the browse/detail views can show them.
+  const [options, setOptions] = useState<string[]>(['Yes', 'No'])
+  const setOption = (i: number, v: string) =>
+    setOptions((o) => o.map((x, j) => (j === i ? v : x)))
+  const addOption = () => setOptions((o) => (o.length < 12 ? [...o, ''] : o))
+  const removeOption = (i: number) =>
+    setOptions((o) => (o.length > 2 ? o.filter((_, j) => j !== i) : o))
   const [deadline, setDeadline] = useState(() =>
     toDatetimeLocal(new Date(Date.now() + 24 * 3600 * 1000)),
   )
@@ -134,6 +141,9 @@ export default function CreateOracle() {
   const validate = useCallback((): boolean => {
     const next: Record<string, string | undefined> = {}
     if (question.trim().length === 0) next.question = 'Enter a question for the oracle.'
+    if (options.length < 2) next.options = 'Provide at least 2 options.'
+    else if (options.some((o) => o.trim().length === 0))
+      next.options = 'Every option needs a label.'
     const unix = datetimeLocalToUnix(deadline)
     if (Number.isNaN(unix)) next.deadline = 'Pick a valid date and time.'
     else if (unix <= Math.floor(Date.now() / 1000))
@@ -153,7 +163,7 @@ export default function CreateOracle() {
     }
     setErrors(next)
     return Object.values(next).every((v) => !v)
-  }, [question, deadline, kassMint, usdcMint])
+  }, [question, options, deadline, kassMint, usdcMint])
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -164,7 +174,7 @@ export default function CreateOracle() {
         connection: action.connection,
         nonce,
         question,
-        optionsCount,
+        options: options.map((o) => o.trim()),
         deadline: deadlineUnix,
         creator: action.address!,
         kassMint: kassMint.trim(),
@@ -190,7 +200,7 @@ export default function CreateOracle() {
         <EyebrowTag pill>Create</EyebrowTag>
         <h1 className="mt-3 font-serif text-heading font-light text-sepia">Open an oracle</h1>
         <p className="mt-3 font-inter text-[15px] text-bronze">
-          Pose a question, set how many options it can resolve to, and a deadline. The question
+          Pose a question, label the options it can resolve to, and set a deadline. The question
           text is hashed on-chain as the oracle's prompt; proposers stake KASS behind an answer.
         </p>
       </header>
@@ -229,21 +239,47 @@ export default function CreateOracle() {
                 )}
               </Field>
 
-              <Field label="Options" hint="How many categorical answers this oracle can resolve to.">
+              <Field
+                label="Options"
+                hint="The categorical answers this oracle can resolve to (min 2). Labels are published so they show when browsing."
+                error={errors.options}
+              >
                 {(ids) => (
-                  <select
-                    id={ids.id}
-                    aria-describedby={ids.describedById}
-                    value={optionsCount}
-                    onChange={(e) => setOptionsCount(Number(e.target.value))}
-                    className={selectClass}
-                  >
-                    {Array.from({ length: 9 }, (_, i) => i + 2).map((n) => (
-                      <option key={n} value={n}>
-                        {n} options
-                      </option>
+                  <div id={ids.id} aria-describedby={ids.describedById} className="flex flex-col gap-2">
+                    {options.map((opt, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="w-5 shrink-0 text-right font-inter text-[12px] tabular-nums text-driftwood">
+                          {i}
+                        </span>
+                        <input
+                          type="text"
+                          value={opt}
+                          onChange={(e) => setOption(i, e.target.value)}
+                          placeholder={`Option ${i} label`}
+                          aria-label={`Option ${i} label`}
+                          className={`${selectClass} flex-1`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeOption(i)}
+                          disabled={options.length <= 2}
+                          aria-label={`Remove option ${i}`}
+                          className="rounded-tag border border-pebble px-2 py-2 font-inter text-[13px] text-bronze transition-colors hover:border-driftwood hover:text-sepia disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sepia/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     ))}
-                  </select>
+                    {options.length < 12 && (
+                      <button
+                        type="button"
+                        onClick={addOption}
+                        className="self-start rounded-tag border border-pebble px-3 py-2 font-inter text-[13px] text-bronze transition-colors hover:border-driftwood hover:text-sepia focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sepia/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment"
+                      >
+                        + Add option
+                      </button>
+                    )}
+                  </div>
                 )}
               </Field>
 

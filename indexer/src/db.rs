@@ -31,6 +31,18 @@ CREATE TABLE IF NOT EXISTS indexer_cursor (
   slot      BIGINT,
   CONSTRAINT cursor_singleton CHECK (id = 1)
 );
+
+-- Off-chain oracle metadata (the plaintext SUBJECT + option labels) captured from
+-- an SPL Memo instruction in the CreateOracle transaction. The chain stores only a
+-- prompt HASH + options_count, so the human-readable question/options live here;
+-- the client re-hashes `subject` against the on-chain prompt_hash to verify it.
+CREATE TABLE IF NOT EXISTS oracle_metadata (
+  oracle    TEXT   PRIMARY KEY,
+  subject   TEXT   NOT NULL,
+  options   JSONB  NOT NULL,      -- array of option-label strings
+  slot      BIGINT NOT NULL,
+  signature TEXT   NOT NULL
+);
 "#;
 
 /// One indexed Kassandra instruction.
@@ -170,4 +182,72 @@ pub async fn query_events(
             })
         })
         .collect())
+}
+
+/// Insert oracle metadata captured from a CreateOracle memo. Idempotent: an oracle
+/// PDA is created once, so a re-processed CreateOracle keeps the first row.
+pub async fn insert_oracle_meta(
+    client: &Client,
+    oracle: &str,
+    subject: &str,
+    options: &serde_json::Value,
+    slot: i64,
+    signature: &str,
+) -> Result<()> {
+    client
+        .execute(
+            "INSERT INTO oracle_metadata (oracle, subject, options, slot, signature)
+             VALUES ($1,$2,$3,$4,$5)
+             ON CONFLICT (oracle) DO NOTHING",
+            &[&oracle, &subject, options, &slot, &signature],
+        )
+        .await?;
+    Ok(())
+}
+
+fn meta_json(r: &tokio_postgres::Row) -> serde_json::Value {
+    serde_json::json!({
+        "oracle": r.get::<_, String>(0),
+        "subject": r.get::<_, String>(1),
+        "options": r.get::<_, serde_json::Value>(2),
+        "slot": r.get::<_, i64>(3),
+    })
+}
+
+/// Oracle metadata for a single oracle PDA, if captured.
+pub async fn get_oracle_meta(client: &Client, oracle: &str) -> Result<Option<serde_json::Value>> {
+    let rows = client
+        .query(
+            "SELECT oracle, subject, options, slot FROM oracle_metadata WHERE oracle = $1",
+            &[&oracle],
+        )
+        .await?;
+    Ok(rows.first().map(meta_json))
+}
+
+/// Oracle metadata for a batch of oracle PDAs (browse view). Empty input → all
+/// captured metadata (capped), so the list page can prefetch in one call.
+pub async fn list_oracle_meta(
+    client: &Client,
+    oracles: &[String],
+    limit: i64,
+) -> Result<Vec<serde_json::Value>> {
+    let rows = if oracles.is_empty() {
+        client
+            .query(
+                "SELECT oracle, subject, options, slot FROM oracle_metadata
+                 ORDER BY slot DESC LIMIT $1",
+                &[&limit.min(1000)],
+            )
+            .await?
+    } else {
+        client
+            .query(
+                "SELECT oracle, subject, options, slot FROM oracle_metadata
+                 WHERE oracle = ANY($1)",
+                &[&oracles],
+            )
+            .await?
+    };
+    Ok(rows.iter().map(meta_json).collect())
 }

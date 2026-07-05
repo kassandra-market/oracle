@@ -4,6 +4,7 @@ import { Button, Card, SectionHeader } from '../components/ui'
 import { PhaseChip } from '../components/oracles/PhaseChip'
 import { DashboardStats, OracleFilters } from '../components/oracles/DashboardStats'
 import { useOracles } from '../hooks/useOracles'
+import { useOracleMeta, type OracleMetaView } from '../hooks/useOracleMeta'
 import type { OracleSummary } from '../data/oracles'
 import { CLUSTER_LABELS, useCluster } from '../lib/cluster'
 import {
@@ -26,11 +27,21 @@ const focusRing =
   'focus-visible:ring-offset-2 focus-visible:ring-offset-parchment'
 
 /** One oracle rendered as a clickable Auros card. */
-function OracleCard({ summary, search }: { summary: OracleSummary; search: string }) {
+function OracleCard({
+  summary,
+  search,
+  meta,
+}: {
+  summary: OracleSummary
+  search: string
+  meta?: OracleMetaView
+}) {
   const { pubkey, oracle } = summary
   const { label } = phaseView(oracle.phase)
   const resolved = oracle.phase === Phase.Resolved
   const hasResolvedOption = resolved && oracle.resolvedOption !== RESOLVED_OPTION_NONE
+  const options = meta?.options ?? []
+  const SHOWN = 6
 
   return (
     <Link
@@ -45,10 +56,32 @@ function OracleCard({ summary, search }: { summary: OracleSummary; search: strin
           </span>
         </div>
 
-        <h3 className="font-serif text-subheading font-light text-sepia">{label}</h3>
-        <p className="font-mono text-[12px] text-bronze" title="Prompt hash">
-          {hashPreview(oracle.promptHash)}
-        </p>
+        {/* Subject (the question) near the top — the verified plaintext when we
+            have it, else the phase label + the raw prompt hash. */}
+        <h3 className="font-serif text-subheading font-light text-sepia">
+          {meta?.subject ?? label}
+        </h3>
+        {options.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {options.slice(0, SHOWN).map((opt, i) => (
+              <span
+                key={i}
+                className="rounded-tag border border-pebble bg-soft-cream px-2 py-0.5 font-inter text-[12px] text-bronze"
+              >
+                {opt}
+              </span>
+            ))}
+            {options.length > SHOWN && (
+              <span className="rounded-tag px-2 py-0.5 font-inter text-[12px] text-driftwood">
+                +{options.length - SHOWN}
+              </span>
+            )}
+          </div>
+        ) : (
+          <p className="font-mono text-[12px] text-bronze" title="Prompt hash">
+            {hashPreview(oracle.promptHash)}
+          </p>
+        )}
 
         <dl className="mt-auto flex flex-wrap gap-x-5 gap-y-1 font-inter text-[13px] text-bronze">
           <div className="flex gap-1">
@@ -151,6 +184,14 @@ export default function Oracles() {
     return sortOracles(filterByPhaseGroup(searched, filter), sort)
   }, [data, query, filter, sort])
 
+  // Verified plaintext subject + option labels (from the indexer), fetched once
+  // for the whole loaded set so filtering/sorting doesn't refetch.
+  const metaItems = useMemo(
+    () => (data ?? []).map((s) => ({ pubkey: s.pubkey, promptHash: s.oracle.promptHash })),
+    [data],
+  )
+  const meta = useOracleMeta(metaItems)
+
   return (
     <main className="mx-auto max-w-[1200px] px-6 py-16 md:py-20">
       <SectionHeader
@@ -233,7 +274,12 @@ export default function Oracles() {
           ) : (
             <div className={gridClass}>
               {visible.map((summary) => (
-                <OracleCard key={summary.pubkey} summary={summary} search={search} />
+                <OracleCard
+                  key={summary.pubkey}
+                  summary={summary}
+                  search={search}
+                  meta={meta.get(summary.pubkey)}
+                />
               ))}
             </div>
           )}

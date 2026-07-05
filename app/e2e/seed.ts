@@ -27,6 +27,7 @@ import {
   voteFact,
 } from '@kassandra/sdk'
 
+import { buildOracleMetaMemoIx } from '../src/data/actions/create.ts'
 import { SurfpoolHarness, mintBytes, toHex, tokenAccountBytes } from '../../sdk/test/surfpool/harness.ts'
 import { MockAnthropic } from '../../sdk/test/surfpool/mock-anthropic.ts'
 import {
@@ -155,11 +156,20 @@ export async function sendIx(
   ix: TransactionInstruction,
   signers: Keypair[] = [],
 ): Promise<void> {
+  await sendIxs(ctx, [ix], signers)
+}
+
+/** Send several ixs in ONE tx signed by the payer (+ extra signers). */
+export async function sendIxs(
+  ctx: SeedCtx,
+  ixs: TransactionInstruction[],
+  signers: Keypair[] = [],
+): Promise<void> {
   const conn = ctx.harness.connection
   const tx = new Transaction()
   tx.feePayer = ctx.payer.publicKey
   tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash
-  tx.add(ix)
+  for (const ix of ixs) tx.add(ix)
   await tx.sign(ctx.payer, ...signers)
   const sig = await conn.sendRawTransaction(await tx.serialize(), { skipPreflight: false })
   await ctx.harness.confirmSignature(sig)
@@ -197,20 +207,21 @@ export async function createOracleReal(
 ): Promise<Address> {
   const creatorKass = await fundKass(ctx, ctx.payer.publicKey.toString(), 10n ** 15n)
   const now = await ctx.harness.clockUnixTimestamp()
-  await sendIx(
-    ctx,
-    await createOracle({
-      nonce,
-      promptHash: await sha256(question),
-      optionsCount,
-      deadline: now + 1_000n + nonce * 100n,
-      twapWindow: 600n,
-      creator: ctx.payer.publicKey.toString(),
-      creatorKassToken: creatorKass,
-      kassMint: ctx.kassMint.publicKey.toString(),
-      usdcMint: ctx.usdcMint.publicKey.toString(),
-    }),
-  )
+  const createIx = await createOracle({
+    nonce,
+    promptHash: await sha256(question),
+    optionsCount,
+    deadline: now + 1_000n + nonce * 100n,
+    twapWindow: 600n,
+    creator: ctx.payer.publicKey.toString(),
+    creatorKassToken: creatorKass,
+    kassMint: ctx.kassMint.publicKey.toString(),
+    usdcMint: ctx.usdcMint.publicKey.toString(),
+  })
+  // Publish the subject + option labels as a memo (same tx) so the single indexer
+  // captures them and the browse/detail views show them (the chain has only a hash).
+  const options = Array.from({ length: optionsCount }, (_, i) => `Option ${i}`)
+  await sendIxs(ctx, [createIx, buildOracleMetaMemoIx(question, options)])
   return (await pda.oracle(nonce)).address
 }
 

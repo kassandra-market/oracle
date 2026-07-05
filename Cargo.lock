@@ -3102,6 +3102,7 @@ dependencies = [
  "solana-commitment-config 3.1.1",
  "solana-hash 3.1.0",
  "solana-instruction 3.2.0",
+ "solana-message 3.1.0",
  "solana-pubkey 3.0.0",
  "solana-rpc-client",
  "solana-signature 3.3.0",

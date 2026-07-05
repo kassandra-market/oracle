@@ -48,6 +48,11 @@ pub fn router(state: ApiState) -> Router {
         .route("/status", get(status))
         .route("/events", get(events))
         .route("/accounts/{pubkey}/events", get(account_events))
+        // Off-chain oracle metadata (plaintext subject + option labels) captured
+        // from the CreateOracle memo. `/oracles/meta?accounts=pk1,pk2` batches the
+        // browse list; `/oracles/{pubkey}/meta` is the single-oracle detail read.
+        .route("/oracles/meta", get(oracles_meta))
+        .route("/oracles/{pubkey}/meta", get(oracle_meta))
         // JSON-RPC gateway: the app performs ALL its chain work (reads, blockhash
         // for building txs, sendRawTransaction) through here, so the browser never
         // holds a Solana RPC endpoint.
@@ -138,6 +143,36 @@ async fn account_events(
             Json(serde_json::json!({ "account": pubkey, "count": rows.len(), "events": rows }))
                 .into_response()
         }
+        Err(e) => err(e).into_response(),
+    }
+}
+
+async fn oracle_meta(State(s): State<ApiState>, Path(pubkey): Path<String>) -> impl IntoResponse {
+    match db::get_oracle_meta(&s.client, &pubkey).await {
+        Ok(Some(v)) => Json(v).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "no metadata for this oracle" })),
+        )
+            .into_response(),
+        Err(e) => err(e).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct MetaQuery {
+    /// Comma-separated oracle PDAs to fetch (empty → the most-recent captured set).
+    accounts: Option<String>,
+}
+
+async fn oracles_meta(State(s): State<ApiState>, Query(q): Query<MetaQuery>) -> impl IntoResponse {
+    let oracles: Vec<String> = q
+        .accounts
+        .as_deref()
+        .map(|a| a.split(',').filter(|s| !s.is_empty()).map(str::to_string).collect())
+        .unwrap_or_default();
+    match db::list_oracle_meta(&s.client, &oracles, 500).await {
+        Ok(rows) => Json(serde_json::json!({ "count": rows.len(), "meta": rows })).into_response(),
         Err(e) => err(e).into_response(),
     }
 }

@@ -77,3 +77,36 @@ export async function fetchEvents(
 export async function fetchIndexerStatus(signal?: AbortSignal): Promise<IndexerStatus> {
   return getJson<IndexerStatus>('/status', signal)
 }
+
+/**
+ * Off-chain oracle metadata captured from the CreateOracle memo: the plaintext
+ * SUBJECT (== the hashed question) + the option LABELS. The chain stores only a
+ * prompt hash + options_count, so this is how the browse/detail views show the
+ * real question + options. The client verifies `subject` against the on-chain
+ * `prompt_hash` (see `verifyOracleSubject`); `options` are advisory (not hashed).
+ */
+export interface OracleMeta {
+  oracle: string
+  subject: string
+  options: string[]
+  slot: number
+}
+
+/**
+ * Fetch metadata for a batch of oracle PDAs. Best-effort: returns an empty map
+ * when the indexer is not configured or the request fails, so the browse view
+ * degrades gracefully to the prompt-hash display.
+ */
+export async function fetchOracleMeta(
+  pubkeys: string[],
+  signal?: AbortSignal,
+): Promise<Map<string, OracleMeta>> {
+  if (!indexerBaseUrl() || pubkeys.length === 0) return new Map()
+  try {
+    const params = new URLSearchParams({ accounts: pubkeys.join(',') })
+    const body = await getJson<{ meta: OracleMeta[] }>(`/oracles/meta?${params.toString()}`, signal)
+    return new Map(body.meta.map((m) => [m.oracle, m]))
+  } catch {
+    return new Map()
+  }
+}

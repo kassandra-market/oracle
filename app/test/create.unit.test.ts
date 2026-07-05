@@ -93,6 +93,45 @@ describe("buildCreateOracleIxs", () => {
     expect(keyShape(built.ixs[0])).toEqual(keyShape(expected));
   });
 
+  it("appends the subject+options memo and derives options_count from the labels", async () => {
+    const { creator, kassMint, usdcMint } = await fixture();
+    const question = "Which team wins?";
+    const options = ["Red", "Blue", "Draw"];
+    const built = await buildCreateOracleIxs({
+      connection: mockConnection(true),
+      nonce: 9n,
+      question,
+      options,
+      deadline: FUTURE,
+      creator,
+      kassMint,
+      usdcMint,
+    });
+
+    // createOracle ix + the memo ix (ATA already present).
+    expect(built.ixs.length).toBe(2);
+    const memo = built.ixs[1];
+    expect(memo.programId.toString()).toBe("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+    expect(memo.keys.length).toBe(0);
+    expect(new TextDecoder().decode(memo.data)).toBe(
+      JSON.stringify({ v: 1, subject: question, options }),
+    );
+
+    // options_count on the createOracle payload is derived from labels.length (3).
+    const expected = await createOracle({
+      nonce: 9n,
+      promptHash: await sha256(question),
+      optionsCount: options.length,
+      deadline: FUTURE,
+      twapWindow: 3600n,
+      creator,
+      creatorKassToken: (await associatedTokenAccount(creator, kassMint)).address,
+      kassMint,
+      usdcMint,
+    });
+    expect(Array.from(built.ixs[0].data)).toEqual(Array.from(expected.data));
+  });
+
   it("prepends an idempotent create-ATA ix when the creator's ATA is absent", async () => {
     const { creator, kassMint, usdcMint, ata } = await fixture();
     const built = await buildCreateOracleIxs({

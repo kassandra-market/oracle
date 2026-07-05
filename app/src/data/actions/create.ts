@@ -40,6 +40,25 @@ export const DEFAULT_TWAP_WINDOW = 3600n;
 /** Inclusive upper bound on `options_count` (u8; index 255 is the CLAIM_OPTION_NONE sentinel). */
 export const MAX_OPTIONS_COUNT = 255;
 
+/** The SPL Memo program — carries the off-chain oracle metadata (see below). */
+const MEMO_PROGRAM_ID = new Address("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+
+/**
+ * The chain stores only a prompt HASH + options_count, so the human-readable
+ * SUBJECT (== the hashed question) and the option LABELS are attached as an SPL
+ * Memo instruction in the create tx. The indexer captures it (keyed by the oracle
+ * PDA) and serves it; the client re-hashes `subject` against the on-chain
+ * `prompt_hash` to verify it before trusting it. Options are advisory (not hashed).
+ */
+export function buildOracleMetaMemoIx(subject: string, options: string[]): TransactionInstruction {
+  const payload = JSON.stringify({ v: 1, subject, options });
+  return new TransactionInstruction({
+    programId: MEMO_PROGRAM_ID,
+    keys: [],
+    data: new TextEncoder().encode(payload),
+  });
+}
+
 /** Coerce an {@link AddressInput} into an `Address`, re-typing a parse failure as a field error. */
 function mint(field: string, a: AddressInput): Address {
   if (a instanceof Address) return a;
@@ -103,8 +122,14 @@ export interface BuildCreateOracleArgs {
   connection: Connection;
   /** Human-readable question text — SHA-256'd into the on-chain `prompt_hash`. */
   question: string;
-  /** Categorical option count (2..255). */
-  optionsCount: number;
+  /**
+   * The option LABELS (2..255). When given, they drive `options_count` AND are
+   * attached (with the subject) as a memo so the browse/detail views can show
+   * them. Prefer this over the bare `optionsCount`.
+   */
+  options?: string[];
+  /** Categorical option count — used only when `options` is not provided. */
+  optionsCount?: number;
   /** Resolution deadline as a unix timestamp (seconds); must be in the future. */
   deadline: bigint | number;
   /** Creator authority (the signer): pays rent + is the creation-fee burn source. */
@@ -144,10 +169,18 @@ export async function buildCreateOracleIxs(
   if (args.question.trim().length === 0) {
     throw new ValidationError("question", "Question must not be empty.");
   }
-  if (!Number.isInteger(args.optionsCount) || args.optionsCount < 2) {
-    throw new ValidationError("optionsCount", "Options count must be an integer >= 2.");
+  // Option labels (preferred) drive the count + the memo; a bare `optionsCount`
+  // is still accepted (legacy / no-metadata path).
+  if (args.options) {
+    if (args.options.some((o) => o.trim().length === 0)) {
+      throw new ValidationError("options", "Option labels must not be empty.");
+    }
   }
-  if (args.optionsCount > MAX_OPTIONS_COUNT) {
+  const optionsCount = args.options ? args.options.length : args.optionsCount;
+  if (optionsCount === undefined || !Number.isInteger(optionsCount) || optionsCount < 2) {
+    throw new ValidationError("optionsCount", "There must be at least 2 options.");
+  }
+  if (optionsCount > MAX_OPTIONS_COUNT) {
     throw new ValidationError(
       "optionsCount",
       `Options count must be <= ${MAX_OPTIONS_COUNT}.`,
@@ -176,7 +209,7 @@ export async function buildCreateOracleIxs(
   const ix = await createOracle({
     nonce,
     promptHash,
-    optionsCount: args.optionsCount,
+    optionsCount,
     deadline,
     twapWindow,
     creator,
@@ -186,10 +219,12 @@ export async function buildCreateOracleIxs(
     programId: args.programId,
   });
 
-  return {
-    ixs: createIx ? [createIx, ix] : [ix],
-    nonce,
-    oracle,
-    promptHash,
-  };
+  const ixs: TransactionInstruction[] = createIx ? [createIx, ix] : [ix];
+  // Attach the plaintext subject + option labels as a memo so they can be indexed
+  // and shown when browsing (the chain keeps only the prompt hash).
+  if (args.options) {
+    ixs.push(buildOracleMetaMemoIx(args.question, args.options));
+  }
+
+  return { ixs, nonce, oracle, promptHash };
 }
