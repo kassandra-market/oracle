@@ -1,7 +1,11 @@
 @import "tailwindcss";
-/* Wallet-adapter base styles — imported here (before our overrides below) so
- * the Auros restyle reliably wins the cascade. */
-@import "@solana/wallet-adapter-react-ui/styles.css";
+/* NOTE: the wallet-adapter base stylesheet is loaded from `main.tsx` (a JS
+ * import) BEFORE this file, not `@import`ed here. Its first line is a hotlinked
+ * Google-Fonts `@import`; pulling it in after Tailwind's expansion would place
+ * that `@import` mid-bundle and break the build ("@import must precede all other
+ * statements"). Importing it as its own module keeps that `@import` at the top
+ * of its own file, and the earlier import order still lets our overrides below
+ * win the cascade. */
 
 /*
  * Auros design system — "abyssal terminal with bioluminescent data orbs".
