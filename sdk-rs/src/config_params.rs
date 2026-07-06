@@ -102,3 +102,62 @@ impl ConfigParams {
         out
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn to_payload_is_176_bytes_le_in_field_order() {
+        // Each field carries its 1-based wire position as its value, so the k-th
+        // 8-byte little-endian window MUST read back k — pinning both the
+        // field→offset order and the LE packing. A struct/array reorder (or a
+        // field dropped/duplicated) breaks exactly one window and fails here.
+        let p = ConfigParams {
+            emission_num: 1,
+            emission_den: 2,
+            total_supply_cap: 3,
+            fee_ema_halflife: 4,
+            fee_per_ema_unit: 5,
+            fee_ema_increment: 6,
+            threshold_num: 7,
+            threshold_den: 8,
+            market_threshold_num: 9,
+            market_threshold_den: 10,
+            flip_slash_num: 11,
+            flip_slash_den: 12,
+            phase_window: 13,
+            proposal_window: 14,
+            fact_vote_slash_num: 15,
+            fact_vote_slash_den: 16,
+            reward_proposer_weight: 17,
+            reward_fact_weight: 18,
+            challenge_fail_usdc_fee_num: 19,
+            challenge_fail_usdc_fee_den: 20,
+            challenge_success_kass_fee_num: 21,
+            challenge_success_kass_fee_den: 22,
+        };
+        let payload = p.to_payload();
+        assert_eq!(payload.len(), 176);
+        for k in 0..22usize {
+            let off = k * 8;
+            let word = u64::from_le_bytes(payload[off..off + 8].try_into().unwrap());
+            assert_eq!(
+                word,
+                k as u64 + 1,
+                "field #{} at offset {off} out of order",
+                k + 1
+            );
+        }
+    }
+
+    #[test]
+    fn defaults_encode_a_valid_full_width_payload() {
+        let payload = ConfigParams::defaults().to_payload();
+        assert_eq!(payload.len(), 176);
+        // emission_den (field #2 @8) and reward_proposer_weight (#17 @128) default
+        // to 1 — the struct's non-zero baselines land at their pinned offsets.
+        assert_eq!(u64::from_le_bytes(payload[8..16].try_into().unwrap()), 1);
+        assert_eq!(u64::from_le_bytes(payload[128..136].try_into().unwrap()), 1);
+    }
+}
