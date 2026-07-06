@@ -268,3 +268,40 @@ jobs:
         run: pnpm --filter ./app exec playwright test
         env:
           SURFPOOL_BIN: /usr/local/bin/surfpool
+
+  db-it:
+    name: Indexer · Postgres integration
+    runs-on: ubuntu-latest
+    # The db-layer tests run the REAL Postgres-specific SQL (JSONB, ANY($1) arrays,
+    # $N placeholders, ON CONFLICT … EXCLUDED) against a throwaway Postgres service —
+    # a SQLite stand-in would exercise a rewritten query. They self-skip everywhere
+    # else (no TEST_DATABASE_URL), so this is the only job that needs a database.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo + target
+        uses: Swatinem/rust-cache@v2
+
+      # Compiles only the indexer (no .so needed); the db integration test runs
+      # against the service Postgres, every other indexer test runs as usual.
+      - name: Indexer tests against real Postgres
+        run: cargo test -p kassandra-indexer
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
