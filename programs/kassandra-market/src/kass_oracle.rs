@@ -14,7 +14,7 @@
 //!   - tag / phase / offsets ← `kassandra/programs/kassandra/src/state.rs`
 //!     (`AccountType::Oracle == 1`, `Phase::Resolved == 7`,
 //!     `Phase::InvalidDeadend == 8`, `Oracle` is `#[repr(C)]` packed with
-//!     `size_of == 392`; `options_count`/`phase`/`resolved_option` sit at the
+//!     `size_of == 360`; `options_count`/`phase`/`resolved_option` sit at the
 //!     offsets below). The market test harness stamps the same offsets, and the
 //!     oracle-gated create/cancel/activate/resolve tests prove the reads match.
 
@@ -29,7 +29,9 @@ pub const KASSANDRA_PROGRAM_ID: Address =
 pub const ORACLE_ACCOUNT_TYPE: u8 = 1;
 
 /// `size_of::<kassandra::state::Oracle>()`; minimum data length of a real oracle.
-pub const ORACLE_LEN: usize = 392;
+/// (Was 392 before `prompt_hash` was removed from the Oracle — a stale value here
+/// rejected every real 360-byte oracle with `InvalidAccount`, breaking create_market.)
+pub const ORACLE_LEN: usize = 360;
 
 /// Byte offset of `options_count: u8` within the `Oracle` struct.
 pub const OPTIONS_COUNT_OFFSET: usize = 160;

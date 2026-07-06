@@ -11,7 +11,7 @@
  *   - `phase: u8`         @161
  *   - `resolved_option: u8` @197  (pinned; valid ONLY when `phase == Resolved`)
  *
- * The oracle account is `Oracle::LEN == 392` bytes; we require at least enough
+ * The oracle account is `Oracle::LEN == 360` bytes; we require at least enough
  * bytes to cover `resolved_option` but do NOT pin the exact size (the oracle
  * struct grows independently of this market program).
  */
