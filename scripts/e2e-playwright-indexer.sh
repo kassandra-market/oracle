@@ -34,9 +34,8 @@ if ! command -v initdb >/dev/null 2>&1 && [ -z "${PG_BIN:-}" ] \
 fi
 
 echo "==> [3/5] build the program (.so), the SDK, and the indexer binary"
-if [ ! -f "target/deploy/kassandra_program.so" ]; then
-  just build
-fi
+# Always rebuild (incremental) so a stale .so after a program change isn't deployed.
+just build
 pnpm --filter sdk build >/dev/null
 cargo build --release --locked --manifest-path indexer/Cargo.toml
 

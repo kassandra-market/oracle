@@ -25,10 +25,9 @@ if ! command -v surfpool >/dev/null 2>&1 && [ -z "${SURFPOOL_BIN:-}" ]; then
   exit 1
 fi
 
-echo "==> [2/4] build the program (.so) if missing, the runner binary, and the SDK"
-if [ ! -f "target/deploy/kassandra_program.so" ]; then
-  just build
-fi
+echo "==> [2/4] build the program (.so), the runner binary, and the SDK"
+# Always rebuild (incremental) so a stale .so after a program change isn't deployed.
+just build
 # globalSetup seeds AI claims via the REAL runner (mock Anthropic).
 if [ ! -x "target/debug/kassandra-runner" ]; then
   cargo build -p kassandra-runner

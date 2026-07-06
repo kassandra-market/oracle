@@ -17,10 +17,10 @@ MODE="${1:-all}"
 RPC_URL="http://127.0.0.1:8899"
 
 ensure_built() {
-  if [ ! -f "target/deploy/kassandra_program.so" ] || [ ! -f "target/deploy/kassandra_market_program.so" ]; then
-    echo "==> building both programs (.so)…"
-    just build
-  fi
+  # Always rebuild (incremental ~1s no-op when current) so a STALE .so left from
+  # before a program change is never deployed as-is (see dev-full.sh).
+  echo "==> building both programs (.so)…"
+  just build
   echo "==> building both SDKs…"
   pnpm --filter ./sdk build >/dev/null
   pnpm --filter ./sdk-market build >/dev/null

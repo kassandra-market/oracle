@@ -28,9 +28,12 @@ if ! command -v initdb >/dev/null 2>&1 && [ -z "${PG_BIN:-}" ] \
 fi
 
 echo "==> [2/4] build both programs (.so), both SDKs, and the indexer binary"
-if [ ! -f "target/deploy/kassandra_program.so" ] || [ ! -f "target/deploy/kassandra_market_program.so" ]; then
-  just build
-fi
+# ALWAYS (re)build the programs. `cargo build-sbf` is incremental (~1s no-op when
+# the .so is already current) and — crucially — rebuilds a STALE .so after a
+# program change. The old "build only if the .so is MISSING" guard silently
+# deployed a stale .so left from before a merge, so the current SDK's instruction
+# layout no longer matched the deployed program → "invalid instruction data".
+just build
 # The app dev server imports BOTH @kassandra/sdk and @kassandra-market/sdk, so
 # both dist/ must exist before vite starts.
 pnpm --filter ./sdk build >/dev/null
