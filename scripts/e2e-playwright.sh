@@ -29,11 +29,10 @@ if ! command -v surfpool >/dev/null 2>&1 && [ -z "${SURFPOOL_BIN:-}" ]; then
   exit 1
 fi
 
-echo "==> [2/4] build the program (.so) if missing, the runner binary, and the SDK"
-if [ ! -f "target/deploy/kassandra_program.so" ]; then
-  echo "    building program with just build…"
-  just build
-fi
+echo "==> [2/4] build the program (.so), the runner binary, and the SDK"
+# Always rebuild (incremental) so a stale .so after a program change isn't deployed.
+echo "    building programs with just build…"
+just build
 # The e2e seeds AI claims by running the REAL runner (mock Anthropic), not
 # fabricated hashes — so the runner binary must exist for globalSetup.
 if [ ! -x "target/debug/kassandra-runner" ]; then
