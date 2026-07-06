@@ -253,8 +253,13 @@ jobs:
       - name: Build runner binary
         run: cargo build -p kassandra-runner
 
-      - name: Build SDK
-        run: pnpm --filter ./sdk build
+      - name: Build SDKs (oracle + market)
+        # The app dev server resolves BOTH `@kassandra/sdk` and the market
+        # `@kassandra-market/sdk` (its `exports` point at `dist/`), so the Markets
+        # pages need the market SDK built too — else Vite fails to resolve it.
+        run: |
+          pnpm --filter ./sdk build
+          pnpm --filter ./sdk-market build
 
       - name: Install Playwright Chromium
         run: pnpm --filter ./app exec playwright install --with-deps chromium
