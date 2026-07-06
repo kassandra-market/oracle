@@ -43,7 +43,7 @@ function Toggle<T extends string>({
             aria-pressed={active}
             onClick={() => onChange(o.value)}
             className={`rounded-[10px] px-3 py-1.5 font-inter text-[13px] transition-colors ${
-              active ? "bg-chestnut text-white" : "text-sepia hover:bg-pebble/50"
+              active ? "bg-chestnut text-liquid-abyss" : "text-sepia hover:bg-pebble/50"
             }`}
           >
             {o.label}
