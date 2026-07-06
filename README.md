@@ -36,20 +36,37 @@ No zkTLS, no TEEs. Honesty is enforced **economically** (KASS staking and slashi
    surviving proposers is computed. If nothing survives (or a tie), the oracle reaches an
    **Invalid dead-end**, resolvable only by KASS governance.
 
+## Two products, one repo
+
+This monorepo hosts **two** on-chain programs and the shared surface around them:
+
+- **Kassandra** — the AI-assisted optimistic oracle described above.
+- **[Kassandra Market](./programs/kassandra-market)** — a KASS-denominated **AMM
+  prediction market** that wraps MetaDAO v0.4 `conditional_vault` + `amm` and defers
+  resolution to the oracle. Program ID `FEGNHWAB7kc7VC9CCwbvVPsv4Jykz2r2WQ758V4xCT9S`.
+
+There is a **single app** (both `/oracles` and `/markets`) and a **single indexer**
+(one Postgres, two pipelines) serving both. See the docs
+[Prediction markets](./docs-site/market/overview.mdx) section.
+
 ## Monorepo layout
 
 | Path | What it is |
 | --- | --- |
-| [`programs/kassandra/`](./programs/kassandra) | The core Solana program, written in **Pinocchio** (not Anchor). Owns oracle state, phases, facts, AI claims, plurality, staking, emissions, and the dynamic fee. Program ID `KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY`. |
+| [`programs/kassandra/`](./programs/kassandra) | The oracle Solana program, written in **Pinocchio** (not Anchor). Owns oracle state, phases, facts, AI claims, plurality, staking, emissions, and the dynamic fee. Program ID `KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY`. |
+| [`programs/kassandra-market/`](./programs/kassandra-market) | The **prediction-market** program — a Pinocchio wrapper over MetaDAO v0.4 vault + amm, resolved by the oracle. |
 | [`runner/`](./runner) | The open-source AI runner (`kassandra-runner`). Applies the fixed interpretation to the agreed facts and produces a categorical answer plus verifiable metadata. |
-| [`sdk/`](./sdk) | A hand-written TypeScript client (`@kassandra/sdk`) — instruction builders, account decoders, and PDA helpers. No IDL; layouts mirror the program. |
-| [`app/`](./app) | The frontend (Vite + React) for creating oracles, proposing, fact voting, and trading challenge markets. |
-| [`docs-site/`](./docs-site) | The Mintlify documentation site (published via GitHub Actions → GitHub Pages). |
-| [`docs/`](./docs) | Design document + the dated implementation plans (`docs/plans/`). |
+| [`sdk/`](./sdk) · [`sdk-market/`](./sdk-market) | Hand-written TypeScript clients (`@kassandra/sdk`, `@kassandra-market/sdk`) — instruction builders, account decoders, PDA helpers. No IDL; layouts mirror the programs. |
+| [`sdk-rs/`](./sdk-rs) · [`sdk-rs-market/`](./sdk-rs-market) | The Rust SDKs (`kassandra-sdk`, `kassandra-market-sdk`). |
+| [`indexer/`](./indexer) | The single Carbon indexer — two pipelines (oracle transactions → `events`; market accounts → `market_accounts`) into one Postgres, serving both read + gateway APIs. |
+| [`app/`](./app) | The single frontend (Vite + React) — both the oracle (`/oracles`) and market (`/markets`) sections. |
+| [`docs-site/`](./docs-site) | The Mintlify documentation site (published via GitHub Actions → GitHub Pages) — covers both products. |
+| [`docs/`](./docs) | Design documents + the dated implementation plans (`docs/plans/`) for both programs. |
 | [`scripts/`](./scripts) | Helper scripts — dumping MetaDAO program binaries into the test fixtures. |
 
-MetaDAO's deployed **conditional-vault + AMM** programs are reused for the pass/fail
-decision markets via CPI; Kassandra does not reimplement the vault or AMM.
+MetaDAO's deployed **conditional-vault + AMM** programs are reused via CPI — by the
+oracle for the pass/fail decision markets, and by Kassandra Market for the cYES/cNO
+AMM; neither reimplements the vault or AMM.
 
 ## Getting started
 
@@ -57,7 +74,7 @@ decision markets via CPI; Kassandra does not reimplement the vault or AMM.
 
 - **Rust** (stable — see [`rust-toolchain.toml`](./rust-toolchain.toml)) with the
   Solana toolchain (`cargo build-sbf`, from the Solana CLI / Agave).
-- **Node.js** and **pnpm** (the `sdk` and `app` form a pnpm workspace).
+- **Node.js** and **pnpm** (the `sdk`, `sdk-market`, `app`, and `docs-site` form a pnpm workspace).
 - [`just`](https://github.com/casey/just) for the program build/test recipes.
 - For the e2e / dev-stack targets: [`surfpool`](https://surfpool.run) and Postgres
   (`initdb`/`pg_ctl`).
@@ -68,12 +85,12 @@ Every useful task is a `make` target — `make help` lists them all. It delegate
 `cargo`, `just`, `pnpm`, and the `scripts/*.sh`, so there's a single surface:
 
 ```bash
-make setup       # install JS deps + build the program (.so) and SDK (first run)
-make build       # build everything (program, sdk, app, runner, indexer)
-make test        # all unit tests (rust workspace + sdk + app + indexer)
+make setup       # install JS deps + build both programs (.so) and both SDKs (first run)
+make build       # build everything (both programs, both sdks, app, runner, indexer)
+make test        # all unit tests (rust workspace + both sdks + app + indexer)
 make lint        # oxlint (app) + clippy (rust)
-make typecheck   # sdk + app tsc
-make dev         # boot a seeded local surfpool chain AND the app dev server
+make typecheck   # both sdks + app tsc
+make dev         # boot a seeded local surfpool chain (both programs) AND the app dev server
 
 make test-e2e            # browser E2E (surfpool + funded wallet + app)
 make test-e2e-fork       # mainnet-forked challenge-market E2E
@@ -81,15 +98,16 @@ make test-e2e-indexer    # surfpool + Postgres + indexer + ActivityFeed E2E
 make ci                  # exactly what CI runs
 ```
 
-`make dev` (or `make chain` alone) boots surfpool, deploys the program, and seeds a
-spread of oracles across phases — then holds the chain alive so you can browse it in
-the app. Ctrl-C tears it down.
+`make dev` boots surfpool, deploys **both** programs (+ the MetaDAO v0.4 fixtures the
+market CPIs), seeds a spread of oracles across phases **and** demo prediction markets,
+starts the single Postgres-backed indexer over both, and serves the app — then holds
+the chain alive so you can browse `/oracles` and `/markets`. Ctrl-C tears it down.
 
 ### Build & test the program
 
 ```bash
-just build            # cargo build-sbf --manifest-path programs/kassandra/Cargo.toml
-just test             # rebuilds the .so first, then runs the LiteSVM test suite
+just build            # cargo build-sbf for BOTH programs (oracle + market → target/deploy/*.so)
+just test             # rebuilds the .so files first, then runs both LiteSVM test suites
 ```
 
 The tests are **LiteSVM** unit + invariant + CPI-integration tests. `just test` depends on
@@ -99,8 +117,9 @@ The tests are **LiteSVM** unit + invariant + CPI-integration tests. `just test` 
 
 ```bash
 pnpm install
-pnpm --filter sdk build     # the app imports the built SDK
-pnpm --filter app dev       # serve the frontend locally
+pnpm --filter ./sdk build         # the app imports the built oracle SDK
+pnpm --filter ./sdk-market build  # …and the market SDK (note: `--filter sdk` won't match `@kassandra/sdk`)
+pnpm --filter ./app dev           # serve the frontend locally
 ```
 
 See each package's README for details:

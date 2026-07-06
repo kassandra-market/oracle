@@ -17,12 +17,13 @@ MODE="${1:-all}"
 RPC_URL="http://127.0.0.1:8899"
 
 ensure_built() {
-  if [ ! -f "target/deploy/kassandra_program.so" ]; then
-    echo "==> building the program (.so)…"
+  if [ ! -f "target/deploy/kassandra_program.so" ] || [ ! -f "target/deploy/kassandra_market_program.so" ]; then
+    echo "==> building both programs (.so)…"
     just build
   fi
-  echo "==> building the SDK…"
-  pnpm --filter sdk build >/dev/null
+  echo "==> building both SDKs…"
+  pnpm --filter ./sdk build >/dev/null
+  pnpm --filter ./sdk-market build >/dev/null
 }
 
 run_chain() {

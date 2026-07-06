@@ -14,6 +14,12 @@ pub fn oracle(program_id: &Pubkey, nonce: u64) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[b"oracle", &nonce.to_le_bytes()], program_id)
 }
 
+/// Oracle-metadata PDA — seeds `[b"oracle_meta", oracle]`. Holds the plaintext
+/// subject + option labels + uri/uri_hash written by `write_oracle_meta`.
+pub fn oracle_meta(program_id: &Pubkey, oracle: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[b"oracle_meta", oracle.as_ref()], program_id)
+}
+
 /// Protocol singleton PDA — seeds `[b"protocol"]`.
 pub fn protocol(program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[b"protocol"], program_id)

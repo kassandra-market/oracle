@@ -86,10 +86,20 @@ No zkTLS, no TEEs. Honesty is enforced **economically** (KASS staking and slashi
     produces a categorical answer plus verifiable metadata.
   </Card>
   <Card title="app" icon="browser" href="/architecture/dapp">
-    The frontend for creating oracles, proposing, fact voting, and trading challenge
-    markets.
+    The single frontend — both the oracle (`/oracles`) and the prediction market
+    (`/markets`) sections, served by one Vite + React dApp.
+  </Card>
+  <Card title="programs/kassandra-market" icon="chart-line" href="/market/overview">
+    A KASS-denominated **AMM prediction market** that wraps MetaDAO v0.4
+    vault + amm and defers resolution to the Kassandra oracle. One indexer serves both.
   </Card>
 </CardGroup>
+
+<Note>
+  This repo hosts **two** products: the optimistic oracle documented here, and the
+  [**Kassandra Market**](/market/overview) prediction market resolved by it. A single app
+  and a single indexer serve both.
+</Note>
 
 <Note>
   Every reference page in these docs is grounded in the actual source — instruction names,

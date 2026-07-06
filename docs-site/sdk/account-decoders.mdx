@@ -25,7 +25,7 @@ when the byte is out of range).
 | Decoder → type | On-chain account (`AccountType`) | Size (bytes) |
 | --- | --- | --- |
 | `decodeProtocol` → `Protocol` | Protocol singleton (`Protocol` = 7) | 368 |
-| `decodeOracle` → `Oracle` | Oracle (`Oracle` = 1) | 392 |
+| `decodeOracle` → `Oracle` | Oracle (`Oracle` = 1) | 360 |
 | `decodeProposer` → `Proposer` | Proposer (`Proposer` = 2) | 96 |
 | `decodeFact` → `Fact` | Fact (`Fact` = 3) | 336 |
 | `decodeFactVote` → `FactVote` | FactVote (`FactVote` = 4) | 88 |
@@ -41,13 +41,14 @@ when the byte is out of range).
     (`emissionNum` … `challengeSuccessKassFeeDen`). See the
     [Protocol layout](/protocol/accounts).
   </Accordion>
-  <Accordion title="decodeOracle → Oracle (392 bytes)">
+  <Accordion title="decodeOracle → Oracle (360 bytes)">
     Top-level dispute account. Fields include `creator, kassMint, usdcMint, stakeVault,
     deadline, phaseEndsAt, twapWindow, optionsCount, phaseRaw, phase: Phase | undefined,
     proposerCount, survivingCount, factCount, totalOracleStake, bondPool, disputeBondTotal,
-    settledCount, aiFinalizedCount, bump, resolvedOption, openChallengeCount, promptHash`,
+    settledCount, aiFinalizedCount, bump, resolvedOption, openChallengeCount`,
     the 12-field governable-param snapshot, the 4 challenge-fee fields, plus
-    `totalCorrectProposerStake, totalApprovedFactStake, rewardPool, rewardEmission`.
+    `totalCorrectProposerStake, totalApprovedFactStake, rewardPool, rewardEmission`. The
+    question and option labels live in the companion `oracle_meta` account, not on `Oracle`.
   </Accordion>
   <Accordion title="decodeProposer → Proposer (96 bytes)">
     A proposer's commitment: `oracle, authority, bond, originalOption, claimOption,

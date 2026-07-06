@@ -59,10 +59,12 @@ Kassandra's central design decision removes that ambiguity up front. When an ora
 - the **interpretation rules** — exactly how evidence maps to an answer, and
 - the **categorical options** — the finite set of allowed outcomes.
 
-All of this is immutable after creation. On-chain, the fixed prompt-plus-interpretation is
-committed as a 32-byte `prompt_hash` on the `Oracle` account (`state.rs`); the
-interpretation *text* itself lives off-chain, paired to that hash — the runner refuses to
-proceed unless `sha256(prompt_file) == oracle.prompt_hash` (`runner/src/rpc.rs`).
+All of this is immutable after creation. On-chain, the metadata lands in a companion
+`oracle_meta` PDA written atomically with the oracle (`write_oracle_meta`): the plaintext
+subject and option labels, plus a `uri` and a 32-byte `uri_hash` binding an extended
+off-chain interpretation JSON (`state.rs`). The interpretation *text* itself lives at that
+`uri` — the runner reads it from chain and refuses to proceed unless
+`sha256(json) == uri_hash` (`runner/src/rpc.rs`).
 
 <Info>
   Because the interpretation is fixed, a dispute can no longer be about *what the evidence

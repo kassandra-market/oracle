@@ -1,0 +1,55 @@
+---
+title: "PDAs"
+description: "Every kassandra-market PDA — its account, exact seed components, and deriving program — plus the external ProgramData account init_config reads."
+---
+
+Every kassandra-market account is a Program Derived Address. All are derived with
+`find_program_address` under the program
+(`crate::ID = FEGNHWAB7kc7VC9CCwbvVPsv4Jykz2r2WQ758V4xCT9S`) unless noted. The Rust
+derivers live in `sdk-rs-market/src/pda.rs`; the TypeScript mirrors are in
+[SDK · Market](/sdk/market).
+
+## Program-owned PDAs
+
+| Account | Seeds | Purpose |
+| --- | --- | --- |
+| Config (singleton) | `[b"config"]` | governed config; authority = KASS futarchy |
+| Market | `[b"market", oracle, [outcome_index]]` | per-outcome binary sub-market (binary = `outcome_index` 0) |
+| Escrow vault | `[b"escrow", market]` | SPL token account on KASS, authority = Market PDA; holds contributions |
+| Contribution | `[b"contribution", market, contributor]` | per-contributor stake record |
+| cYES holder | `[b"cyes", market]` | transient Market-PDA-owned cYES token account (split destination) |
+| cNO holder | `[b"cno", market]` | transient Market-PDA-owned cNO token account (split destination) |
+| LP vault | `[b"lp_vault", market]` | Market-PDA-owned LP token account holding seeded liquidity |
+
+<Note>
+`outcome_index` is a single byte: seed `[outcome_index]` is the 1-byte slice
+`&[outcome_index]`. A categorical N-option oracle therefore yields N distinct
+Market PDAs — one per outcome — each an independent "will the oracle resolve to
+this outcome? YES/NO" sub-market.
+</Note>
+
+The Market PDA doubles as the **SPL token authority** of the escrow, cYES, cNO, and
+LP-vault accounts, and as the **oracle-authority** of the MetaDAO Question. Every
+program-signed CPI (split, add/remove liquidity, redeem, resolve_question, transfer,
+close) is signed with the market seeds
+`[b"market", oracle, [outcome_index], [bump]]`.
+
+## External ProgramData PDA — init_config only
+
+| Account | Seeds | Program |
+| --- | --- | --- |
+| ProgramData of the market program | `[program_id]` | BPF-Upgradeable Loader `BPFLoaderUpgradeab1e11111111111111111111111` |
+
+The BPF-Upgradeable-Loader `ProgramData` account stores the program's
+`upgrade_authority`, which [`init_config`](/market-protocol/instructions) requires
+the caller to be (`sdk-rs-market/src/pda.rs:17`). It is **not** derived under
+`crate::ID`.
+
+## External MetaDAO PDAs — out of scope
+
+`activate`, `collect_fee`, and `resolve_market` bind several PDAs derived under
+**other** programs — the MetaDAO conditional_vault and the v0.4 AMM (the Question,
+the KASS conditional vault, the cYES/cNO conditional-token mints, the AMM, its LP
+mint, its per-mint vault ATAs, and each program's event-authority PDA). These are
+re-derived and owner-checked in the processors (`processor/activate.rs`) but are not
+kassandra-market PDAs. See [Activation](/market/activation).

@@ -77,3 +77,55 @@ export async function fetchEvents(
 export async function fetchIndexerStatus(signal?: AbortSignal): Promise<IndexerStatus> {
   return getJson<IndexerStatus>('/status', signal)
 }
+
+/**
+ * Oracle metadata indexed from the on-chain `oracle_meta` account: the plaintext
+ * SUBJECT + option LABELS (both on-chain, authoritative) plus the extended-JSON
+ * `uri` and its `uriHash` (hex sha256). The browse/detail views read this mirror;
+ * the detail view fetches the `uri` JSON and verifies it against `uriHash`.
+ */
+export interface OracleMeta {
+  oracle: string
+  subject: string
+  options: string[]
+  uri: string
+  uriHash: string
+  slot: number
+}
+
+/**
+ * Fetch metadata for a batch of oracle PDAs. Best-effort: returns an empty map
+ * when the indexer is not configured or the request fails, so the browse view
+ * degrades gracefully to the prompt-hash display.
+ */
+export async function fetchOracleMeta(
+  pubkeys: string[],
+  signal?: AbortSignal,
+): Promise<Map<string, OracleMeta>> {
+  if (!indexerBaseUrl() || pubkeys.length === 0) return new Map()
+  try {
+    const params = new URLSearchParams({ accounts: pubkeys.join(',') })
+    const body = await getJson<{ meta: OracleMeta[] }>(`/oracles/meta?${params.toString()}`, signal)
+    return new Map(body.meta.map((m) => [m.oracle, m]))
+  } catch {
+    return new Map()
+  }
+}
+
+/**
+ * POST the extended metadata JSON to the app's OWN metadata host (a relative URL;
+ * the app server proxies it to the private indexer). Best-effort — errors are
+ * swallowed: the JSON is only ever served once its sha256 matches the on-chain
+ * `uri_hash`, so a failed or late POST is harmless.
+ */
+export async function postOracleMetadata(oracle: string, jsonString: string): Promise<void> {
+  try {
+    await fetch(`/api/oracle/${oracle}/metadata.json`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: jsonString,
+    })
+  } catch {
+    // Swallow — hosting the JSON is a convenience, not required for correctness.
+  }
+}

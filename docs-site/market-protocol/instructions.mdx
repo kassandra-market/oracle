@@ -1,0 +1,196 @@
+---
+title: "Instructions"
+description: "Complete reference for all 11 kassandra-market instructions (Ix 0–10): discriminants, purpose, payloads, key accounts, and errors."
+---
+
+The program exposes **11 instructions**. The first byte of `instruction_data` is
+the discriminant (the `Ix` value, `instruction.rs`); the remaining bytes are the
+payload, parsed by each processor (`processor/mod.rs`). Discriminants are a stable
+public contract — never renumbered, only appended. All multi-byte payload fields
+are little-endian.
+
+## Config & governance
+
+<AccordionGroup>
+  <Accordion title="Ix 0 · InitConfig — create the singleton" icon="wrench">
+    One-time creation of the `[b"config"]` singleton
+    (`processor/init_config.rs`). Records the futarchy `authority`, canonical KASS
+    mint, `min_liquidity`, `fee_bps` (≤ `MAX_FEE_BPS`), and `fee_destination`.
+    **Gated to the program's on-chain upgrade authority** (create-or-adopt allocation).
+
+    **Accounts:** `0` config PDA (writable, `[b"config"]`, self-signs) · `1` payer
+    (signer, writable) · `2` kass_mint · `3` fee_destination (KASS token account) ·
+    `4` system program · `5` program_data (BPF-loader `ProgramData` of this program).
+
+    **Payload (74 bytes):** `authority: [u8;32]` ++ `min_liquidity: u64` ++
+    `fee_bps: u16` ++ `fee_destination: [u8;32]`.
+
+    **Errors:** re-init → `AlreadyInitialized`; wrong caller → `NotUpgradeAuthority`;
+    `fee_bps > MAX_FEE_BPS` → `InvalidFee`; non-KASS fee destination → `InvalidAccount`.
+  </Accordion>
+
+  <Accordion title="Ix 1 · UpdateConfig — futarchy-gated update" icon="sliders">
+    Overwrites `min_liquidity`, `fee_bps`, and `fee_destination` in one call, gated
+    to `Config.authority` (the KASS futarchy DAO executor) (`processor/update_config.rs`).
+    Does not touch in-flight markets (they snapshot config at creation).
+
+    **Accounts:** `0` config PDA (writable) · `1` authority (signer; == `Config.authority`)
+    · `2` fee_destination.
+
+    **Payload (42 bytes):** `min_liquidity: u64` ++ `fee_bps: u16` ++ `fee_destination: [u8;32]`.
+
+    **Errors:** wrong signer → `Unauthorized`; `fee_bps > MAX_FEE_BPS` → `InvalidFee`;
+    non-KASS destination → `InvalidAccount`.
+  </Accordion>
+</AccordionGroup>
+
+## Crowdfunding
+
+<AccordionGroup>
+  <Accordion title="Ix 2 · CreateMarket — stand up a sub-market" icon="star">
+    Creates the `[b"market", oracle, [outcome_index]]` sub-market, its KASS escrow,
+    and the creator's Contribution, transferring the creator's seed into escrow
+    (`processor/create_market.rs`). Snapshots `min_liquidity`/`fee_bps` from Config.
+
+    **Accounts:** `0` config · `1` oracle (Kassandra) · `2` market PDA (writable,
+    uninit) · `3` escrow PDA (writable, uninit) · `4` kass_mint · `5` creator
+    (signer, writable) · `6` creator_kass_ata (writable) · `7` contribution PDA
+    (writable, uninit) · `8` token program · `9` system program.
+
+    **Payload (9 bytes):** `seed_amount: u64` ++ `outcome_index: u8`.
+
+    **Errors:** wrong mint → `WrongMint`; `seed_amount == 0` → `ZeroAmount`;
+    `outcome_index >= options_count` → `InvalidOutcome`; oracle terminal →
+    `OracleResolved`; duplicate market address → `InvalidAccount`.
+  </Accordion>
+
+  <Accordion title="Ix 3 · Contribute — crowdfund toward the floor" icon="hand-holding-dollar">
+    Adds KASS from any contributor to a `Funding` market's escrow, creating or
+    incrementing their Contribution (`processor/contribute.rs`). Only a brand-new
+    Contribution grows `open_contributions`.
+
+    **Accounts:** `0` market (writable) · `1` escrow (writable; == `market.escrow_vault`)
+    · `2` contributor (signer, writable) · `3` contributor_kass_ata (writable) · `4`
+    contribution PDA (writable) · `5` token program · `6` system program.
+
+    **Payload (8 bytes):** `amount: u64`.
+
+    **Errors:** not `Funding` → `NotFunding`; `amount == 0` → `ZeroAmount`.
+  </Accordion>
+
+  <Accordion title="Ix 4 · Cancel — abort a stranded funding round" icon="ban">
+    Permissionless. Flips a `Funding` market to `Cancelled` once its oracle is
+    terminal, at any funding level (`processor/cancel.rs`).
+
+    **Accounts:** `0` market (writable) · `1` oracle (== `market.oracle`, terminal).
+    **Payload:** empty.
+
+    **Errors:** not `Funding` → `NotFunding`; oracle not terminal → `OracleNotTerminal`.
+  </Accordion>
+
+  <Accordion title="Ix 5 · Refund — pull a contributor's KASS back" icon="rotate-left">
+    Permissionless per-contributor refund out of a `Cancelled` market's escrow
+    (program-signed), closing the Contribution (rent → contributor) and decrementing
+    `open_contributions` (`processor/refund.rs`).
+
+    **Accounts:** `0` market (writable) · `1` escrow (writable) · `2` contribution
+    PDA (writable, CLOSED) · `3` contributor_kass_ata (writable; SPL owner ==
+    `contribution.contributor`) · `4` contributor (writable; rent recipient) · `5`
+    token program. **Payload:** empty.
+
+    **Errors:** not `Cancelled` → `NotCancelled`; wrong destination owner / mismatched
+    market → `InvalidAccount`.
+  </Accordion>
+</AccordionGroup>
+
+## Activation & settlement
+
+<AccordionGroup>
+  <Accordion title="Ix 6 · Activate — compose the AMM" icon="layer-group">
+    Permissionless. Verifies the client-composed MetaDAO Question/vault/cYES/cNO/AMM,
+    program-splits the escrow into cYES/cNO, seeds the pool 50/50, mints LP into the
+    Market PDA's `lp_vault`, and records the bindings with `status = Active`
+    (`processor/activate.rs`). See [Activation](/market/activation).
+
+    **Accounts (22):** `0` market (writable) · `1` oracle · `2` payer (signer,
+    writable) · `3` question · `4` vault (writable) · `5` vault_underlying_ata
+    (writable) · `6` escrow (writable) · `7` yes_mint (writable) · `8` no_mint
+    (writable) · `9` market_cyes (writable) · `10` market_cno (writable) · `11` amm
+    (writable) · `12` lp_mint (writable) · `13` lp_vault (writable) · `14`
+    amm_vault_base (writable) · `15` amm_vault_quote (writable) · `16`
+    cv_event_authority · `17` cv_program · `18` amm_event_authority · `19` amm_program
+    · `20` token program · `21` system program. **Payload:** empty.
+
+    **Errors:** not `Funding` → `NotFunding`; under floor → `NotFunded`; oracle
+    terminal → `OracleResolved`; non-empty pool → `PoolNotEmpty`; binding failures →
+    `InvalidAccount`.
+  </Accordion>
+
+  <Accordion title="Ix 7 · ClaimLp — pro-rata LP claim" icon="coins">
+    Permissionless per-contributor pull of seeded LP, pro-rata by contribution share
+    of `lp_total`; the last claimer sweeps the remainder. Gated on `fee_collected == 1`.
+    Closes the Contribution (`processor/claim_lp.rs`).
+
+    **Accounts:** `0` market (writable) · `1` lp_vault (writable) · `2` contribution
+    PDA (writable, CLOSED) · `3` contributor_lp_ata (writable; owner == contributor,
+    mint == `lp_mint`) · `4` contributor (writable) · `5` token program. **Payload:** empty.
+
+    **Errors:** not activated → `NotActive`; `fee_collected != 1` → `FeeNotCollected`;
+    wrong destination → `InvalidAccount`.
+  </Accordion>
+
+  <Accordion title="Ix 8 · ResolveMarket — bridge the oracle result" icon="scale-balanced">
+    Permissionless idempotent crank. The Market PDA (question oracle-authority) signs
+    `resolve_question`, mapping `Resolved`→YES/NO or `InvalidDeadend`→void; sets the
+    terminal status and `settled = 1` (`processor/resolve_market.rs`).
+
+    **Accounts:** `0` market (writable; the resolver signer) · `1` oracle (terminal)
+    · `2` question (writable) · `3` cv_event_authority · `4` cv_program. **Payload:** empty.
+
+    **Errors:** already settled → `AlreadySettled`; not `Active` → `NotActive`; oracle
+    not terminal → `OracleNotTerminal`; out-of-range `resolved_option` → `InvalidAccount`.
+  </Accordion>
+
+  <Accordion title="Ix 9 · CollectFee — cut the protocol fee" icon="hand-holding-dollar">
+    Permissionless crank cutting `fee_bps` of accrued LP earnings, denominated in
+    KASS, to `Config.fee_destination` via program-signed `remove_liquidity` →
+    `redeem_tokens` → transfer; sets `lp_total -= fee_lp`, `fee_collected = 1`
+    (`processor/collect_fee.rs`). 21 accounts (mirrors `activate` plus `config` +
+    `fee_destination`). **Payload:** empty.
+
+    **Errors:** already collected → `AlreadySettled`; not `Resolved`/`Void` →
+    `NotActive`; wrong fee mint → `WrongMint`; binding failures → `InvalidAccount`.
+  </Accordion>
+
+  <Accordion title="Ix 10 · CloseMarket — reclaim rent" icon="box-archive">
+    Permissionless rent reclaim for a fully-settled market. SPL-`CloseAccount`s the
+    Market-PDA-owned token accounts (escrow always; cyes/cno/lp_vault iff activated)
+    only if empty, then closes the Market PDA — all rent → creator
+    (`processor/close_market.rs`).
+
+    **Accounts:** `0` market (writable, CLOSED) · `1` creator (writable; recipient)
+    · `2` escrow · `3` cyes · `4` cno · `5` lp_vault · `6` token program. **Payload:** empty.
+
+    **Errors:** not terminal → `NotSettled`; activated + `fee_collected != 1` →
+    `FeeNotCollected`; live contributions → `ContributionsOpen`.
+  </Accordion>
+</AccordionGroup>
+
+## Full discriminant table
+
+| Ix | Name | Group | Payload | Signer |
+| --- | --- | --- | --- | --- |
+| 0 | `InitConfig` | Config | 74 | upgrade authority |
+| 1 | `UpdateConfig` | Config | 42 | futarchy authority |
+| 2 | `CreateMarket` | Crowdfunding | 9 | creator |
+| 3 | `Contribute` | Crowdfunding | 8 | contributor |
+| 4 | `Cancel` | Crowdfunding | 0 | permissionless |
+| 5 | `Refund` | Crowdfunding | 0 | permissionless |
+| 6 | `Activate` | Settlement | 0 | permissionless (payer) |
+| 7 | `ClaimLp` | Settlement | 0 | permissionless |
+| 8 | `ResolveMarket` | Settlement | 0 | permissionless |
+| 9 | `CollectFee` | Settlement | 0 | permissionless |
+| 10 | `CloseMarket` | Settlement | 0 | permissionless |
+
+See [Accounts](/market-protocol/accounts) for the structs these read/write and
+[Errors](/market-protocol/errors) for the full code list.

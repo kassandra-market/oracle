@@ -22,7 +22,7 @@
 # The mainnet-FORKED Playwright project (playwright.fork.config.ts) and the
 # network-dependent SDK surfpool suites are intentionally NOT run here — they need
 # live mainnet RPC and are flaky on hosted runners; run them locally via
-# scripts/e2e-playwright-fork.sh / `pnpm --filter sdk test:e2e`.
+# scripts/e2e-playwright-fork.sh / `pnpm --filter ./sdk test:e2e`.
 
 name: CI
 
@@ -69,14 +69,18 @@ jobs:
           sh -c "$(curl -sSfL https://release.anza.xyz/${SOLANA_VERSION}/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
 
-      - name: Build SBF program (.so)
-        run: cargo build-sbf --manifest-path programs/kassandra/Cargo.toml
+      - name: Build SBF programs (.so) — oracle + market
+        run: |
+          cargo build-sbf --manifest-path programs/kassandra/Cargo.toml
+          cargo build-sbf --manifest-path programs/kassandra-market/Cargo.toml
 
-      - name: Upload program artifact
+      - name: Upload program artifacts
         uses: actions/upload-artifact@v4
         with:
           name: program-so
-          path: target/deploy/kassandra_program.so
+          path: |
+            target/deploy/kassandra_program.so
+            target/deploy/kassandra_market_program.so
           if-no-files-found: error
           retention-days: 1
 
@@ -131,25 +135,33 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # The SDK is consumed by the app via its built dist/ (package `exports`), so
-      # it must be built before the app typechecks / tests.
-      - name: Build SDK
-        run: pnpm --filter sdk build
+      # Both SDKs are consumed by the app via their built dist/ (package `exports`),
+      # so they must be built before the app typechecks / tests.
+      - name: Build SDKs (oracle + market)
+        run: |
+          pnpm --filter ./sdk build
+          pnpm --filter ./sdk-market build
 
       - name: SDK tests (litesvm + decoders)
-        run: pnpm --filter sdk test
+        # The market SDK's litesvm suite crashes (napi bad_alloc) on hosted linux,
+        # so it self-skips under SKIP_LITESVM (mirrors the kassandra-market CI).
+        run: |
+          pnpm --filter ./sdk test
+          SKIP_LITESVM=1 pnpm --filter ./sdk-market test
 
       - name: SDK typecheck
-        run: pnpm --filter sdk typecheck
+        run: |
+          pnpm --filter ./sdk typecheck
+          pnpm --filter ./sdk-market typecheck
 
       - name: App typecheck
-        run: pnpm --filter app typecheck
+        run: pnpm --filter ./app typecheck
 
       - name: App lint
-        run: pnpm --filter app lint
+        run: pnpm --filter ./app lint
 
       - name: App unit tests
-        run: pnpm --filter app test
+        run: pnpm --filter ./app test
 
   runner-e2e:
     name: E2E · real runner + mock Anthropic (offline)
@@ -185,7 +197,7 @@ jobs:
       # server — no ANTHROPIC_API_KEY, no network. Asserts the mock's option flows
       # through to a genuine 97-byte claim payload, plus the refusal arm.
       - name: Run real-runner e2e (mock provider)
-        run: pnpm --filter sdk exec vitest run test/surfpool/runner-mock-anthropic.test.ts
+        run: pnpm --filter ./sdk exec vitest run test/surfpool/runner-mock-anthropic.test.ts
         env:
           KASSANDRA_E2E: "1"
 
@@ -242,12 +254,12 @@ jobs:
         run: cargo build -p kassandra-runner
 
       - name: Build SDK
-        run: pnpm --filter sdk build
+        run: pnpm --filter ./sdk build
 
       - name: Install Playwright Chromium
-        run: pnpm --filter app exec playwright install --with-deps chromium
+        run: pnpm --filter ./app exec playwright install --with-deps chromium
 
       - name: Run browser E2E (local simnet)
-        run: pnpm --filter app exec playwright test
+        run: pnpm --filter ./app exec playwright test
         env:
           SURFPOOL_BIN: /usr/local/bin/surfpool

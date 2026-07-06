@@ -99,7 +99,7 @@ pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]
     }
     let nonce = u64::from_le_bytes(payload[0..8].try_into().unwrap());
 
-    let [oracle_ai, stake_vault_ai, protocol_ai, dao_treasury_ai, creator_ai, token_prog_ai, ..] =
+    let [oracle_ai, stake_vault_ai, protocol_ai, dao_treasury_ai, creator_ai, token_prog_ai, rest @ ..] =
         accounts
     else {
         return Err(ProgramError::NotEnoughAccountKeys);
@@ -168,7 +168,26 @@ pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]
     CloseAccount::new(stake_vault_ai, creator_ai, oracle_ai)
         .invoke_signed(&[Signer::from(&seeds)])?;
 
-    // 3. Close the Oracle PDA: drain its rent lamports → creator, then zero it.
+    // 3. Optionally close the companion `oracle_meta` PDA (rent → creator). Passed
+    //    as an extra trailing account. Tolerant: an oracle created without meta,
+    //    or a caller that omits it, just skips this. Guarded by the derived PDA +
+    //    program ownership + non-empty, so a foreign account in this slot can
+    //    never be drained.
+    if let Some(meta_ai) = rest.first_mut() {
+        let (expected_meta, _) = pinocchio::address::Address::find_program_address(
+            &[b"oracle_meta", oracle_ai.address().as_ref()],
+            program_id,
+        );
+        if meta_ai.address() == &expected_meta
+            && meta_ai.owned_by(program_id)
+            && !meta_ai.is_data_empty()
+        {
+            drain_lamports(meta_ai, creator_ai)?;
+            meta_ai.close()?;
+        }
+    }
+
+    // 4. Close the Oracle PDA: drain its rent lamports → creator, then zero it.
     //    Idempotent by closure.
     drain_lamports(oracle_ai, creator_ai)?;
     oracle_ai.close()

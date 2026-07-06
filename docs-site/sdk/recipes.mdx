@@ -97,7 +97,6 @@ async function submit(
     const deadline = svm.getClock().unixTimestamp + 1_000n;
     await submit(svm, payer, await createOracle({
       nonce,
-      promptHash: new Uint8Array(32).fill(0x42),
       optionsCount: 3,
       deadline,
       twapWindow: 600n,
@@ -106,6 +105,8 @@ async function submit(
       kassMint: kassMint.publicKey,
       usdcMint: usdcMint.publicKey,
     }));
+    // The question + option labels are written on-chain by a separate
+    // writeOracleMeta instruction, appended to the same transaction as createOracle.
 
     let oracleAcct = decodeOracle(fetchData(svm, oraclePda.address));
     console.log("oracle.phase === Proposal:", oracleAcct.phase === Phase.Proposal);

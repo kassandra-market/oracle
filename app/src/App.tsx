@@ -11,6 +11,9 @@ const Landing = lazy(() => import('./pages/Landing.tsx'))
 const Oracles = lazy(() => import('./pages/Oracles.tsx'))
 const CreateOracle = lazy(() => import('./pages/CreateOracle.tsx'))
 const OracleDetail = lazy(() => import('./pages/OracleDetail.tsx'))
+const Markets = lazy(() => import('./pages/Markets.tsx'))
+const CreateMarket = lazy(() => import('./pages/CreateMarket.tsx'))
+const MarketDetail = lazy(() => import('./pages/MarketDetail.tsx'))
 const StyleGuide = lazy(() => import('./pages/StyleGuide.tsx'))
 const Admin = lazy(() => import('./pages/Admin.tsx'))
 
@@ -52,6 +55,9 @@ export default function App() {
             <Route path="/oracles" element={lazyRoute(<Oracles />)} />
             <Route path="/oracles/new" element={lazyRoute(<CreateOracle />)} />
             <Route path="/oracles/:pubkey" element={lazyRoute(<OracleDetail />)} />
+            <Route path="/markets" element={lazyRoute(<Markets />)} />
+            <Route path="/markets/new" element={lazyRoute(<CreateMarket />)} />
+            <Route path="/markets/:pubkey" element={lazyRoute(<MarketDetail />)} />
             <Route path="/styleguide" element={lazyRoute(<StyleGuide />)} />
             <Route path="/admin" element={lazyRoute(<Admin />)} />
             <Route path="*" element={<Navigate to="/" replace />} />

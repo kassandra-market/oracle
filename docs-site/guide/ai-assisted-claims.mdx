@@ -23,9 +23,11 @@ fixed interpretation, its agreed facts, and its categorical options, the runner:
     rejected — the agreed set is exactly what the fact phase pinned.
   </Step>
   <Step title="Assemble a byte-deterministic prompt">
-    It concatenates the interpretation text (whose `sha256` must equal
-    `oracle.prompt_hash`) and the verified facts into a fixed, versioned prompt layout
-    (`prompt.rs`, spec `runner/PROMPT.md`; `PROMPT_ASSEMBLY_VERSION = 1`).
+    It reads the interpretation from chain: it fetches the oracle's `oracle_meta` account,
+    fetches its `uri` JSON, and uses the `promptTemplate`/`interpretation` only if
+    `sha256(json) == uri_hash`. That text and the verified facts are concatenated into a
+    fixed, versioned prompt layout (`prompt.rs`, spec `runner/PROMPT.md`;
+    `PROMPT_ASSEMBLY_VERSION = 1`).
   </Step>
   <Step title="Complete with a pinned model">
     It calls a pinned model behind a generic `AiProvider` trait (Claude/Anthropic by
@@ -103,9 +105,10 @@ bit-reproducible**, so a byte-exact on-chain proof would be impossible to satisf
 
 <Steps>
   <Step title="Read the claim and the agreed facts">
-    Build the runner config from the on-chain oracle: `--oracle <pubkey> --rpc-url <url>
-    --prompt-file <path>`. The runner enumerates the oracle's facts, keeps the `agreed`
-    ones, and asserts `sha256(prompt_file) == oracle.prompt_hash` (`rpc.rs`).
+    Build the runner config from the on-chain oracle: `--oracle <pubkey> --rpc-url <url>`.
+    The runner enumerates the oracle's facts and keeps the `agreed` ones; it reads the
+    interpretation from the oracle's `oracle_meta` account — fetching its `uri` JSON and
+    verifying `sha256(json) == uri_hash` (`rpc.rs`, `cli.rs`).
   </Step>
   <Step title="Re-run with the declared model and compare">
     Run `kassandra-runner verify --option <n>` (optionally passing the submitted

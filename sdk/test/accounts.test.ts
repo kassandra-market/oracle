@@ -153,7 +153,7 @@ describe("Pod account decoders — synthetic buffers at pinned offsets", () => {
     expect(p.challengeSuccessKassFeeDen).toBe(100n);
   });
 
-  it("decodes Oracle (392) with every field, incl. Phase enum + 0xFF resolved_option", () => {
+  it("decodes Oracle (360) with every field, incl. Phase enum + 0xFF resolved_option", () => {
     const b = new Buf(ACCOUNT_SIZES.Oracle, AccountType.Oracle)
       .raw(8, key32(10)) // creator
       .raw(40, key32(11)) // kass_mint
@@ -175,27 +175,27 @@ describe("Pod account decoders — synthetic buffers at pinned offsets", () => {
       .u8(196, 249) // bump
       .u8(197, 0xff) // resolved_option (dead-end sentinel)
       .u16(198, 1) // open_challenge_count
-      .raw(200, key32(14)) // prompt_hash (32 bytes)
-      .u64(232, 2n) // threshold_num
-      .u64(240, 3n) // threshold_den
-      .u64(248, 1n) // market_threshold_num
-      .u64(256, 10n) // market_threshold_den
-      .u64(264, 1n) // flip_slash_num
-      .u64(272, 2n) // flip_slash_den
-      .i64(280, 3600n) // phase_window
-      .i64(288, 3601n) // proposal_window
-      .u64(296, 1n) // fact_vote_slash_num
-      .u64(304, 2n) // fact_vote_slash_den
-      .u64(312, 2n) // reward_proposer_weight
-      .u64(320, 1n) // reward_fact_weight
-      .u64(328, 1n) // challenge_fail_usdc_fee_num
-      .u64(336, 100n) // challenge_fail_usdc_fee_den
-      .u64(344, 1n) // challenge_success_kass_fee_num
-      .u64(352, 100n) // challenge_success_kass_fee_den
-      .u64(360, 3_000_000n) // total_correct_proposer_stake
-      .u64(368, 4_000_000n) // total_approved_fact_stake
-      .u64(376, 7_000_000n) // reward_pool
-      .u64(384, 1_500_000n); // reward_emission
+      // (former prompt_hash @200 removed — governable block shifted -32.)
+      .u64(200, 2n) // threshold_num
+      .u64(208, 3n) // threshold_den
+      .u64(216, 1n) // market_threshold_num
+      .u64(224, 10n) // market_threshold_den
+      .u64(232, 1n) // flip_slash_num
+      .u64(240, 2n) // flip_slash_den
+      .i64(248, 3600n) // phase_window
+      .i64(256, 3601n) // proposal_window
+      .u64(264, 1n) // fact_vote_slash_num
+      .u64(272, 2n) // fact_vote_slash_den
+      .u64(280, 2n) // reward_proposer_weight
+      .u64(288, 1n) // reward_fact_weight
+      .u64(296, 1n) // challenge_fail_usdc_fee_num
+      .u64(304, 100n) // challenge_fail_usdc_fee_den
+      .u64(312, 1n) // challenge_success_kass_fee_num
+      .u64(320, 100n) // challenge_success_kass_fee_den
+      .u64(328, 3_000_000n) // total_correct_proposer_stake
+      .u64(336, 4_000_000n) // total_approved_fact_stake
+      .u64(344, 7_000_000n) // reward_pool
+      .u64(352, 1_500_000n); // reward_emission
 
     const o = decodeOracle(b.bytes);
     expect(o.accountType).toBe(AccountType.Oracle);
@@ -220,7 +220,6 @@ describe("Pod account decoders — synthetic buffers at pinned offsets", () => {
     expect(o.bump).toBe(249);
     expect(o.resolvedOption).toBe(0xff);
     expect(o.openChallengeCount).toBe(1);
-    expect(Array.from(o.promptHash)).toEqual(Array.from(key32(14)));
     expect(o.thresholdNum).toBe(2n);
     expect(o.thresholdDen).toBe(3n);
     expect(o.marketThresholdNum).toBe(1n);

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CLAIM_OPTION_NONE, Phase, pda } from '@kassandra/sdk'
 import type { AiClaim, Fact, Market, Oracle, Proposer } from '@kassandra/sdk'
@@ -16,6 +16,7 @@ import { verdictFor } from '../lib/phaseTimeline'
 import { ClaimControl, CloseControl, OracleActions, VoteControl } from '../components/oracles/actions'
 import { isIndexerConfigured } from '../data/indexer'
 import { useOracleDetail } from '../hooks/useOracles'
+import { useOracleMeta } from '../hooks/useOracleMeta'
 import { OracleNotFoundError } from '../data/oracles'
 import { recallNonce } from '../lib/nonceStore'
 import { resolveOracleNonce } from '../data/actions/finalize'
@@ -493,6 +494,10 @@ function OracleBody({
   refetch: () => void
 }) {
   const { pubkey, oracle, facts, proposers, aiClaims, market } = detail
+  // On-chain plaintext subject + option labels (indexed from oracle_meta).
+  const metaItems = useMemo(() => [pubkey], [pubkey])
+  const meta = useOracleMeta(metaItems).get(pubkey)
+  const options = meta?.options ?? []
   const resolved = oracle.phase === Phase.Resolved
   const hasResolvedOption = resolved && oracle.resolvedOption !== RESOLVED_OPTION_NONE
   const votingOpen = oracle.phase === Phase.FactVoting
@@ -506,19 +511,47 @@ function OracleBody({
 
   return (
     <>
-      {/* Header */}
+      {/* Header — the SUBJECT (verified question) + its options lead. */}
       <header className="mt-8">
         <EyebrowTag pill>Oracle</EyebrowTag>
-        <h1 className="mt-3 font-serif text-heading font-light text-sepia">Oracle dispute</h1>
+        <h1 className="mt-3 font-serif text-heading font-light text-sepia">
+          {meta?.subject ?? 'Oracle dispute'}
+        </h1>
+        {options.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2" aria-label="Options">
+            {options.map((opt, i) => (
+              <span
+                key={i}
+                className="rounded-tag border border-pebble bg-soft-cream px-2.5 py-1 font-inter text-[13px] text-bronze"
+              >
+                <span className="tabular-nums text-driftwood">{i}</span>
+                <span className="mx-1 text-driftwood">·</span>
+                {opt}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 font-inter text-[13px] text-driftwood">
           <PhaseChip phase={oracle.phase} />
           <span>{relativeDeadline(oracle.deadline)}</span>
           <Truncated value={pubkey} copyable label="oracle address" />
         </div>
-        <div className="mt-3 flex items-baseline gap-2 font-inter text-[13px] text-driftwood">
-          <span>Prompt hash</span>
-          <Truncated value={hashHex(oracle.promptHash)} head={8} tail={6} copyable label="prompt hash" />
-        </div>
+        {meta?.uri && (
+          <div className="mt-3 flex items-baseline gap-2 font-inter text-[13px] text-driftwood">
+            <span>Metadata</span>
+            <a
+              href={meta.uri}
+              target="_blank"
+              rel="noreferrer"
+              className="text-chestnut underline decoration-dotted underline-offset-2"
+            >
+              extended JSON
+            </a>
+            <span className="text-driftwood/70" title="sha256 committed on-chain">
+              (hash-verified)
+            </span>
+          </div>
+        )}
         {resolved ? (
           <p className="mt-3 font-inter text-[14px] text-chestnut">
             {hasResolvedOption

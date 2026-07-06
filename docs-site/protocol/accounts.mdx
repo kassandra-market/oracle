@@ -1,12 +1,13 @@
 ---
 title: "Accounts"
-description: "Complete reference for the 7 Kassandra account structs — full field tables, byte sizes, AccountType tags, and the enums and sentinels."
+description: "Complete reference for the Kassandra account structs — full field tables, byte sizes, AccountType tags, and the enums and sentinels."
 ---
 
-Kassandra stores state in **7 account types**, all defined in `programs/kassandra/src/state.rs`. Every
-struct is `#[repr(C)]`, `Pod + Zeroable`, fully packed (explicit `_pad` arrays), and read/written
-zero-copy via `bytemuck`. Each begins with an 8-byte header: `account_type: u8` at offset 0 followed
-by `_pad_hdr: [u8;7]`. Byte sizes and offsets are pinned by `programs/kassandra/tests/state_layout.rs`.
+Kassandra stores state in the account types defined in `programs/kassandra/src/state.rs`. The
+fixed-layout structs are `#[repr(C)]`, `Pod + Zeroable`, fully packed (explicit `_pad` arrays), and
+read/written zero-copy via `bytemuck`, each beginning with an 8-byte header: `account_type: u8` at
+offset 0 followed by `_pad_hdr: [u8;7]`. The one exception is `oracle_meta`, a variable-length
+metadata account with a compact 34-byte header (see below). Byte sizes and offsets are pinned by `programs/kassandra/tests/state_layout.rs`.
 Throughout, `type Pubkey = [u8;32]`.
 
 ## Enums & sentinels
@@ -26,6 +27,7 @@ account carries `Uninitialized` (0) until it is stamped.
 | `AiClaim` | 5 |
 | `Market` | 6 |
 | `Protocol` | 7 |
+| `OracleMeta` | 8 |
 
 ### Phase (`#[repr(u8)]`)
 
@@ -48,12 +50,13 @@ strictly-highest option), `Tie` (≥2 options share the maximum), `NoSurvivors` 
 | Account | Tag | `LEN` (bytes) |
 | --- | --- | --- |
 | `Protocol` | 7 | 368 |
-| `Oracle` | 1 | 392 |
+| `Oracle` | 1 | 360 |
 | `Proposer` | 2 | 96 |
 | `Fact` | 3 | 336 |
 | `FactVote` | 4 | 88 |
 | `AiClaim` | 5 | 208 |
 | `Market` | 6 | 416 |
+| `OracleMeta` | 8 | variable |
 
 ## Protocol — LEN 368
 
@@ -102,7 +105,7 @@ The governable params are detailed in [Constants](/protocol/constants). Identity
 (`admin`, mints, `fee_ema`, `last_creation_unix`, `bump`, `governance_set`, `dao_authority`,
 `kass_dao`) are **not** touched by `set_config`.
 
-## Oracle — LEN 392
+## Oracle — LEN 360
 
 The top-level dispute account. Its governable params are **snapshotted from `Protocol` at
 `create_oracle`** and read by downstream processors from the Oracle, so mid-dispute governance changes
@@ -132,27 +135,49 @@ cannot move the goalposts. **PDA:** `[b"oracle", nonce_le]`.
 | `bump` | u8 | 196 | PDA bump |
 | `resolved_option` | u8 | 197 | final option; valid ONLY when `phase == Resolved`; `0xFF` on `InvalidDeadend` |
 | `open_challenge_count` | u16 | 198 | # open (created-but-unsettled) challenge markets; finalize requires 0 |
-| `prompt_hash` | [u8;32] | 200 | hash of the fixed prompt + interpretation |
-| `threshold_num` | u64 | 232 | fact-quorum supermajority numerator |
-| `threshold_den` | u64 | 240 | fact-quorum supermajority denominator |
-| `market_threshold_num` | u64 | 248 | slash-trigger margin numerator (widened to u128 on use) |
-| `market_threshold_den` | u64 | 256 | slash-trigger margin denominator |
-| `flip_slash_num` | u64 | 264 | flip-slash fraction numerator |
-| `flip_slash_den` | u64 | 272 | flip-slash fraction denominator |
-| `phase_window` | i64 | 280 | dispute phase window seconds |
-| `proposal_window` | i64 | 288 | proposal-registration window seconds |
-| `fact_vote_slash_num` | u64 | 296 | reserved (voter slash) numerator |
-| `fact_vote_slash_den` | u64 | 304 | reserved denominator |
-| `reward_proposer_weight` | u64 | 312 | reward weight PW |
-| `reward_fact_weight` | u64 | 320 | reward weight FW |
-| `challenge_fail_usdc_fee_num` | u64 | 328 | USDC fee on failed challenge numerator |
-| `challenge_fail_usdc_fee_den` | u64 | 336 | denominator |
-| `challenge_success_kass_fee_num` | u64 | 344 | KASS fee on successful challenge numerator |
-| `challenge_success_kass_fee_den` | u64 | 352 | denominator |
-| `total_correct_proposer_stake` | u64 | 360 | Σ bond over surviving proposers whose `claim_option == resolved_option` |
-| `total_approved_fact_stake` | u64 | 368 | Σ (`fact.stake` + `fact.approve_stake`) over agreed facts |
-| `reward_pool` | u64 | 376 | distributable pool at resolution; `= bond_pool + reward_emission` on Resolved; 0 on InvalidDeadend |
-| `reward_emission` | u64 | 384 | KASS minted into stake_vault at create; folded into reward_pool on Resolved, burned on InvalidDeadend |
+| `threshold_num` | u64 | 200 | fact-quorum supermajority numerator |
+| `threshold_den` | u64 | 208 | fact-quorum supermajority denominator |
+| `market_threshold_num` | u64 | 216 | slash-trigger margin numerator (widened to u128 on use) |
+| `market_threshold_den` | u64 | 224 | slash-trigger margin denominator |
+| `flip_slash_num` | u64 | 232 | flip-slash fraction numerator |
+| `flip_slash_den` | u64 | 240 | flip-slash fraction denominator |
+| `phase_window` | i64 | 248 | dispute phase window seconds |
+| `proposal_window` | i64 | 256 | proposal-registration window seconds |
+| `fact_vote_slash_num` | u64 | 264 | reserved (voter slash) numerator |
+| `fact_vote_slash_den` | u64 | 272 | reserved denominator |
+| `reward_proposer_weight` | u64 | 280 | reward weight PW |
+| `reward_fact_weight` | u64 | 288 | reward weight FW |
+| `challenge_fail_usdc_fee_num` | u64 | 296 | USDC fee on failed challenge numerator |
+| `challenge_fail_usdc_fee_den` | u64 | 304 | denominator |
+| `challenge_success_kass_fee_num` | u64 | 312 | KASS fee on successful challenge numerator |
+| `challenge_success_kass_fee_den` | u64 | 320 | denominator |
+| `total_correct_proposer_stake` | u64 | 328 | Σ bond over surviving proposers whose `claim_option == resolved_option` |
+| `total_approved_fact_stake` | u64 | 336 | Σ (`fact.stake` + `fact.approve_stake`) over agreed facts |
+| `reward_pool` | u64 | 344 | distributable pool at resolution; `= bond_pool + reward_emission` on Resolved; 0 on InvalidDeadend |
+| `reward_emission` | u64 | 352 | KASS minted into stake_vault at create; folded into reward_pool on Resolved, burned on InvalidDeadend |
+
+## OracleMeta — variable
+
+The companion metadata account for one oracle, written by `write_oracle_meta` (`Ix::WriteOracleMeta =
+23`) in the same transaction as `create_oracle`. Unlike the fixed-layout structs it is
+**variable-length** and length-prefixed: it holds the plaintext subject (the question), the option
+labels, and a `uri` + `uri_hash` binding the extended off-chain interpretation JSON. **PDA:**
+`[b"oracle_meta", oracle]`.
+
+Byte layout (in order):
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `account_type` | u8 | `AccountType::OracleMeta` (8) |
+| `bump` | u8 | PDA bump |
+| `oracle` | Pubkey | parent oracle |
+| `subject_len` | u16 | length of the subject bytes |
+| `subject` | [u8; subject_len] | plaintext question |
+| `options_count` | u8 | number of option labels that follow |
+| `options` | `options_count × (option_len: u16 ++ option: [u8; option_len])` | length-prefixed option labels |
+| `uri_len` | u16 | length of the uri bytes |
+| `uri` | [u8; uri_len] | URL of the extended off-chain interpretation JSON |
+| `uri_hash` | [u8;32] | `sha256` of that JSON; the runner refuses to resolve unless it matches |
 
 ## Proposer — LEN 96
 

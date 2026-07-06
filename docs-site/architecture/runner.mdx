@@ -8,17 +8,21 @@ The runner is Kassandra's open-source, reproducible off-chain AI resolver. It is
 workspace member. Anyone can run it to **propose** a claim or to **verify** an existing claim before
 deciding whether to challenge.
 
-Given an oracle's fixed interpretation (`prompt_hash`), its agreed facts (`content_hash` + `uri`), and
-its categorical options, the runner: (1) fetches and verifies each fact against its `content_hash`,
-(2) assembles a byte-deterministic prompt, (3) completes it with a pinned model behind a generic
-`AiProvider` trait, (4) hashes the run into claim metadata, and (5) emits the chosen `option` plus the
-exact **97-byte** `submit_ai_claim` payload (`runner/README.md`).
+The oracle's fixed interpretation comes from its on-chain `oracle_meta` account — the subject and
+option labels, plus a `uri` whose extended JSON carries the `promptTemplate`/`interpretation`; the
+runner fetches that JSON and uses it only if `sha256(json) == uri_hash`. Given that interpretation, the
+oracle's agreed facts (`content_hash` + `uri`), and its categorical options, the runner: (1) fetches
+and verifies each fact against its `content_hash`, (2) assembles a byte-deterministic prompt, (3)
+completes it with a pinned model behind a generic `AiProvider` trait, (4) hashes the run into claim
+metadata, and (5) emits the chosen `option` plus the exact **97-byte** `submit_ai_claim` payload
+(`runner/README.md`).
 
 ## Subcommands
 
 The CLI (`runner/src/cli.rs`, `Command` enum: `Run`, `Verify`) builds its config one of two mutually
 exclusive ways: an explicit **JSON config** (`--config <path>` or stdin), or an **on-chain fetch**
-(`--oracle <pubkey> --rpc-url <url> --prompt-file <path>`).
+(`--oracle <pubkey> --rpc-url <url>`), which reads the interpretation from the oracle's `oracle_meta`
+account (fetching its `uri` JSON and verifying `sha256(json) == uri_hash`).
 
 <Tabs>
   <Tab title="run">

@@ -1,0 +1,34 @@
+[package]
+name = "kassandra-market-program"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+pinocchio = { workspace = true }
+pinocchio-system = { workspace = true }
+pinocchio-token = { workspace = true }
+# `bytemuck` gives `Address` its `Pod`/`Zeroable` (zero-copy state); `curve25519`
+# (native PDA helpers) is target-gated off-chain so the SBF build never pulls
+# curve25519-dalek. Mirrors programs/kassandra.
+solana-address = { workspace = true, features = ["bytemuck"] }
+bytemuck = { workspace = true }
+
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+solana-address = { workspace = true, features = ["curve25519"] }
+
+[dev-dependencies]
+# The market program's LiteSVM tests are a solana-sdk v2 island: pinned directly
+# (NOT via the workspace, which is on the granular v3 stack) so both majors
+# coexist in the lockfile without a cross-crate type split. litesvm 0.6 matches
+# solana-sdk v2 / spl-token 6.
+litesvm = "0.6"
+solana-sdk = "2"
+spl-token = { version = "6", features = ["no-entrypoint"] }
+bytemuck = { workspace = true }
+kassandra-market-sdk = { workspace = true }
+
+[features]
+no-entrypoint = []

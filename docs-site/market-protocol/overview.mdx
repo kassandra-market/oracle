@@ -1,0 +1,97 @@
+---
+title: "Market program overview"
+description: "Program ID, the thin-wrapper security model, account-type tags, and how the kassandra-market Pinocchio program pins its CPIs and cranks."
+---
+
+The **kassandra-market** program is a thin Pinocchio (no-Anchor) wrapper that
+composes and verifies MetaDAO v0.4 `conditional_vault` + `amm` accounts,
+program-signs the value-moving CPIs, and defers resolution to the Kassandra
+oracle. It never custodies value on the trading hot path.
+
+- **Program ID:** `FEGNHWAB7kc7VC9CCwbvVPsv4Jykz2r2WQ758V4xCT9S`
+  (`programs/kassandra-market/src/lib.rs:17`).
+- **Entrypoint:** `process_instruction` → `processor::process`, which reads the
+  first byte of `instruction_data` as the [instruction discriminant](/market-protocol/instructions)
+  and dispatches to one processor per file (`processor/mod.rs`).
+- **External programs bound:** conditional_vault
+  `VLTX1ishMBbcX3rdBWGssxawAo1Q2X2qxYFYqiGodVg`, amm v0.4
+  `AMMyu265tkBpRW21iGQxKGLaves3gKm2JcMUqfXNSpqD`.
+
+## Account-type tags
+
+Every account is a `#[repr(C)]`, `Pod + Zeroable` struct, fully packed with
+explicit padding, whose **first byte is an `AccountType` tag** to reject
+type-confusion (`state.rs:17`). A freshly `CreateAccount`'d account carries
+`Uninitialized` (0) until it is stamped.
+
+| Variant | Value | Account |
+| --- | --- | --- |
+| `Uninitialized` | 0 | (zeroed, unstamped) |
+| `Config` | 1 | the governed singleton |
+| `Market` | 2 | a per-outcome binary sub-market |
+| `Contribution` | 3 | a per-contributor stake |
+
+## The security model
+
+The program is audited-in-spirit against the
+[Solana Security Standard](https://github.com/Copenhagen0x/solana-security-standard).
+Because there is no Anchor, every check is hand-rolled in `processor/guards.rs`:
+
+<CardGroup cols={2}>
+  <Card title="Owner / PDA / tag checks" icon="shield-halved">
+    Every account is validated by owner, re-derived PDA address, and account-type
+    tag before its bytes are trusted. External MetaDAO accounts are owner-checked
+    against the callee program and their recorded fields are read and compared.
+  </Card>
+  <Card title="Program-signed CPIs pin the callee" icon="signature">
+    Every value-moving CPI pins the callee program id and binds its accounts to
+    recorded `Market` state, signed with the market seeds
+    `[b"market", oracle, [outcome_index], [bump]]`.
+  </Card>
+  <Card title="Permissionless cranks pin outputs" icon="rotate">
+    `activate`, `resolve_market`, `collect_fee`, `claim_lp`, `refund`, and
+    `close_market` are open to anyone, so each pins its destinations to immutable
+    recorded fields (e.g. a refund/LP destination must be owned by the recorded
+    contributor) — a cranker cannot redirect funds.
+  </Card>
+  <Card title="Checked / u128 math" icon="calculator">
+    All arithmetic is checked; the accrued-fee and pro-rata computations widen to
+    u128 intermediates and floor, never over-distributing.
+  </Card>
+</CardGroup>
+
+### init_config is gated to the upgrade authority
+
+The `[b"config"]` address is deterministic and known at deploy time, so an attacker
+could try to front-run genesis and seize `Config.authority` (the futarchy
+governance key). `init_config` defends against this two ways
+(`processor/init_config.rs`):
+
+- **Bootstrap authorization:** the caller must be the program's **on-chain upgrade
+  authority**, proven by reading the BPF-Upgradeable-Loader `ProgramData` account;
+  otherwise `NotUpgradeAuthority`.
+- **Create-or-adopt:** rather than a plain `CreateAccount` (which fails on any
+  pre-funded account and would brick genesis), it tops the balance up to
+  rent-exempt, then `Allocate`s + `Assign`s the PDA under the program seeds — so a
+  pre-funded singleton is adopted, not blocked. Re-init is rejected by the
+  account-type **tag**, not lamports.
+
+The same create-or-adopt idiom protects the three Market-PDA-owned token accounts
+in `activate`, so a lamport donation to a derivable PDA can never brick activation.
+
+## Reference
+
+<CardGroup cols={2}>
+  <Card title="Instructions" icon="scroll" href="/market-protocol/instructions">
+    All 11 instructions, discriminants, purposes, and key accounts.
+  </Card>
+  <Card title="Accounts" icon="box-open" href="/market-protocol/accounts">
+    Config / Market / Contribution field-by-field, LEN, enums.
+  </Card>
+  <Card title="PDAs" icon="fingerprint" href="/market-protocol/pdas">
+    Every PDA, its seeds, and purpose.
+  </Card>
+  <Card title="Errors" icon="triangle-exclamation" href="/market-protocol/errors">
+    MarketError codes 0–22, including the reserved ones.
+  </Card>
+</CardGroup>

@@ -110,6 +110,12 @@ pub enum Ix {
     /// (SPL `CloseAccount`) and the `Oracle` PDA, reclaiming both rents to
     /// `oracle.creator`. Requires governance to be set. Idempotent by closure.
     SweepOracle = 22,
+    /// Write the oracle's off-chain-authored but ON-CHAIN metadata — the
+    /// plaintext subject + option labels + a `uri`/`uri_hash` for the extended
+    /// JSON — into the companion `[b"oracle_meta", oracle]` PDA (sized to fit,
+    /// write-once). Lets other programs read the subject/options without our
+    /// indexer; the PDA's rent is reclaimed at `sweep_oracle`.
+    WriteOracleMeta = 23,
     // Future variants are APPENDED here with the next discriminant; add a
     // matching arm to `from_u8` below.
 }
@@ -142,6 +148,7 @@ impl Ix {
             20 => Some(Ix::CloseAiClaim),
             21 => Some(Ix::CloseMarket),
             22 => Some(Ix::SweepOracle),
+            23 => Some(Ix::WriteOracleMeta),
             _ => None,
         }
     }

@@ -38,7 +38,7 @@ fn setup_open(ctx: &mut TestCtx, nonce: u64, options_count: u8) -> Pubkey {
     let (_p, res) = ctx.init_protocol();
     assert!(res.is_ok(), "init_protocol should succeed: {res:?}");
     let deadline = ctx.now() + DEADLINE_DELTA;
-    let (oracle, res) = ctx.create_oracle(nonce, options_count, deadline, 600, [0x42; 32]);
+    let (oracle, res) = ctx.create_oracle(nonce, options_count, deadline, 600);
     assert!(res.is_ok(), "create_oracle should succeed: {res:?}");
     ctx.warp(DEADLINE_DELTA); // now >= deadline, inside the proposal window
     oracle
@@ -180,7 +180,7 @@ fn finalize_foreign_oracle_proposer_fails() {
 
     // Oracle B (same protocol) with its own proposer.
     let deadline_b = ctx.now() + DEADLINE_DELTA;
-    let (oracle_b, res) = ctx.create_oracle(2, 3, deadline_b, 600, [0x43; 32]);
+    let (oracle_b, res) = ctx.create_oracle(2, 3, deadline_b, 600);
     assert!(res.is_ok(), "create_oracle B should succeed: {res:?}");
     ctx.warp(DEADLINE_DELTA);
     let prop_b = propose_each(&mut ctx, oracle_b, &[0], 5_000);

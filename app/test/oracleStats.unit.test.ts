@@ -42,7 +42,6 @@ function makeOracle(over: Partial<Oracle>): Oracle {
     bump: 254,
     resolvedOption: 0xff,
     openChallengeCount: 0,
-    promptHash: new Uint8Array(32),
     thresholdNum: 2n,
     thresholdDen: 3n,
     marketThresholdNum: 1n,

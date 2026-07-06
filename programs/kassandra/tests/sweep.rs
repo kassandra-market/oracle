@@ -92,6 +92,7 @@ impl Sweepable {
             self.protocol,
             self.treasury,
             self.creator.pubkey(),
+            None,
         )
     }
 }
@@ -187,6 +188,7 @@ fn sweep_wrong_treasury_fails() {
         f.protocol,
         wrong,
         f.creator.pubkey(),
+        None,
     );
     assert_eq!(
         ctx.send(ix, &[]).unwrap_err().err,
@@ -206,6 +208,7 @@ fn sweep_wrong_creator_fails() {
         f.protocol,
         f.treasury,
         Pubkey::new_unique(), // not oracle.creator
+        None,
     );
     assert_eq!(
         ctx.send(ix, &[]).unwrap_err().err,
@@ -225,6 +228,7 @@ fn sweep_wrong_stake_vault_fails() {
         f.protocol,
         f.treasury,
         f.creator.pubkey(),
+        None,
     );
     assert_eq!(
         ctx.send(ix, &[]).unwrap_err().err,

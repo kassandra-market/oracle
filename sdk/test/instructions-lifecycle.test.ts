@@ -40,8 +40,10 @@ import {
   resolveDeadend,
   setConfig,
   setGovernance,
+  writeOracleMeta,
   type SetConfigParams,
 } from "../src/instructions/index.js";
+import { decodeOracleMeta } from "../src/accounts/index.js";
 import { toLiteSvmTransaction } from "../src/litesvm-interop.js";
 
 const PROGRAM_ID = "KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY";
@@ -94,16 +96,14 @@ describe("D3a instruction builders — data bytes + account metas", () => {
     ]);
   });
 
-  it("createOracle: 57-byte payload (nonce, prompt_hash, options, deadline, twap) + 10 accounts", async () => {
+  it("createOracle: 25-byte payload (nonce, options, deadline, twap) + 10 accounts", async () => {
     const nonce = 7n;
-    const promptHash = new Uint8Array(32).fill(0x42);
     const optionsCount = 3;
     const deadline = 1_700_000_000n;
     const twapWindow = 86_400n;
 
     const ix = await createOracle({
       nonce,
-      promptHash,
       optionsCount,
       deadline,
       twapWindow,
@@ -115,13 +115,12 @@ describe("D3a instruction builders — data bytes + account metas", () => {
 
     const expected = bytesOf(Ix.CreateOracle, [
       ...leU64(nonce),
-      ...Array.from(promptHash),
       optionsCount,
       ...leI64(deadline),
       ...leI64(twapWindow),
     ]);
     expect(ix.data).toEqual(expected);
-    expect(ix.data.length).toBe(1 + 57);
+    expect(ix.data.length).toBe(1 + 25);
 
     const protocol = await pda.protocol();
     const oracle = await pda.oracle(nonce);
@@ -140,6 +139,45 @@ describe("D3a instruction builders — data bytes + account metas", () => {
       [CREATOR_KASS, false, true],
       [mintAuth.address.toString(), false, false],
     ]);
+  });
+
+  it("writeOracleMeta: length-prefixed body round-trips through decodeOracleMeta", async () => {
+    const oracle = (await pda.oracle(7n)).address;
+    const subject = "Which team wins?";
+    const options = ["Red", "Blue", "Draw"];
+    const uri = "https://app.example/api/oracle/x/metadata.json";
+    const uriHash = new Uint8Array(32).fill(0xab);
+
+    const ix = await writeOracleMeta({
+      oracle,
+      creator: CREATOR,
+      subject,
+      options,
+      uri,
+      uriHash,
+    });
+
+    expect(ix.data[0]).toBe(Ix.WriteOracleMeta);
+    // Accounts: creator(signer,w), oracle(ro), oracle_meta(w), system(ro).
+    const meta = await pda.oracleMeta(oracle);
+    expect(metaTriples(ix.keys)).toEqual([
+      [CREATOR, true, true],
+      [oracle.toString(), false, false],
+      [meta.address.toString(), false, true],
+      [SYSTEM_PROGRAM_ID.toString(), false, false],
+    ]);
+
+    // Rebuild the on-chain account body (header + the ix payload) and decode it.
+    const body = ix.data.slice(1);
+    const account = new Uint8Array(34 + body.length);
+    account[0] = 8; // AccountType.OracleMeta
+    account.set(oracle.toBytes(), 2);
+    account.set(body, 34);
+    const decoded = decodeOracleMeta(account);
+    expect(decoded.subject).toBe(subject);
+    expect(decoded.options).toEqual(options);
+    expect(decoded.uri).toBe(uri);
+    expect(Array.from(decoded.uriHash)).toEqual(Array.from(uriHash));
   });
 
   it("propose: option u8 ++ bond u64 + 7 accounts", async () => {

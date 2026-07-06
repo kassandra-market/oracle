@@ -35,6 +35,7 @@ pub mod submit_ai_claim;
 pub mod submit_fact;
 pub mod sweep_oracle;
 pub mod vote_fact;
+pub mod write_oracle_meta;
 
 pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], data: &[u8]) -> ProgramResult {
     // First byte = discriminant; the rest is the per-instruction payload.
@@ -67,5 +68,6 @@ pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], data: &[u8]) -
         Ix::CloseAiClaim => close_ai_claim::process(program_id, accounts, payload),
         Ix::CloseMarket => close_market::process(program_id, accounts, payload),
         Ix::SweepOracle => sweep_oracle::process(program_id, accounts, payload),
+        Ix::WriteOracleMeta => write_oracle_meta::process(program_id, accounts, payload),
     }
 }

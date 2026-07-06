@@ -9,27 +9,39 @@ Kassandra is a monorepo spanning two build systems: a **Rust Cargo workspace** (
 
 | Path | What it is | Build system |
 | --- | --- | --- |
-| `programs/kassandra` | The on-chain program (`kassandra-program`), a Pinocchio-based Solana program. | Cargo (`cargo build-sbf`) |
+| `programs/kassandra` | The oracle on-chain program (`kassandra-program`), a Pinocchio-based Solana program. | Cargo (`cargo build-sbf`) |
+| `programs/kassandra-market` | The **prediction-market** on-chain program (`kassandra-market-program`) — a Pinocchio wrapper over MetaDAO v0.4 vault + amm, resolved by the oracle. | Cargo (`cargo build-sbf`) |
 | `runner` | The AI runner (`kassandra-runner`), a Rust binary/lib crate. | Cargo |
-| `sdk` | The hand-written TypeScript SDK (`@kassandra/sdk`). | pnpm |
-| `app` | The Vite + React web dApp. | pnpm |
-| `docs/` | Design docs (`docs/design/`) and dated implementation plans (`docs/plans/`). | — |
+| `sdk` | The oracle TypeScript SDK (`@kassandra/sdk`). | pnpm |
+| `sdk-market` | The market TypeScript SDK (`@kassandra-market/sdk`). | pnpm |
+| `sdk-rs` | The oracle Rust SDK (`kassandra-sdk`) — builders/PDAs used by the indexer + tests. | Cargo |
+| `sdk-rs-market` | The market Rust SDK (`kassandra-market-sdk`) — a solana-sdk v2 "island". | Cargo |
+| `indexer` | The single Carbon indexer (`kassandra-indexer`): two pipelines → one Postgres, serving both programs' read + gateway APIs. | Cargo |
+| `app` | The single Vite + React dApp — both `/oracles` and `/markets`. | pnpm |
+| `docs/` | Design docs and dated implementation plans (`docs/plans/`) for both programs. | — |
 | `docs-site/` | This Mintlify documentation site (config `docs.json`, MDX content). | Mintlify / npm |
 | `scripts/` | Bash fixture fetchers that dump MetaDAO program binaries for hermetic LiteSVM CPI tests. | — |
 
 ## The two workspaces
 
-The Cargo workspace (`Cargo.toml`) uses `resolver = "2"` with members `programs/kassandra` and `runner`. The runner reuses the program crate with the `no-entrypoint` feature so it can never drift from the on-chain layout.
+The Cargo workspace (`Cargo.toml`) uses `resolver = "2"` with members `programs/kassandra`, `programs/kassandra-market`, `runner`, `sdk-rs`, `sdk-rs-market`, and `indexer`. The oracle stack rides the granular **solana v3** client crates; the market program's tests + `sdk-rs-market` are a **solana-sdk v2 island** (pinned directly, not via the workspace), so both majors coexist without a cross-crate type split. The shipped indexer stays v3-clean.
 
-The pnpm workspace (`pnpm-workspace.yaml`) contains exactly two packages:
+The pnpm workspace (`pnpm-workspace.yaml`) contains:
 
 ```yaml
 packages:
   - "sdk"
+  - "sdk-market"
   - "app"
+  - "docs-site"
 ```
 
-The app consumes the SDK via `workspace:*` and needs `sdk/dist/` built first (`pnpm --filter @kassandra/sdk build` or `pnpm -r build`). The `runner` and `programs/kassandra` are **not** JS/TS workspace members — they are Rust.
+The app consumes **both** SDKs via `workspace:*` and needs their `dist/` built first (`pnpm --filter ./sdk build && pnpm --filter ./sdk-market build`). The Rust crates (`programs/*`, `runner`, `sdk-rs*`, `indexer`) are **not** JS/TS workspace members.
+
+<Note>
+  Filter tip: the SDK package is named `@kassandra/sdk`, so `pnpm --filter sdk` does **not**
+  match it — use the path form `pnpm --filter ./sdk` (and `./sdk-market`).
+</Note>
 
 ## Fixture scripts
 

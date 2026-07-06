@@ -5,8 +5,7 @@
  * init_protocol + mint KASS to a funded USER keypair at its canonical ATA, then
  * drive `buildCreateOracleIxs` through the {@link keypairSender}-backed
  * {@link sendAndConfirm} seam (the SAME action the UI uses) and decode the
- * created Oracle — asserting promptHash == sha256(question), optionsCount,
- * deadline, and creator == the user.
+ * created Oracle — asserting optionsCount, deadline, and creator == the user.
  *
  * Gated: skips (never fails) unless `KASSANDRA_E2E=1` AND surfpool + the built
  * `.so` are present.
@@ -38,10 +37,6 @@ interface Fixture {
   payer: Keypair;
   kassMint: Keypair;
   usdcMint: Keypair;
-}
-
-async function sha256(s: string): Promise<Uint8Array> {
-  return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
 }
 
 describe.skipIf(!ENABLED)("create-oracle action over a real surfpool cluster", () => {
@@ -115,7 +110,6 @@ describe.skipIf(!ENABLED)("create-oracle action over a real surfpool cluster", (
     expect(signature).toBeTruthy();
 
     const oracle = decodeOracle(await fetchAccount(f, built.oracle));
-    expect(toHex(oracle.promptHash)).toBe(toHex(await sha256(question)));
     expect(oracle.optionsCount).toBe(optionsCount);
     expect(oracle.deadline).toBe(deadline);
     expect(oracle.creator.toString()).toBe(user.publicKey.toString());

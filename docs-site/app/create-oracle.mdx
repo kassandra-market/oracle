@@ -10,14 +10,22 @@ The form wraps the pure action layer at `app/src/data/actions/create.ts`, which 
 ## Form fields
 
 <ParamField path="question" type="string">
-  The oracle's resolution rules in plain text. The app hashes it to the on-chain
-  `prompt_hash` (32 bytes) — the interpretation commitment. Keep the exact text
-  you hashed; the AI runner must re-supply it verbatim so its `sha256` matches
-  (see [Running the runner](/ops/runner)).
+  The oracle's question in plain text. It is stored **on-chain** (as the subject
+  of the companion `oracle_meta` account) so other programs — and the AI runner —
+  can read it directly without the indexer.
 </ParamField>
 
-<ParamField path="options count" type="number">
-  The number of categorical options (mirrors `Oracle.options_count`).
+<ParamField path="options" type="string[]">
+  The categorical option labels. Stored on-chain in `oracle_meta`; their count
+  drives `Oracle.options_count`.
+</ParamField>
+
+<ParamField path="Advanced (optional)" type="metadata">
+  A `promptTemplate` (the AI-runner interpretation, defaulted from the question),
+  an optional human `interpretation`, and a `category`. These go into an extended
+  JSON hosted off-chain at the oracle's `uri`, bound by a 32-byte `uri_hash` on
+  `oracle_meta` (tamper-evident). The runner reads the interpretation from there
+  (see [Running the runner](/ops/runner)).
 </ParamField>
 
 <ParamField path="deadline" type="timestamp">
@@ -34,11 +42,13 @@ The TWAP window (`twap_window`) — the length of the challenge-market TWAP wind
 
 ## The instruction it builds
 
-`createOracle` produces the `create_oracle` instruction. Its 57-byte payload is (`sdk/src/instructions/lifecycle.ts`):
+`createOracle` produces the `create_oracle` instruction. Its 25-byte payload is (`sdk/src/instructions/lifecycle.ts`):
 
 ```
-nonce u64 ++ prompt_hash[32] ++ options_count u8 ++ deadline i64 ++ twap_window i64
+nonce u64 ++ options_count u8 ++ deadline i64 ++ twap_window i64
 ```
+
+The metadata (subject + option labels + `uri`/`uri_hash`) is written by a second instruction, `write_oracle_meta` (Ix = 23), appended to the **same transaction** so an oracle is never created without its metadata. It fills the companion `oracle_meta` PDA (`[b"oracle_meta", oracle]`).
 
 The **nonce** is the oracle's identity: the Oracle PDA is derived as `[b"oracle", nonce_u64_le]` (`sdk/src/pda.ts` `oracle`). Because the nonce is not stored on-chain but is needed later by finalize-facts, finalize-oracle, and the claim/close/sweep instructions, the app persists it per-browser at create time (`app/src/lib/nonceStore.ts`).
 

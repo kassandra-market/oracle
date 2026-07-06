@@ -10,7 +10,6 @@ import { Address } from "@solana/web3.js";
 import { AccountType, ACCOUNT_SIZES, Phase } from "../constants.js";
 import {
   assertAccount,
-  readBytes,
   readI64LE,
   readPubkey,
   readU16LE,
@@ -58,8 +57,6 @@ export interface Oracle {
   resolvedOption: number;
   /** Number of open (created-but-not-settled) challenge markets. */
   openChallengeCount: number;
-  /** Hash of the fixed prompt + interpretation (32 bytes). */
-  promptHash: Uint8Array;
   // Governable params snapshotted from Protocol at create_oracle.
   thresholdNum: bigint;
   thresholdDen: bigint;
@@ -116,26 +113,26 @@ export function decodeOracle(data: Uint8Array): Oracle {
     bump: readU8(dv, 196),
     resolvedOption: readU8(dv, 197),
     openChallengeCount: readU16LE(dv, 198),
-    promptHash: readBytes(data, 200, 32),
-    thresholdNum: readU64LE(dv, 232),
-    thresholdDen: readU64LE(dv, 240),
-    marketThresholdNum: readU64LE(dv, 248),
-    marketThresholdDen: readU64LE(dv, 256),
-    flipSlashNum: readU64LE(dv, 264),
-    flipSlashDen: readU64LE(dv, 272),
-    phaseWindow: readI64LE(dv, 280),
-    proposalWindow: readI64LE(dv, 288),
-    factVoteSlashNum: readU64LE(dv, 296),
-    factVoteSlashDen: readU64LE(dv, 304),
-    rewardProposerWeight: readU64LE(dv, 312),
-    rewardFactWeight: readU64LE(dv, 320),
-    challengeFailUsdcFeeNum: readU64LE(dv, 328),
-    challengeFailUsdcFeeDen: readU64LE(dv, 336),
-    challengeSuccessKassFeeNum: readU64LE(dv, 344),
-    challengeSuccessKassFeeDen: readU64LE(dv, 352),
-    totalCorrectProposerStake: readU64LE(dv, 360),
-    totalApprovedFactStake: readU64LE(dv, 368),
-    rewardPool: readU64LE(dv, 376),
-    rewardEmission: readU64LE(dv, 384),
+    // (former `prompt_hash` [u8;32] @200 removed — everything below shifted -32.)
+    thresholdNum: readU64LE(dv, 200),
+    thresholdDen: readU64LE(dv, 208),
+    marketThresholdNum: readU64LE(dv, 216),
+    marketThresholdDen: readU64LE(dv, 224),
+    flipSlashNum: readU64LE(dv, 232),
+    flipSlashDen: readU64LE(dv, 240),
+    phaseWindow: readI64LE(dv, 248),
+    proposalWindow: readI64LE(dv, 256),
+    factVoteSlashNum: readU64LE(dv, 264),
+    factVoteSlashDen: readU64LE(dv, 272),
+    rewardProposerWeight: readU64LE(dv, 280),
+    rewardFactWeight: readU64LE(dv, 288),
+    challengeFailUsdcFeeNum: readU64LE(dv, 296),
+    challengeFailUsdcFeeDen: readU64LE(dv, 304),
+    challengeSuccessKassFeeNum: readU64LE(dv, 312),
+    challengeSuccessKassFeeDen: readU64LE(dv, 320),
+    totalCorrectProposerStake: readU64LE(dv, 328),
+    totalApprovedFactStake: readU64LE(dv, 336),
+    rewardPool: readU64LE(dv, 344),
+    rewardEmission: readU64LE(dv, 352),
   };
 }

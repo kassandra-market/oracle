@@ -171,7 +171,6 @@ async function main(): Promise<void> {
     payer,
     await createOracle({
       nonce,
-      promptHash: new Uint8Array(32).fill(0x42),
       optionsCount: 3,
       deadline,
       twapWindow: 600n,

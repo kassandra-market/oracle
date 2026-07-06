@@ -28,6 +28,7 @@ import {
   associatedTokenAccount,
   createOracle,
   pda,
+  writeOracleMeta,
 } from "@kassandra/sdk";
 import { ValidationError, hashToContentHash } from "../actions";
 
@@ -39,6 +40,65 @@ export const DEFAULT_TWAP_WINDOW = 3600n;
 
 /** Inclusive upper bound on `options_count` (u8; index 255 is the CLAIM_OPTION_NONE sentinel). */
 export const MAX_OPTIONS_COUNT = 255;
+
+/** Version tag of the extended off-chain metadata JSON schema. */
+export const ORACLE_META_JSON_VERSION = 1;
+
+/**
+ * The default AI-runner interpretation (the `promptTemplate`) generated from the
+ * question. The runner reads this verbatim as the resolution rule, so it embeds
+ * the concrete subject rather than a placeholder template. Creators can override
+ * it via the create form's "Advanced" disclosure.
+ */
+export function defaultPromptTemplate(subject: string): string {
+  return (
+    `Resolve the question "${subject}" by selecting exactly one of the listed options. ` +
+    `Base the decision ONLY on the verified facts provided. If the facts are insufficient ` +
+    `to decide, choose the option that best reflects the most likely outcome given those facts.`
+  );
+}
+
+/** The extended off-chain metadata JSON (hosted at the oracle's `uri`, bound by `uri_hash`). */
+export interface OracleMetadataJson {
+  version: number;
+  subject: string;
+  options: string[];
+  promptTemplate: string;
+  interpretation?: string;
+  category?: string;
+  createdAt: number;
+}
+
+/**
+ * Build the extended-metadata JSON object. The on-chain `oracle_meta` stores the
+ * subject + option labels (program-readable) plus this JSON's `uri` + its
+ * `sha256` (`uri_hash`); the extended fields (prompt template, interpretation,
+ * category) live here, off chain, bound by that hash.
+ */
+export function buildOracleMetadataJson(args: {
+  subject: string;
+  options: string[];
+  promptTemplate?: string;
+  interpretation?: string;
+  category?: string;
+  createdAt?: number;
+}): OracleMetadataJson {
+  const json: OracleMetadataJson = {
+    version: ORACLE_META_JSON_VERSION,
+    subject: args.subject,
+    options: args.options,
+    promptTemplate: args.promptTemplate?.trim() || defaultPromptTemplate(args.subject),
+    createdAt: args.createdAt ?? Date.now(),
+  };
+  if (args.interpretation?.trim()) json.interpretation = args.interpretation.trim();
+  if (args.category?.trim()) json.category = args.category.trim();
+  return json;
+}
+
+/** The public URL the app server hosts an oracle's metadata JSON at. */
+export function oracleMetadataUri(appOrigin: string, oracle: Address): string {
+  return `${appOrigin.replace(/\/$/, "")}/api/oracle/${oracle.toString()}/metadata.json`;
+}
 
 /** Coerce an {@link AddressInput} into an `Address`, re-typing a parse failure as a field error. */
 function mint(field: string, a: AddressInput): Address {
@@ -103,8 +163,14 @@ export interface BuildCreateOracleArgs {
   connection: Connection;
   /** Human-readable question text — SHA-256'd into the on-chain `prompt_hash`. */
   question: string;
-  /** Categorical option count (2..255). */
-  optionsCount: number;
+  /**
+   * The option LABELS (2..255). When given, they drive `options_count` AND are
+   * attached (with the subject) as a memo so the browse/detail views can show
+   * them. Prefer this over the bare `optionsCount`.
+   */
+  options?: string[];
+  /** Categorical option count — used only when `options` is not provided. */
+  optionsCount?: number;
   /** Resolution deadline as a unix timestamp (seconds); must be in the future. */
   deadline: bigint | number;
   /** Creator authority (the signer): pays rent + is the creation-fee burn source. */
@@ -117,19 +183,41 @@ export interface BuildCreateOracleArgs {
   nonce?: bigint | number;
   /** TWAP window (seconds, > 0). Defaults to {@link DEFAULT_TWAP_WINDOW}. */
   twapWindow?: bigint | number;
+  /**
+   * The app's public origin (e.g. `https://app.kassandra.fi` or, in dev,
+   * `window.location.origin`). REQUIRED when `options` is provided: the oracle's
+   * metadata `uri` is hosted at `${appOrigin}/api/oracle/{oracle}/metadata.json`.
+   */
+  appOrigin?: string;
+  /** AI-runner interpretation template. Defaults to {@link defaultPromptTemplate}. */
+  promptTemplate?: string;
+  /** Optional human resolution rules (stored in the off-chain JSON). */
+  interpretation?: string;
+  /** Optional category tag (stored in the off-chain JSON). */
+  category?: string;
   programId?: Address;
 }
 
 /** The create-oracle build result: the ixs to send plus the derived identifiers. */
 export interface CreateOracleBuild {
-  /** The instruction list (optional create-ATA, then `createOracle`). */
+  /** The instruction list (optional create-ATA, `createOracle`, then `writeOracleMeta`). */
   ixs: TransactionInstruction[];
   /** The resolved oracle nonce (caller-supplied or generated). */
   nonce: bigint;
   /** The derived Oracle PDA (`[b"oracle", nonce_le8]`) — the navigation target. */
   oracle: Address;
-  /** The 32-byte SHA-256 of `question` written on-chain as `prompt_hash`. */
-  promptHash: Uint8Array;
+  /**
+   * The extended metadata JSON to POST to the app server (which hosts it at the
+   * on-chain `uri`, gated by `uri_hash`). Present only when `options` was given.
+   * `jsonString` is the EXACT bytes that were hashed into `uri_hash` — POST it
+   * verbatim so the served content matches the commitment.
+   */
+  metadata?: {
+    json: OracleMetadataJson;
+    jsonString: string;
+    uri: string;
+    uriHash: Uint8Array;
+  };
 }
 
 /**
@@ -144,10 +232,18 @@ export async function buildCreateOracleIxs(
   if (args.question.trim().length === 0) {
     throw new ValidationError("question", "Question must not be empty.");
   }
-  if (!Number.isInteger(args.optionsCount) || args.optionsCount < 2) {
-    throw new ValidationError("optionsCount", "Options count must be an integer >= 2.");
+  // Option labels (preferred) drive the count + the memo; a bare `optionsCount`
+  // is still accepted (legacy / no-metadata path).
+  if (args.options) {
+    if (args.options.some((o) => o.trim().length === 0)) {
+      throw new ValidationError("options", "Option labels must not be empty.");
+    }
   }
-  if (args.optionsCount > MAX_OPTIONS_COUNT) {
+  const optionsCount = args.options ? args.options.length : args.optionsCount;
+  if (optionsCount === undefined || !Number.isInteger(optionsCount) || optionsCount < 2) {
+    throw new ValidationError("optionsCount", "There must be at least 2 options.");
+  }
+  if (optionsCount > MAX_OPTIONS_COUNT) {
     throw new ValidationError(
       "optionsCount",
       `Options count must be <= ${MAX_OPTIONS_COUNT}.`,
@@ -168,15 +264,13 @@ export async function buildCreateOracleIxs(
   const usdcMint = mint("usdcMint", args.usdcMint);
 
   const nonce = args.nonce === undefined ? randomNonce() : BigInt(args.nonce);
-  const promptHash = await hashToContentHash(args.question);
   const oracle = (await pda.oracle(nonce, args.programId)).address;
 
   const { ata, createIx } = await ensureCreatorKassAta(args.connection, creator, kassMint);
 
   const ix = await createOracle({
     nonce,
-    promptHash,
-    optionsCount: args.optionsCount,
+    optionsCount,
     deadline,
     twapWindow,
     creator,
@@ -186,10 +280,37 @@ export async function buildCreateOracleIxs(
     programId: args.programId,
   });
 
-  return {
-    ixs: createIx ? [createIx, ix] : [ix],
-    nonce,
-    oracle,
-    promptHash,
-  };
+  const ixs: TransactionInstruction[] = createIx ? [createIx, ix] : [ix];
+
+  // With option labels, write the on-chain metadata (subject + labels + uri/uri_hash)
+  // in the SAME tx (atomic: no oracle without its metadata). The extended JSON is
+  // returned for the caller to POST to the app's metadata host.
+  let metadata: CreateOracleBuild["metadata"];
+  if (args.options) {
+    const json = buildOracleMetadataJson({
+      subject: args.question,
+      options: args.options,
+      promptTemplate: args.promptTemplate,
+      interpretation: args.interpretation,
+      category: args.category,
+    });
+    const jsonString = JSON.stringify(json);
+    const uriHash = await hashToContentHash(jsonString);
+    const uri = args.appOrigin ? oracleMetadataUri(args.appOrigin, oracle) : "";
+
+    ixs.push(
+      await writeOracleMeta({
+        oracle,
+        creator,
+        subject: args.question,
+        options: args.options,
+        uri,
+        uriHash,
+        programId: args.programId,
+      }),
+    );
+    metadata = { json, jsonString, uri, uriHash };
+  }
+
+  return { ixs, nonce, oracle, metadata };
 }

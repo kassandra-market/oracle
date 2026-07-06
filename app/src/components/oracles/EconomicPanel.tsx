@@ -1,5 +1,5 @@
 import type { Oracle, Proposer } from '@kassandra/sdk'
-import { groupDigits } from '../../lib/oracleView'
+import { formatKass } from '../../lib/oracleView'
 
 /** A percent 0..100 of `value` against `max` (bigint-safe), floored to a visible sliver when nonzero. */
 function pct(value: bigint, max: bigint): number {
@@ -24,7 +24,7 @@ function Bar({
     <div>
       <div className="flex items-baseline justify-between gap-3">
         <span className="font-inter text-[12px] text-driftwood">{label}</span>
-        <span className="font-inter text-[12px] tabular-nums text-sepia">{groupDigits(value)}</span>
+        <span className="font-inter text-[12px] tabular-nums text-sepia">{formatKass(value)}</span>
       </div>
       <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-soft-cream">
         <div className={`h-full rounded-full ${fill}`} style={{ width: `${width}%` }} />
@@ -79,7 +79,7 @@ export function EconomicPanel({
       className="mt-4 rounded-card border border-pebble bg-pure-card p-5"
     >
       <span className="font-inter text-[11px] uppercase tracking-[0.06em] text-driftwood">
-        Economics · raw KASS base units
+        Economics · KASS
       </span>
 
       {/* Vault meters */}

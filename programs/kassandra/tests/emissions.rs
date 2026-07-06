@@ -61,7 +61,7 @@ fn create_oracle_mints_emission_into_vault() {
 
     let supply_before = ctx.mint_supply(ctx.kass_mint);
     let deadline = ctx.now() + 1_000;
-    let (oracle, res) = ctx.create_oracle(0, 2, deadline, 600, [0x55; 32]);
+    let (oracle, res) = ctx.create_oracle(0, 2, deadline, 600);
     assert!(res.is_ok(), "create_oracle: {res:?}");
 
     // Genesis creation → fee 0 → no burn; emission on the full reservoir.
@@ -92,13 +92,13 @@ fn fee_burn_boosts_emission() {
 
     // Genesis creation is free (no burn).
     let deadline = ctx.now() + 1_000_000;
-    let (_o0, res) = ctx.create_oracle(0, 2, deadline, 600, [0x11; 32]);
+    let (_o0, res) = ctx.create_oracle(0, 2, deadline, 600);
     assert!(res.is_ok(), "genesis create: {res:?}");
 
     // Second rapid creation: a positive fee is burned BEFORE the emission mint.
     let bal_pre = ctx.token_balance(ctx.payer_kass);
     let supply_pre = ctx.mint_supply(ctx.kass_mint);
-    let (o1, res) = ctx.create_oracle(1, 2, deadline, 600, [0x22; 32]);
+    let (o1, res) = ctx.create_oracle(1, 2, deadline, 600);
     assert!(res.is_ok(), "second create: {res:?}");
 
     let fee = bal_pre - ctx.token_balance(ctx.payer_kass);
@@ -244,7 +244,7 @@ fn mint_authority_mismatch_rejected() {
     ctx.set_kass_mint_authority(payer);
 
     let deadline = ctx.now() + 1_000;
-    let (_o, res) = ctx.create_oracle(0, 2, deadline, 600, [0x99; 32]);
+    let (_o, res) = ctx.create_oracle(0, 2, deadline, 600);
     let err = res.unwrap_err().err;
     assert_eq!(
         err,
@@ -267,7 +267,7 @@ fn cap_zero_emits_nothing() {
 
     let supply_before = ctx.mint_supply(ctx.kass_mint);
     let deadline = ctx.now() + 1_000;
-    let (oracle, res) = ctx.create_oracle(0, 2, deadline, 600, [0x33; 32]);
+    let (oracle, res) = ctx.create_oracle(0, 2, deadline, 600);
     assert!(res.is_ok(), "create with cap 0: {res:?}");
 
     assert_eq!(ctx.oracle(oracle).reward_emission, 0);
@@ -288,7 +288,7 @@ fn emission_num_zero_emits_nothing() {
 
     let supply_before = ctx.mint_supply(ctx.kass_mint);
     let deadline = ctx.now() + 1_000;
-    let (oracle, res) = ctx.create_oracle(0, 2, deadline, 600, [0x44; 32]);
+    let (oracle, res) = ctx.create_oracle(0, 2, deadline, 600);
     assert!(res.is_ok(), "create with emission_num 0: {res:?}");
 
     assert_eq!(ctx.oracle(oracle).reward_emission, 0);

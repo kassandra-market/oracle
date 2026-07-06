@@ -87,7 +87,7 @@ consumes `@kassandra/sdk` via `workspace:*`, so the SDK must be built first. See
 
 | On-chain (program) | Off-chain |
 | --- | --- |
-| Request config: prompt hash, options, deadline, TWAP window | Model inference (private to each runner) |
+| Request config: `oracle_meta` (subject, labels, uri/uri_hash), options, deadline, TWAP window | Model inference (private to each runner) |
 | All KASS stakes/bonds and USDC market collateral | Prompt assembly and fact fetching |
 | Fact set, votes, and approval tallies | Raw AI output (never stored on-chain) |
 | AI-claim metadata (model/params/io hashes, option) | MetaDAO market composition transactions |

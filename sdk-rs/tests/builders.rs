@@ -17,15 +17,13 @@ fn program_id_is_canonical() {
 }
 
 #[test]
-fn create_oracle_payload_is_57_plus_disc_in_field_order() {
-    let prompt = [7u8; 32];
+fn create_oracle_payload_is_25_plus_disc_in_field_order() {
     let ix = ix::create_oracle(
         &PROGRAM_ID,
         42,    // nonce
         3,     // options_count
         1_234, // deadline
         600,   // twap_window
-        &prompt,
         pk(1),
         pk(2),
         pk(3),
@@ -33,18 +31,58 @@ fn create_oracle_payload_is_57_plus_disc_in_field_order() {
         pk(5),
     );
     assert_eq!(ix.data[0], Ix::CreateOracle as u8);
-    assert_eq!(ix.data.len(), 1 + 57);
+    assert_eq!(ix.data.len(), 1 + 25);
     // nonce (LE u64) at payload offset 0.
     assert_eq!(&ix.data[1..9], &42u64.to_le_bytes());
-    // prompt_hash at offset 8.
-    assert_eq!(&ix.data[9..41], &prompt);
-    // options_count at offset 40.
-    assert_eq!(ix.data[41], 3);
-    // deadline (LE i64) at offset 41.
-    assert_eq!(&ix.data[42..50], &1_234i64.to_le_bytes());
-    // twap_window (LE i64) at offset 49.
-    assert_eq!(&ix.data[50..58], &600i64.to_le_bytes());
+    // options_count at offset 8 (prompt_hash removed).
+    assert_eq!(ix.data[9], 3);
+    // deadline (LE i64) at offset 9.
+    assert_eq!(&ix.data[10..18], &1_234i64.to_le_bytes());
+    // twap_window (LE i64) at offset 17.
+    assert_eq!(&ix.data[18..26], &600i64.to_le_bytes());
     assert_eq!(ix.accounts.len(), 10);
+}
+
+#[test]
+fn write_oracle_meta_body_is_length_prefixed_in_order() {
+    let uri_hash = [9u8; 32];
+    let ix = ix::write_oracle_meta(
+        &PROGRAM_ID,
+        pk(1), // oracle
+        pk(2), // creator
+        "Q?",
+        &["Yes", "No"],
+        "u",
+        &uri_hash,
+    );
+    assert_eq!(ix.data[0], Ix::WriteOracleMeta as u8);
+    let body = &ix.data[1..];
+    let mut off = 0usize;
+    // subject
+    assert_eq!(&body[off..off + 2], &2u16.to_le_bytes());
+    off += 2;
+    assert_eq!(&body[off..off + 2], b"Q?");
+    off += 2;
+    // options
+    assert_eq!(body[off], 2);
+    off += 1;
+    for label in ["Yes", "No"] {
+        assert_eq!(&body[off..off + 2], &(label.len() as u16).to_le_bytes());
+        off += 2;
+        assert_eq!(&body[off..off + label.len()], label.as_bytes());
+        off += label.len();
+    }
+    // uri
+    assert_eq!(&body[off..off + 2], &1u16.to_le_bytes());
+    off += 2;
+    assert_eq!(&body[off..off + 1], b"u");
+    off += 1;
+    // uri_hash
+    assert_eq!(&body[off..off + 32], &uri_hash);
+    assert_eq!(off + 32, body.len(), "no trailing bytes");
+    // creator (signer) + oracle + meta + system.
+    assert_eq!(ix.accounts.len(), 4);
+    assert!(ix.accounts[0].is_signer);
 }
 
 #[test]

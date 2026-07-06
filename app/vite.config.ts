@@ -45,6 +45,21 @@ function injectE2eWallet(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [injectE2eWallet(), react(), tailwindcss()],
+  // Both `@kassandra/sdk` and `@kassandra-market/sdk` (and the app) resolve
+  // `@solana/web3.js` — dedupe to ONE copy so `Address`/`instanceof` checks pass
+  // across the app + both SDKs.
+  resolve: { dedupe: ['@solana/web3.js'] },
+  // Dev: the market client talks to the indexer over same-origin `/api/*`; proxy
+  // it to the local indexer (the oracle side uses a direct VITE_RPC_URL in dev).
+  server: {
+    proxy: {
+      '/api': {
+        target:
+          process.env.INDEXER_URL ?? process.env.VITE_INDEXER_URL ?? 'http://127.0.0.1:3111',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     rollupOptions: {
       output: {
@@ -53,9 +68,14 @@ export default defineConfig({
         // (wallet-adapter / web3.js / the SDK) cache across route navigations
         // and deploys. Purely a bundling detail — no runtime behavior change.
         manualChunks(id) {
-          // @kassandra/sdk resolves via the workspace to sdk/dist (NOT
-          // node_modules), so key on either the package name or the dist path.
-          if (id.includes('@kassandra/sdk') || id.includes('/sdk/dist/')) {
+          // The two workspace SDKs resolve to their dist/ (NOT node_modules), so
+          // key on either the package name or the dist path.
+          if (
+            id.includes('@kassandra/sdk') ||
+            id.includes('/sdk/dist/') ||
+            id.includes('@kassandra-market/sdk') ||
+            id.includes('/sdk-market/dist/')
+          ) {
             return 'sdk'
           }
           // Solana: wallet-adapter, web3.js, and their low-level deps (ox,

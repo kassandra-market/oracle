@@ -233,7 +233,6 @@ async function createOracleAndOpen(
   const deadline = f.svm.getClock().unixTimestamp + 1_000n; // near future
   const ix = await createOracle({
     nonce,
-    promptHash: new Uint8Array(32).fill(0x42),
     optionsCount,
     deadline,
     twapWindow: 600n,
@@ -320,7 +319,6 @@ describe("D4 litesvm end-to-end lifecycle via the SDK", () => {
     expect(o.usdcMint.toString()).toBe(f.usdcMint.publicKey.toString());
     expect(o.optionsCount).toBe(3);
     expect(o.proposerCount).toBe(0);
-    expect(Array.from(o.promptHash)).toEqual(Array.from(new Uint8Array(32).fill(0x42)));
 
     // 3. propose ×3, ALL agreeing on option 1.
     const agreedOption = 1;

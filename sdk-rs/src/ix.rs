@@ -372,8 +372,8 @@ pub fn init_protocol(
 
 // ===================================================================== Ix 10
 /// `CreateOracle` (Ix 10). Derives the protocol, stake-vault, and mint-authority
-/// PDAs internally. Payload order is nonce, prompt_hash, options_count, deadline,
-/// twap_window (NOT the account order).
+/// PDAs internally. Payload order is nonce, options_count, deadline, twap_window
+/// (NOT the account order). The subject now lives on-chain in `oracle_meta`.
 #[allow(clippy::too_many_arguments)]
 pub fn create_oracle(
     program_id: &Pubkey,
@@ -381,7 +381,6 @@ pub fn create_oracle(
     options_count: u8,
     deadline: i64,
     twap_window: i64,
-    prompt_hash: &[u8; 32],
     oracle: Pubkey,
     kass_mint: Pubkey,
     usdc_mint: Pubkey,
@@ -392,10 +391,9 @@ pub fn create_oracle(
     let (stake_vault, _) = crate::pda::stake_vault(program_id, &oracle);
     let (mint_authority, _) = crate::pda::mint_authority(program_id);
 
-    let mut data = Vec::with_capacity(1 + 57);
+    let mut data = Vec::with_capacity(1 + 25);
     data.push(Ix::CreateOracle as u8);
     data.extend_from_slice(&nonce.to_le_bytes());
-    data.extend_from_slice(prompt_hash);
     data.push(options_count);
     data.extend_from_slice(&deadline.to_le_bytes());
     data.extend_from_slice(&twap_window.to_le_bytes());
@@ -685,19 +683,65 @@ pub fn sweep_oracle(
     protocol: Pubkey,
     dao_treasury: Pubkey,
     creator: Pubkey,
+    // The companion oracle_meta PDA, closed alongside the oracle (rent → creator).
+    // `None` for an oracle that has no metadata (the close is skipped).
+    oracle_meta: Option<Pubkey>,
 ) -> Instruction {
     let mut data = Vec::with_capacity(1 + 8);
     data.push(Ix::SweepOracle as u8);
     data.extend_from_slice(&nonce.to_le_bytes());
+    let mut accounts = vec![
+        AccountMeta::new(oracle, false),
+        AccountMeta::new(stake_vault, false),
+        AccountMeta::new_readonly(protocol, false),
+        AccountMeta::new(dao_treasury, false),
+        AccountMeta::new(creator, false),
+        AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+    ];
+    if let Some(meta) = oracle_meta {
+        accounts.push(AccountMeta::new(meta, false));
+    }
+    build(program_id, accounts, data)
+}
+
+// ===================================================================== Ix 23
+/// `WriteOracleMeta` (Ix 23). Writes the companion `[b"oracle_meta", oracle]`
+/// PDA — the plaintext `subject` + option `labels` + `uri`/`uri_hash`. The body
+/// is length-prefixed (`subject_len u16 ++ subject ++ options_count u8 ++
+/// [option_len u16 ++ option]* ++ uri_len u16 ++ uri ++ uri_hash[32]`); the
+/// account is sized to fit and is write-once, gated to the oracle's creator.
+#[allow(clippy::too_many_arguments)]
+pub fn write_oracle_meta(
+    program_id: &Pubkey,
+    oracle: Pubkey,
+    creator: Pubkey,
+    subject: &str,
+    options: &[&str],
+    uri: &str,
+    uri_hash: &[u8; 32],
+) -> Instruction {
+    let (meta, _) = crate::pda::oracle_meta(program_id, &oracle);
+
+    let mut data = Vec::new();
+    data.push(Ix::WriteOracleMeta as u8);
+    data.extend_from_slice(&(subject.len() as u16).to_le_bytes());
+    data.extend_from_slice(subject.as_bytes());
+    data.push(options.len() as u8);
+    for o in options {
+        data.extend_from_slice(&(o.len() as u16).to_le_bytes());
+        data.extend_from_slice(o.as_bytes());
+    }
+    data.extend_from_slice(&(uri.len() as u16).to_le_bytes());
+    data.extend_from_slice(uri.as_bytes());
+    data.extend_from_slice(uri_hash);
+
     build(
         program_id,
         vec![
-            AccountMeta::new(oracle, false),
-            AccountMeta::new(stake_vault, false),
-            AccountMeta::new_readonly(protocol, false),
-            AccountMeta::new(dao_treasury, false),
-            AccountMeta::new(creator, false),
-            AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+            AccountMeta::new(creator, true),
+            AccountMeta::new_readonly(oracle, false),
+            AccountMeta::new(meta, false),
+            AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
         ],
         data,
     )

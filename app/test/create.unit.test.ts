@@ -4,10 +4,11 @@
  * A mock {@link Connection} reports the creator's KASS ATA absent or present.
  * We assert `buildCreateOracleIxs`:
  *   - emits a `createOracle` ix whose `data` + `keys` byte-for-byte match the SDK
- *     builder for the SAME inputs (with the promptHash == sha256(question), the
- *     derived creator ATA as `creatorKassToken`, and the derived Oracle PDA);
+ *     builder for the SAME inputs (the derived creator ATA as `creatorKassToken`
+ *     and the derived Oracle PDA), and appends `writeOracleMeta` when options are
+ *     given;
  *   - prepends the idempotent create-ATA ix ONLY when the ATA is absent;
- *   - returns the resolved nonce + Oracle PDA + promptHash;
+ *   - returns the resolved nonce + Oracle PDA + extended metadata;
  *   - rejects bad input (optionsCount 1, past deadline, empty question) with a
  *     typed `ValidationError`.
  */
@@ -40,10 +41,6 @@ function keyShape(ix: TransactionInstruction) {
   }));
 }
 
-async function sha256(s: string): Promise<Uint8Array> {
-  return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
-}
-
 async function fixture() {
   const creator = (await Keypair.generate()).publicKey;
   const kassMint = (await Keypair.generate()).publicKey;
@@ -71,15 +68,13 @@ describe("buildCreateOracleIxs", () => {
     });
 
     expect(built.ixs.length).toBe(1);
-    // promptHash == sha256(question)
-    expect(Array.from(built.promptHash)).toEqual(Array.from(await sha256(question)));
-    // returned Oracle PDA == pda.oracle(nonce)
+    // No `options` → no metadata written; returned Oracle PDA == pda.oracle(nonce).
+    expect(built.metadata).toBeUndefined();
     expect(built.oracle.toString()).toBe((await pda.oracle(nonce)).address.toString());
     expect(built.nonce).toBe(nonce);
 
     const expected = await createOracle({
       nonce,
-      promptHash: await sha256(question),
       optionsCount: 3,
       deadline: FUTURE,
       twapWindow: 3600n,
@@ -91,6 +86,53 @@ describe("buildCreateOracleIxs", () => {
     expect(built.ixs[0].programId.toString()).toBe(expected.programId.toString());
     expect(Array.from(built.ixs[0].data)).toEqual(Array.from(expected.data));
     expect(keyShape(built.ixs[0])).toEqual(keyShape(expected));
+  });
+
+  it("appends the writeOracleMeta ix and derives options_count from the labels", async () => {
+    const { creator, kassMint, usdcMint } = await fixture();
+    const question = "Which team wins?";
+    const options = ["Red", "Blue", "Draw"];
+    const built = await buildCreateOracleIxs({
+      connection: mockConnection(true),
+      nonce: 9n,
+      question,
+      options,
+      deadline: FUTURE,
+      creator,
+      kassMint,
+      usdcMint,
+      appOrigin: "https://app.test",
+    });
+
+    // createOracle ix + the writeOracleMeta ix (ATA already present).
+    expect(built.ixs.length).toBe(2);
+    const meta = built.ixs[1];
+    // WriteOracleMeta discriminant (23); accounts: creator(signer), oracle, meta, system.
+    expect(meta.data[0]).toBe(23);
+    expect(meta.keys.length).toBe(4);
+    expect(meta.keys[0].isSigner).toBe(true);
+
+    // The extended JSON returned for hosting carries the subject/options + a uri
+    // pointing at the app origin, bound by a 32-byte uri_hash.
+    expect(built.metadata?.json.subject).toBe(question);
+    expect(built.metadata?.json.options).toEqual(options);
+    expect(built.metadata?.uri).toBe(
+      `https://app.test/api/oracle/${built.oracle.toString()}/metadata.json`,
+    );
+    expect(built.metadata?.uriHash.length).toBe(32);
+
+    // options_count on the createOracle payload is derived from labels.length (3).
+    const expected = await createOracle({
+      nonce: 9n,
+      optionsCount: options.length,
+      deadline: FUTURE,
+      twapWindow: 3600n,
+      creator,
+      creatorKassToken: (await associatedTokenAccount(creator, kassMint)).address,
+      kassMint,
+      usdcMint,
+    });
+    expect(Array.from(built.ixs[0].data)).toEqual(Array.from(expected.data));
   });
 
   it("prepends an idempotent create-ATA ix when the creator's ATA is absent", async () => {
@@ -118,7 +160,6 @@ describe("buildCreateOracleIxs", () => {
 
     const expected = await createOracle({
       nonce: 7n,
-      promptHash: await sha256("Q?"),
       optionsCount: 2,
       deadline: FUTURE,
       twapWindow: 3600n,

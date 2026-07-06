@@ -1,0 +1,44 @@
+---
+title: "Errors"
+description: "All MarketError codes (0–22) — code, name, and meaning, including the reserved/unused discriminants kept for wire stability."
+---
+
+Every failure the program raises is a variant of `MarketError`
+(`programs/kassandra-market/src/error.rs`), declared `#[repr(u32)]` and surfaced to
+clients as `ProgramError::Custom(n)`. Error codes are a **stable public contract** —
+never renumbered, only appended. The SDK re-exports this enum plus a `decodeError`
+helper and per-code messages (`sdk-market/src/constants.ts`).
+
+| Code | Name | Meaning |
+| --- | --- | --- |
+| 0 | `InvalidAccount` | An account is invalid (wrong owner, address, or contents), or a MetaDAO binding failed. |
+| 1 | `Unauthorized` | Signer is not authorized (e.g. `update_config` by a non-`Config.authority`). |
+| 2 | `AlreadyInitialized` | `init_config` on an already-initialized Config (tag check). |
+| 3 | `InvalidSplit` | **Reserved/unused** — the abandoned uneven opening-prior range check. |
+| 4 | `ZeroAmount` | Zero `seed_amount`/`amount` where a positive amount is required. |
+| 5 | `NotFunding` | Market is not in the `Funding` status this instruction requires. |
+| 6 | `OracleNotTerminal` | The oracle has not reached a terminal (`Resolved`/`InvalidDeadend`) phase. |
+| 7 | `AlreadyFunded` | **Reserved/unused** discriminant. |
+| 8 | `AlreadyClaimed` | **Reserved/unused** — `claim_lp`/`refund` reap the Contribution, so its absence is the idempotency guard. |
+| 9 | `NotCancelled` | Market is not `Cancelled` (required by `refund`). |
+| 10 | `OracleResolved` | The oracle already resolved; `create_market`/`activate` no longer permitted. |
+| 11 | `NotBinary` | **Reserved/unused** discriminant. |
+| 12 | `WrongMint` | A supplied mint does not match the expected mint (KASS mint / fee destination). |
+| 13 | `NotFunded` | `activate` before `total_contributed >= min_liquidity`. |
+| 14 | `PoolNotEmpty` | `activate` against a non-empty AMM pool (would corrupt the 50/50 seed). |
+| 15 | `NotActive` | Market is not in the `Active`/terminal status this instruction requires. |
+| 16 | `AlreadySettled` | Market already settled / fee already collected (idempotency). |
+| 17 | `InvalidFee` | `fee_bps` exceeds `MAX_FEE_BPS` (`init_config`/`update_config`). |
+| 18 | `FeeNotCollected` | `claim_lp`/`close_market` before `collect_fee` stamped `fee_collected == 1`. |
+| 19 | `InvalidOutcome` | `outcome_index >= oracle.options_count` (`create_market`). |
+| 20 | `ContributionsOpen` | `close_market` while `open_contributions != 0` (a contributor has not exited). |
+| 21 | `NotSettled` | `close_market` on a non-terminal market. |
+| 22 | `NotUpgradeAuthority` | `init_config` caller is not the program's on-chain upgrade authority. |
+
+<Note>
+Codes **3, 7, 8, and 11** are reserved/unused: they are kept only to preserve the
+numbering (`error.rs:9-17`). Beyond these custom codes, the program can also
+surface standard `ProgramError`s — `NotEnoughAccountKeys`, `InvalidInstructionData`,
+and `ArithmeticOverflow` — from account destructuring, payload-length checks, and
+checked math.
+</Note>

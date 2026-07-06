@@ -1,26 +1,40 @@
-# Render Blueprint — the Kassandra dApp + a PRIVATE indexer backend.
+# Render Blueprint — the Kassandra dApp + a single PRIVATE indexer backend.
 #
 # ARCHITECTURE
-#   kassandra-app       (public web service, Node) — serves the Vite SPA AND
-#                       reverse-proxies /indexer/* to the indexer over Render's
-#                       private network. This is the ONLY thing that can reach the
-#                       indexer.
-#   kassandra-indexer   (PRIVATE service, Rust/Carbon) — crawls the program's
-#                       transactions into Postgres and serves a read API. It has
-#                       NO public URL; only kassandra-app reaches it, at its
-#                       internal host:port. The crawler resumes from a durable
-#                       cursor, so it catches up on anything missed during downtime.
-#   kassandra-indexer-db (managed Postgres).
-#
-# The app used to be a static CDN site that fetched the indexer straight from the
-# browser — which forced the indexer to be public. Serving the app from a Node
-# process instead lets the browser call the app's OWN origin (/indexer/...), which
-# the server proxies internally, so the indexer can be locked down as private.
+#   kassandra-app       (public web service, Node) — serves the Vite SPA (both the
+#                       oracle `/oracles*` and market `/markets*` sections) AND
+#                       reverse-proxies BOTH `/indexer/*` (oracle read API + `/rpc`
+#                       gateway) and `/api/*` (market data + tx gateway) to the
+#                       single indexer over Render's private network. This is the
+#                       ONLY thing that can reach the indexer.
+#   kassandra-indexer   (PRIVATE service, Rust/Carbon) — ONE binary running two
+#                       Carbon pipelines into ONE Postgres: the oracle side crawls
+#                       transactions into an `events` log (resuming from a durable
+#                       cursor); the market side indexes the market program's
+#                       accounts (gpa + programSubscribe) into `market_accounts`.
+#                       Serves both API surfaces. NO public URL.
+#   kassandra-indexer-db (managed Postgres) — persists both.
 #
 # DEPLOY: push to the default branch, then Render Dashboard → New → Blueprint →
-# this repo. After the first deploy, set RPC_URL on the indexer.
+# this repo. After the first deploy, set the `kassandra-solana-rpc` group secrets.
 #
 # Docs: https://render.com/docs/blueprint-spec
+
+# Solana RPC secrets, set ONCE and shared by every service that needs chain access.
+# After the first deploy, fill these in the Dashboard (all `sync: false`):
+#   SOLANA_RPC_URL / RPC_URL → the same mainnet HTTP endpoint
+#   SOLANA_WS_URL            → the mainnet ws endpoint (market live programSubscribe)
+envVarGroups:
+  - name: kassandra-solana-rpc
+    envVars:
+      - key: SOLANA_RPC_URL
+        sync: false
+      - key: SOLANA_WS_URL
+        sync: false
+      # Distinct key only because the oracle crawler code reads `RPC_URL`; set it
+      # to the SAME value as SOLANA_RPC_URL.
+      - key: RPC_URL
+        sync: false
 
 databases:
   - name: kassandra-indexer-db
@@ -28,7 +42,7 @@ databases:
     postgresMajorVersion: "16"
 
 services:
-  # ---- App: public Node web service (SPA + private-indexer proxy) ----
+  # ---- App: public Node web service (SPA + private-indexer proxy for both APIs) ----
   - type: web
     name: kassandra-app
     runtime: node
@@ -37,17 +51,19 @@ services:
       paths:
         - app/**
         - sdk/**
+        - sdk-market/**
         - pnpm-lock.yaml
         - render.yaml
-    # Pin pnpm via corepack (lockfile v9 → pnpm 10), install the workspace, build
-    # the SDK (the app bundles its dist/) then the app.
+    # Pin pnpm via corepack, install the workspace, build BOTH SDKs (the app
+    # bundles both dist/) then the app.
     buildCommand: >-
       corepack enable &&
       corepack prepare pnpm@10.28.1 --activate &&
       pnpm install --frozen-lockfile &&
-      pnpm --filter sdk build &&
-      pnpm --filter app build
-    # Serve dist/ + proxy /indexer/* to the private indexer (app/server.mjs).
+      pnpm --filter ./sdk build &&
+      pnpm --filter ./sdk-market build &&
+      pnpm --filter ./app build
+    # Serve dist/ + proxy /indexer/* AND /api/* to the private indexer (app/server.mjs).
     startCommand: node app/server.mjs
     healthCheckPath: /
     previews:
@@ -55,20 +71,15 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
-      # NOTE: no VITE_RPC_URL here on purpose. Unset → the app runs in GATEWAY
-      # mode: it performs ALL chain work (reads, blockhash, sendRawTransaction)
-      # against the SAME-ORIGIN /indexer/rpc path, which the server proxies to the
-      # private backend. The real RPC endpoint never ships in the browser bundle.
-      #
-      # Cluster label for explorer links only (NOT an RPC URL): devnet | mainnet-beta.
+      # No VITE_RPC_URL: unset → the oracle side runs in GATEWAY mode (all chain
+      # work over same-origin /indexer/rpc). Cluster label is for explorer links only.
       - key: VITE_CLUSTER
         value: mainnet-beta
-      # The app calls the backend at its OWN origin under this prefix; the server
-      # proxies it to the private indexer. Same-origin, so it is inlined at build.
+      # Oracle event-indexer base (same-origin; the server proxies /indexer/* → indexer).
       - key: VITE_INDEXER_URL
         value: /indexer
       # The private indexer's internal address, injected by Render — the app
-      # server's proxy target. Not reachable from the public internet.
+      # server's proxy target for BOTH /indexer/* and /api/*.
       - key: INDEXER_HOST
         fromService:
           type: pserv
@@ -80,53 +91,52 @@ services:
           name: kassandra-indexer
           property: port
 
-  # ---- Indexer: PRIVATE Carbon RPC-crawler → Postgres, read API ----
+  # ---- Indexer: PRIVATE, ONE binary → Postgres, serving both API surfaces ----
   - type: pserv
     name: kassandra-indexer
     runtime: rust
-    # The indexer is a member of the repo-root Cargo workspace (single lockfile),
-    # so it builds from the root with `-p` — `cargo build` only compiles this
-    # package + its deps (kassandra-sdk → kassandra-program), not the test/runner
-    # crates. Artifacts land in the workspace `target/`, hence no `rootDir`.
-    # Private services can't use the free plan (Render restricts free to web
-    # services + databases), so the indexer runs on the cheapest paid tier.
+    # Workspace member (single lockfile) — `-p` compiles only this package + its
+    # deps (kassandra-sdk, kassandra-program, kassandra-market-program), not the
+    # test/runner crates. Private services can't use the free plan.
     plan: starter
     buildFilter:
       paths:
         - indexer/**
         - sdk-rs/**
         - programs/kassandra/**
+        - programs/kassandra-market/**
         - Cargo.toml
         - Cargo.lock
         - render.yaml
     buildCommand: cargo build --release --locked -p kassandra-indexer
     startCommand: ./target/release/kassandra-indexer
-    # NOTE: private services (pserv) don't support healthCheckPath — Render only
-    # health-checks public web services. The indexer still serves /health; the
-    # app-server proxy is what actually reaches it.
+    # pserv has no healthCheckPath; the indexer still serves /health.
     envVars:
-      # Managed Postgres connection string, injected by Render.
       - key: DATABASE_URL
         fromDatabase:
           name: kassandra-indexer-db
           property: connectionString
-      # Solana RPC endpoint (`RPC_URL`) — pulled from the SHARED `kassandra-solana-rpc`
-      # env group, which is DEFINED by the sibling kassandra-market Blueprint
-      # (programs/kassandra-market/render.yaml) and referenced here so the mainnet
-      # RPC endpoint is set ONCE and shared across both deploys. The group also
-      # carries SOLANA_RPC_URL/SOLANA_WS_URL for that indexer; this crawler only
-      # reads RPC_URL. Sync the kassandra-market Blueprint first (or pre-create the
-      # group in the Dashboard) so this reference resolves.
+      # SOLANA_RPC_URL + SOLANA_WS_URL + RPC_URL — the oracle crawler + `/rpc`
+      # gateway read RPC_URL/SOLANA_RPC_URL; the market gpa snapshot + live
+      # programSubscribe tail read SOLANA_RPC_URL + SOLANA_WS_URL.
       - fromGroup: kassandra-solana-rpc
-      # Fixed internal port the indexer binds — the app proxy resolves it via the
-      # `port` fromService property above.
       - key: PORT
         value: "10000"
+      # Oracle crawler cadence.
       - key: COMMITMENT
         value: finalized
       - key: POLL_INTERVAL_MS
         value: "10000"
       - key: PROMOTE_INTERVAL_MS
         value: "30000"
+      # Market program id (defaults to the known id in-code; pinned for clarity).
+      - key: MARKET_PROGRAM_ID
+        value: FEGNHWAB7kc7VC9CCwbvVPsv4Jykz2r2WQ758V4xCT9S
+      # 0 => the market side uses the live ws programSubscribe tail (SOLANA_WS_URL
+      # required). >0 would fall back to periodic getProgramAccounts polling.
+      - key: INDEXER_RECONCILE_MS
+        value: "0"
+      - key: ALLOWED_ORIGIN
+        value: "*"
       - key: RUST_LOG
         value: info

@@ -1,9 +1,9 @@
 ---
 title: "Instructions"
-description: "Complete reference for all 23 Kassandra instructions (Ix 0–22): accounts, payloads, phase gates, and errors."
+description: "Complete reference for all 24 Kassandra instructions (Ix 0–23): accounts, payloads, phase gates, and errors."
 ---
 
-The program exposes **23 instructions**. The first byte of `instruction_data` is the discriminant
+The program exposes **24 instructions**. The first byte of `instruction_data` is the discriminant
 (the `Ix` value); the remaining bytes are the payload, parsed inside each processor
 (`programs/kassandra/src/instruction.rs`, `processor/mod.rs`). Discriminants are a stable contract —
 never renumbered, only appended.
@@ -43,12 +43,27 @@ phase semantics are in [Phases](/protocol/phases).
     `4` kass_mint (writable) · `5` usdc_mint · `6` token program · `7` system program · `8`
     creator_kass_token (writable, fee burn source) · `9` mint_authority PDA (`[b"mint_authority"]`).
 
-    **Payload (57 bytes):** `nonce: u64 LE` ++ `prompt_hash: [u8;32]` ++ `options_count: u8` ++
-    `deadline: i64 LE` ++ `twap_window: i64 LE`.
+    **Payload (25 bytes):** `nonce: u64 LE` ++ `options_count: u8` ++ `deadline: i64 LE` ++
+    `twap_window: i64 LE`. The question and option labels are not in this payload — they are written
+    on-chain by `WriteOracleMeta` (Ix 23), appended to the same transaction.
 
     **Errors:** `options_count < 2` → `InvalidOptionsCount`; `deadline < now` → `InvalidDeadline`;
     `twap_window <= 0` → `InvalidInstructionData`; duplicate PDA / bad burn source → `InvalidAccount`;
     emission mint-authority mismatch → `BadMintAuthority`.
+  </Accordion>
+
+  <Accordion title="Ix 23 · WriteOracleMeta — write on-chain metadata" icon="file-pen">
+    Writes the oracle's on-chain metadata into a companion `oracle_meta` PDA
+    (`processor/write_oracle_meta.rs`), appended to the **same transaction** as `create_oracle` so the
+    metadata lands atomically with the oracle. Stores the plaintext subject (the question), the option
+    labels, and a `uri` + `uri_hash` binding the extended off-chain interpretation JSON.
+
+    **Accounts:** `0` creator (signer, writable) · `1` oracle (read-only) · `2` oracle_meta PDA
+    (writable, uninit; `[b"oracle_meta", oracle]`) · `3` system program.
+
+    **Payload (variable):** `subject_len: u16 LE` ++ `subject: [u8; subject_len]` ++ `options_count: u8`
+    ++ `options_count × (option_len: u16 LE ++ option: [u8; option_len])` ++ `uri_len: u16 LE` ++
+    `uri: [u8; uri_len]` ++ `uri_hash: [u8;32]`.
   </Accordion>
 
   <Accordion title="Ix 13 · SetGovernance — admin→DAO handoff" icon="landmark">
@@ -435,7 +450,7 @@ phase semantics are in [Phases](/protocol/phases).
 | 7 | `AdvancePhase` | Lifecycle | 0 |
 | 8 | `FinalizeAiClaims` | AI claim | 0 |
 | 9 | `InitProtocol` | Init | 0 |
-| 10 | `CreateOracle` | Init | 57 |
+| 10 | `CreateOracle` | Init | 25 |
 | 11 | `Propose` | Lifecycle | 9 |
 | 12 | `FinalizeProposals` | Lifecycle | 0 |
 | 13 | `SetGovernance` | Governance | ≥64 |
@@ -448,3 +463,4 @@ phase semantics are in [Phases](/protocol/phases).
 | 20 | `CloseAiClaim` | Close | 0 |
 | 21 | `CloseMarket` | Close | 8 |
 | 22 | `SweepOracle` | Sweep | 8 |
+| 23 | `WriteOracleMeta` | Lifecycle | variable |

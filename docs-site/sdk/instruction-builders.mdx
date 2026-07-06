@@ -1,6 +1,6 @@
 ---
 title: "Instruction builders"
-description: "The 23 core Kassandra instruction builders (Ix 0–22) — exact names, *Args fields, and the on-chain instruction each produces."
+description: "The core Kassandra instruction builders (Ix 0–23) — exact names, *Args fields, and the on-chain instruction each produces."
 ---
 
 The SDK exposes one builder per on-chain instruction. Each is **async** and returns a
@@ -26,6 +26,7 @@ Creation, phase progression, and governance wiring.
 | --- | --- | --- | --- |
 | `initProtocol` | 9 | `init_protocol` | Create the Protocol singleton. |
 | `createOracle` | 10 | `create_oracle` | Open a new oracle dispute. |
+| `writeOracleMeta` | 23 | `write_oracle_meta` | Write the oracle's on-chain metadata (subject, labels, uri). |
 | `propose` | 11 | `propose` | Register a proposer + stake vault. |
 | `finalizeProposals` | 12 | `finalize_proposals` | Close the proposal window; plurality tick. |
 | `advancePhase` | 7 | `advance_phase` | Permissionless FactProposal → FactVoting tick. |
@@ -46,7 +47,6 @@ Creation, phase progression, and governance wiring.
     ```ts
     CreateOracleArgs {
       nonce: bigint | number,
-      promptHash: Uint8Array, // 32 bytes
       optionsCount: number,
       deadline: bigint | number,
       twapWindow: bigint | number,
@@ -54,9 +54,26 @@ Creation, phase progression, and governance wiring.
       programId?,
     }
     ```
-    Builds `create_oracle`. Payload (57 bytes): `nonce u64 ++ prompt_hash[32] ++
-    options_count u8 ++ deadline i64 ++ twap_window i64`. The creator's KASS token account is
-    the fee-burn source.
+    Builds `create_oracle`. Payload (25 bytes): `nonce u64 ++ options_count u8 ++ deadline
+    i64 ++ twap_window i64`. The creator's KASS token account is the fee-burn source. The
+    oracle's question and option labels are written on-chain by `writeOracleMeta` (appended
+    to the same transaction).
+  </Accordion>
+  <Accordion title="writeOracleMeta — WriteOracleMetaArgs">
+    ```ts
+    WriteOracleMetaArgs {
+      creator, oracle,
+      subject: Uint8Array | string,
+      labels: ReadonlyArray<Uint8Array | string>,
+      uri: Uint8Array | string,
+      uriHash: Uint8Array,       // 32 bytes
+      programId?,
+    }
+    ```
+    Builds `write_oracle_meta`. The SDK derives the `oracle_meta` PDA (`[b"oracle_meta",
+    oracle]`). Payload is length-prefixed: `subject_len u16 ++ subject ++ options_count u8 ++
+    [option_len u16 ++ option]* ++ uri_len u16 ++ uri ++ uri_hash[32]`. Append it to the same
+    transaction as `createOracle` so the metadata lands atomically with the oracle.
   </Accordion>
   <Accordion title="propose — ProposeArgs">
     ```ts

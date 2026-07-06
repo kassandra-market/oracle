@@ -1,6 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["programs/kassandra", "runner", "sdk-rs", "indexer"]
+members = [
+    "programs/kassandra",
+    "programs/kassandra-market",
+    "runner",
+    "sdk-rs",
+    "sdk-rs-market",
+    "indexer",
+]
 
 # Every dependency version lives here; member crates reference them with
 # `{ workspace = true }` (adding only crate-specific features).
@@ -8,6 +15,14 @@ members = ["programs/kassandra", "runner", "sdk-rs", "indexer"]
 # ---- internal crates (path deps) ----
 kassandra-program = { path = "programs/kassandra" }
 kassandra-sdk = { path = "sdk-rs" }
+# The prediction-market program + its Rust SDK (merged in from kassandra-market).
+# The indexer depends on the program crate (state structs + `ID`) only — it is
+# pinocchio/bytemuck based and pulls NO solana-sdk, so the shipped indexer stays
+# on the granular v3 client stack. The market program's own dev-tests + sdk-rs
+# are a solana-sdk v2 "island" (they pin v2/litesvm-0.6/spl-token-6 directly, not
+# via the workspace, so both majors coexist without a cross-crate type split).
+kassandra-market-program = { path = "programs/kassandra-market", default-features = false, features = ["no-entrypoint"] }
+kassandra-market-sdk = { path = "sdk-rs-market" }
 
 # ---- on-chain (pinocchio) stack ----
 # pinocchio rides the solana-address v2 granular crate; that is the CURRENT
@@ -49,12 +64,29 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-uti
 # `http2` for the indexer's outbound RPC; harmless for the runner.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "http2"] }
 
-# ---- indexer (Carbon RPC crawler → Postgres, read API) ----
+# ---- indexer (Carbon → Postgres, read API) ----
+# The oracle side crawls transactions (instruction/event log); the market side
+# indexes accounts (gpa snapshot + program-subscribe live tail). One binary runs
+# both Carbon pipelines into one Postgres + one axum server.
 carbon-core = "1.0.0"
 carbon-rpc-transaction-crawler-datasource = "1.0.0"
+carbon-rpc-gpa-datasource = "1.0.0"
+carbon-rpc-program-subscribe-datasource = "1.0.0"
 axum = "0.8"
 tokio-postgres = { version = "0.7", features = ["with-serde_json-1"] }
 tower-http = { version = "0.7", features = ["cors"] }
+# Market RPC gateway (typed endpoints: blockhash / account / sendTransaction /
+# signature status) — the nonblocking v3 client stack.
+solana-rpc-client = { version = "3", default-features = false }
+solana-rpc-client-api = "3"
+solana-transaction-status = "3"
+
+# Dependency-resolution fix (carried from kassandra-market): the carbon gpa /
+# program-subscribe datasources pull `solana-client -> solana-keypair -> five8 ->
+# five8_core 0.1.x`, which gates `impl Error for DecodeError` behind a `std`
+# feature the graph otherwise leaves off, breaking the `solana-keypair` build.
+# Feature unification is additive, so enabling `std` here turns it on graph-wide.
+five8_core = { version = "0.1.2", features = ["std"] }
 
 # ---- dev/test-only ----
 litesvm = "0.13"

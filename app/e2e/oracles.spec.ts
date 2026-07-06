@@ -35,7 +35,7 @@ test('funded wallet connects and the seeded oracles load from the local validato
 
   // The dashboard-stats strip only renders once the oracle list has been fetched
   // from surfpool — its presence proves the app is talking to the local chain.
-  await expect(page.getByLabel('Oracle dashboard stats')).toBeVisible()
+  await expect(page.getByLabel('Oracle capital at stake')).toBeVisible()
 
   // The funded e2e wallet reports connected: the nav pill flips to the truncated
   // address (aria-label "Connected: <pubkey>. Click to disconnect.").

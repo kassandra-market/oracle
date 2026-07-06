@@ -27,11 +27,14 @@ if ! command -v initdb >/dev/null 2>&1 && [ -z "${PG_BIN:-}" ] \
   exit 1
 fi
 
-echo "==> [2/4] build the program (.so), the SDK, and the indexer binary"
-if [ ! -f "target/deploy/kassandra_program.so" ]; then
+echo "==> [2/4] build both programs (.so), both SDKs, and the indexer binary"
+if [ ! -f "target/deploy/kassandra_program.so" ] || [ ! -f "target/deploy/kassandra_market_program.so" ]; then
   just build
 fi
-pnpm --filter sdk build >/dev/null
+# The app dev server imports BOTH @kassandra/sdk and @kassandra-market/sdk, so
+# both dist/ must exist before vite starts.
+pnpm --filter ./sdk build >/dev/null
+pnpm --filter ./sdk-market build >/dev/null
 cargo build --release --locked --manifest-path indexer/Cargo.toml
 
 echo "==> [3/4] ensure logs/ exists"

@@ -40,7 +40,7 @@ fn setup(ctx: &mut TestCtx, nonce: u64, options_count: u8) -> solana_pubkey::Pub
     let (_p, res) = ctx.init_protocol();
     assert!(res.is_ok(), "init_protocol should succeed: {res:?}");
     let deadline = ctx.now() + DEADLINE_DELTA;
-    let (oracle, res) = ctx.create_oracle(nonce, options_count, deadline, 600, [0x42; 32]);
+    let (oracle, res) = ctx.create_oracle(nonce, options_count, deadline, 600);
     assert!(res.is_ok(), "create_oracle should succeed: {res:?}");
     oracle
 }

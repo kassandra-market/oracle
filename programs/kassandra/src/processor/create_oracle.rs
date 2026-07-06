@@ -45,8 +45,9 @@
 //!    equal the `kass_mint`'s SPL mint authority)
 //!
 //! # Instruction payload (after the 1-byte discriminant), exactly 57 bytes
-//! `nonce: u64 LE` ++ `prompt_hash: [u8; 32]` ++ `options_count: u8` ++
-//! `deadline: i64 LE` ++ `twap_window: i64 LE`.
+//! `nonce: u64 LE` ++ `options_count: u8` ++ `deadline: i64 LE` ++
+//! `twap_window: i64 LE`. (The former `prompt_hash` was removed — the plaintext
+//! subject now lives on-chain in the companion `oracle_meta` account.)
 
 use bytemuck::Zeroable;
 use pinocchio::{
@@ -69,9 +70,9 @@ use crate::{
     state::{AccountType, Oracle, Phase, Protocol},
 };
 
-/// Exact payload length: nonce[8] ++ prompt_hash[32] ++ options_count[1] ++
-/// deadline[8] ++ twap_window[8].
-const PAYLOAD_LEN: usize = 57;
+/// Exact payload length: nonce[8] ++ options_count[1] ++ deadline[8] ++
+/// twap_window[8].
+const PAYLOAD_LEN: usize = 25;
 
 pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]) -> ProgramResult {
     // --- payload parse (exact length) --------------------------------------
@@ -79,11 +80,9 @@ pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]
         return Err(ProgramError::InvalidInstructionData);
     }
     let nonce = u64::from_le_bytes(payload[0..8].try_into().unwrap());
-    let mut prompt_hash = [0u8; 32];
-    prompt_hash.copy_from_slice(&payload[8..40]);
-    let options_count = payload[40];
-    let deadline = i64::from_le_bytes(payload[41..49].try_into().unwrap());
-    let twap_window = i64::from_le_bytes(payload[49..57].try_into().unwrap());
+    let options_count = payload[8];
+    let deadline = i64::from_le_bytes(payload[9..17].try_into().unwrap());
+    let twap_window = i64::from_le_bytes(payload[17..25].try_into().unwrap());
 
     let [protocol_ai, oracle_ai, stake_vault_ai, creator_ai, kass_mint_ai, usdc_mint_ai, token_prog_ai, system_prog_ai, creator_kass_ai, mint_authority_ai, ..] =
         accounts
@@ -259,7 +258,6 @@ pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]
     oracle.ai_finalized_count = 0;
     oracle.resolved_option = 0;
     oracle.open_challenge_count = 0;
-    oracle.prompt_hash = prompt_hash;
     oracle.bump = oracle_bump;
     // S3: record the KASS minted into stake_vault at creation. finalize_oracle
     // folds it into reward_pool on Resolved / burns it back on InvalidDeadend.

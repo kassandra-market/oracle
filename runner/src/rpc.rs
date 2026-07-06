@@ -5,9 +5,11 @@
 //! full config: it reads the `Oracle` account (and its agreed `Fact` accounts)
 //! straight off chain and decodes them through the SHARED
 //! `kassandra_sdk::accounts` `Pod` structs — zero new decode code. The
-//! interpretation TEXT is NOT on chain (only its `prompt_hash` commitment is),
-//! so it comes from an off-chain prompt file whose `sha256` MUST equal the
-//! on-chain `oracle.prompt_hash` (see [`verify_prompt_hash`]).
+//! interpretation TEXT is NOT on chain; it lives in the `oracle_meta` uri JSON,
+//! bound by `uri_hash`. [`fetch_oracle_meta`] reads the (program-owned) meta
+//! account; the caller (`build_config_from_chain`) fetches the uri and verifies
+//! `sha256(json) == uri_hash` before using it — the same fetch-by-uri, check-the-
+//! hash contract as the fact content.
 //!
 //! # Transport (no solana-client)
 //!
@@ -38,7 +40,7 @@
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
+use std::str::FromStr;
 
 use kassandra_sdk::accounts::{AccountType, Fact, Oracle};
 
@@ -342,6 +344,46 @@ pub async fn fetch_oracle(rpc: &dyn JsonRpc, oracle_pubkey: &str) -> Result<Orac
     })
 }
 
+/// Fetch + validate + decode the companion `oracle_meta` account for an oracle.
+///
+/// Derives the `[b"oracle_meta", oracle]` PDA, reads it, verifies program
+/// ownership + the [`AccountType::OracleMeta`] tag, and parses the length-prefixed
+/// layout (`subject` / `options` / `uri` / `uri_hash`). This is how the runner
+/// reads the interpretation source: the `uri` points at the metadata JSON and
+/// `uri_hash` binds it (verified by the caller after fetching).
+pub async fn fetch_oracle_meta(
+    rpc: &dyn JsonRpc,
+    oracle_pubkey: &str,
+) -> Result<kassandra_sdk::accounts::OracleMeta, RpcError> {
+    let oracle =
+        solana_pubkey::Pubkey::from_str(oracle_pubkey).map_err(|e| RpcError::Malformed {
+            method: "oracle_meta".to_string(),
+            detail: format!("invalid oracle pubkey `{oracle_pubkey}`: {e}"),
+        })?;
+    let (meta_pda, _) = kassandra_sdk::pda::oracle_meta(&kassandra_sdk::PROGRAM_ID, &oracle);
+    let meta_pk = meta_pda.to_string();
+
+    let params = json!([
+        meta_pk,
+        { "encoding": "base64", "commitment": "confirmed" }
+    ]);
+    let result = rpc.call("getAccountInfo", params).await?;
+    let value = result.get("value").ok_or_else(|| RpcError::Malformed {
+        method: "getAccountInfo".to_string(),
+        detail: "response `result` had no `value`".to_string(),
+    })?;
+    if value.is_null() {
+        return Err(RpcError::AccountNotFound { pubkey: meta_pk });
+    }
+    let raw = parse_account("getAccountInfo", value)?;
+    // Owner + tag + min-header-length checks (variable-length account).
+    validate(&meta_pk, &raw, AccountType::OracleMeta, "OracleMeta", 34)?;
+    kassandra_sdk::accounts::decode_oracle_meta(&raw.data).ok_or_else(|| RpcError::Malformed {
+        method: "getAccountInfo".to_string(),
+        detail: "OracleMeta decode failed".to_string(),
+    })
+}
+
 /// An agreed fact read from chain: the on-chain `content_hash` commitment plus
 /// the `uri` its off-chain content is served from — exactly what
 /// [`crate::fetch::FactRef`] needs.
@@ -434,45 +476,6 @@ fn decode_uri(pubkey: &str, fact: &Fact) -> Result<String, RpcError> {
         .map_err(|e| malformed(format!("fact `{pubkey}` uri is not valid UTF-8: {e}")))
 }
 
-/// The off-chain prompt-text-by-hash contract failure: the supplied
-/// interpretation text does not hash to the on-chain `prompt_hash`.
-#[derive(Debug, thiserror::Error)]
-#[error(
-    "prompt_hash mismatch: the interpretation text hashes to sha256 {actual}, \
-     but the on-chain oracle.prompt_hash is {expected} \
-     (the prompt file does not match what this oracle committed to)"
-)]
-pub struct PromptHashMismatch {
-    /// The on-chain `prompt_hash`, hex.
-    pub expected: String,
-    /// `sha256(prompt_text)`, hex.
-    pub actual: String,
-}
-
-/// Verify an off-chain interpretation TEXT against an on-chain `prompt_hash`.
-///
-/// The on-chain program stores `prompt_hash` as an opaque 32-byte commitment
-/// (never hashing anything itself — exactly like `content_hash`, see
-/// [`crate::fetch`]). The off-chain convention, mirrored here, is
-/// **`prompt_hash = sha256(interpretation_text_utf8)`** — plain SHA-256 over the
-/// verbatim prompt-file bytes, no length prefix / domain tag / framing. A
-/// mismatch is REJECTED so a wrong or tampered prompt file can never be fed to
-/// the model as this oracle's interpretation.
-pub fn verify_prompt_hash(text: &str, expected: &[u8; 32]) -> Result<(), PromptHashMismatch> {
-    let actual: [u8; 32] = Sha256::digest(text.as_bytes()).into();
-    if &actual == expected {
-        Ok(())
-    } else {
-        Err(PromptHashMismatch {
-            expected: to_hex(expected),
-            actual: to_hex(&actual),
-        })
-    }
-}
-
-/// Lowercase hex of a byte slice.
-use crate::hashing::to_hex;
-
 // --- offline mock transport -------------------------------------------------
 
 /// A deterministic, no-network [`JsonRpc`] backed by a `method -> canned result`
@@ -524,6 +527,7 @@ impl JsonRpc for MockRpc {
 mod tests {
     use super::*;
     use bytemuck::Zeroable;
+    use sha2::{Digest, Sha256};
 
     fn sha256(bytes: &[u8]) -> [u8; 32] {
         Sha256::digest(bytes).into()
@@ -575,12 +579,11 @@ mod tests {
         )
     }
 
-    fn sample_oracle(prompt_hash: [u8; 32]) -> Oracle {
+    fn sample_oracle() -> Oracle {
         let mut o = Oracle::zeroed();
         o.account_type = AccountType::Oracle.as_u8();
         o.options_count = 3;
         o.deadline = 1_900_000_000;
-        o.prompt_hash = prompt_hash;
         o
     }
 
@@ -601,8 +604,7 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_oracle_decodes_shared_pod_fields() {
-        let prompt_hash = sha256(b"Resolve YES iff BTC >= $100k.");
-        let oracle = sample_oracle(prompt_hash);
+        let oracle = sample_oracle();
         let rpc = MockRpc::new().with(
             "getAccountInfo",
             account_info_result(bytemuck::bytes_of(&oracle), &MockRpc::program_owner()),
@@ -611,12 +613,11 @@ mod tests {
         let got = fetch_oracle(&rpc, ORACLE_PK).await.unwrap();
         assert_eq!(got.options_count, 3);
         assert_eq!(got.deadline, 1_900_000_000);
-        assert_eq!(got.prompt_hash, prompt_hash);
     }
 
     #[tokio::test]
     async fn fetch_oracle_rejects_wrong_owner() {
-        let oracle = sample_oracle([0u8; 32]);
+        let oracle = sample_oracle();
         // Owned by some other program.
         let rpc = MockRpc::new().with(
             "getAccountInfo",
@@ -704,25 +705,5 @@ mod tests {
         let rpc = MockRpc::new().with("getProgramAccounts", Value::Array(vec![]));
         let facts = fetch_agreed_facts(&rpc, ORACLE_PK).await.unwrap();
         assert!(facts.is_empty());
-    }
-
-    // --- prompt-by-hash verification ----------------------------------------
-
-    #[test]
-    fn verify_prompt_hash_matches() {
-        let text = "Resolve YES if BTC closed at or above $100,000; otherwise NO.";
-        let expected = sha256(text.as_bytes());
-        assert!(verify_prompt_hash(text, &expected).is_ok());
-    }
-
-    #[test]
-    fn verify_prompt_hash_rejects_mismatch() {
-        let committed = "the real interpretation";
-        let tampered = "a DIFFERENT interpretation";
-        let expected = sha256(committed.as_bytes());
-        let err = verify_prompt_hash(tampered, &expected).unwrap_err();
-        assert_eq!(err.expected, to_hex(&expected));
-        assert_eq!(err.actual, to_hex(&sha256(tampered.as_bytes())));
-        assert_ne!(err.expected, err.actual);
     }
 }

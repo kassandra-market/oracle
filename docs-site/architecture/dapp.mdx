@@ -53,8 +53,10 @@ page/component  →  build*Ixs (pure)  →  @kassandra/sdk  →  wallet-adapter 
 
 The write surface, by phase:
 
-- **Create** (`data/actions/create.ts`) — question hashed to the on-chain `prompt_hash`, options,
-  deadline, mints; the oracle nonce is persisted per-browser (`app/src/lib/nonceStore.ts`).
+- **Create** (`data/actions/create.ts`) — question + option labels written on-chain to `oracle_meta`
+  (a `write_oracle_meta` ix appended to the same create tx), options, deadline, mints; the extended
+  interpretation JSON is POSTed to the app's metadata host, and the oracle nonce is persisted
+  per-browser (`app/src/lib/nonceStore.ts`).
 - **Participate** (detail page) — Propose (Proposal), Submit fact (FactProposal), Vote (FactVoting),
   each with a live `Your KASS:` balance gate.
 - **Crank / finalize** (`data/actions/finalize.ts`) — permissionless: finalize proposals → advance →

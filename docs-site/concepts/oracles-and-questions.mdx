@@ -4,7 +4,7 @@ description: "What an oracle is in Kassandra — a fixed prompt, immutable inter
 ---
 
 An **oracle** in Kassandra is a single on-chain question with everything needed to resolve
-it fixed at creation. It is represented by one `Oracle` account (`state.rs`, LEN = 392) and
+it fixed at creation. It is represented by one `Oracle` account (`state.rs`, LEN = 360) and
 created by the `create_oracle` instruction (`Ix::CreateOracle = 10`). Once created, its
 configuration is immutable — the whole trust model rests on that.
 
@@ -12,14 +12,7 @@ configuration is immutable — the whole trust model rests on that.
 
 `create_oracle` stands up a new oracle in `Phase::Proposal` with a future deadline, a
 program-controlled KASS stake vault, a burned creation fee, and an immutable configuration.
-The creator supplies (payload is exactly 57 bytes; `create_oracle.rs`):
-
-<ParamField path="prompt_hash" type="[u8;32]">
-  A 32-byte hash committing the **fixed prompt and interpretation rules**. The
-  interpretation text lives off-chain; the runner asserts `sha256(prompt_file) ==
-  oracle.prompt_hash` before it will resolve. This is the immutable rule for how evidence
-  maps to an answer — the single most important field on the account.
-</ParamField>
+The creator supplies (payload is exactly 25 bytes; `create_oracle.rs`):
 
 <ParamField path="options_count" type="u8">
   The number of allowed **categorical options**. Must be at least 2, or creation fails with
@@ -41,6 +34,17 @@ The creator supplies (payload is exactly 57 bytes; `create_oracle.rs`):
   The KASS mint (must match the Protocol's canonical KASS) used for all bonds/stakes, and
   the USDC mint used as challenge-market collateral.
 </ParamField>
+
+The `create_oracle` payload no longer carries the question itself. The **question, option
+labels, and interpretation** live on-chain in a companion `oracle_meta` PDA
+(`[b"oracle_meta", oracle]`), written by the `write_oracle_meta` instruction
+(`Ix::WriteOracleMeta = 23`) appended to the **same transaction** so the metadata lands
+atomically with the oracle. `oracle_meta` stores, length-prefixed, the plaintext **subject**
+(the question), the option **labels**, and a **`uri` plus 32-byte `uri_hash`** that binds an
+extended off-chain JSON (`{version, subject, options, promptTemplate, interpretation?,
+category?, createdAt}`). That JSON's `promptTemplate`/`interpretation` is the immutable rule
+for how evidence maps to an answer — the runner fetches the `uri` and refuses to resolve
+unless `sha256(json) == uri_hash`.
 
 Everything else — the bonding and slashing behavior, phase windows, fact-quorum threshold,
 challenge-market thresholds and fees, and reward weights — is **snapshotted** from the

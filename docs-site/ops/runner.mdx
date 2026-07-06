@@ -37,23 +37,22 @@ The runner builds its config either from an explicit **JSON config** or by **fet
     ```
   </Tab>
   <Tab title="On-chain fetch">
-    Pass `--oracle <pubkey> --rpc-url <url> --prompt-file <path>`. The runner
+    Pass `--oracle <pubkey> --rpc-url <url>`. The runner
     `getAccountInfo`s the oracle (verifying the Kassandra-program owner + `Oracle`
     tag), `getProgramAccounts` its `Fact`s and keeps the `agreed` ones, and reads
-    the interpretation text from `--prompt-file` — asserting
-    `sha256(prompt_file_bytes) == oracle.prompt_hash` (a mismatch is rejected).
+    the interpretation from the oracle's `oracle_meta` account — fetching its `uri`
+    JSON and asserting `sha256(json) == uri_hash` (a mismatch is rejected).
 
     ```sh
     kassandra-runner run \
       --oracle <ORACLE_PUBKEY_BASE58> \
       --rpc-url https://api.mainnet-beta.solana.com \
-      --prompt-file interpretation.txt \
       --mock
     ```
   </Tab>
 </Tabs>
 
-`--oracle` requires both `--rpc-url` and `--prompt-file`, and is mutually exclusive with `--config`.
+`--oracle` requires `--rpc-url` and is mutually exclusive with `--config`.
 
 ## Subcommands
 
@@ -77,9 +76,8 @@ Shared flags (`runner/README.md`, `runner/src/cli.rs`):
 | Flag | Meaning |
 | --- | --- |
 | `--config <path>` | Config JSON path; omit to read stdin. Mutually exclusive with `--oracle`. |
-| `--oracle <pubkey>` | Build config from an on-chain oracle. Requires `--rpc-url` + `--prompt-file`. |
+| `--oracle <pubkey>` | Build config from an on-chain oracle. Requires `--rpc-url`. Reads the interpretation from the oracle's `oracle_meta` (`uri` JSON verified against `uri_hash`). |
 | `--rpc-url <url>` | Solana JSON-RPC url (used with `--oracle`; required for `--submit`). |
-| `--prompt-file <path>` | Interpretation text; its `sha256` must equal on-chain `prompt_hash`. |
 | `--mock` | Deterministic `MockProvider` (offline, no key). Also enabled by `KASSANDRA_RUNNER_MOCK=1`. |
 | `--model <str>` | Override the pinned model (default `claude-opus-4-8`). |
 | `--max-tokens <n>` | Override `max_tokens` (default `4096`). |
@@ -107,8 +105,7 @@ export ANTHROPIC_API_KEY=sk-...
 kassandra-runner run --submit \
   --oracle <ORACLE_PUBKEY_BASE58> \
   --rpc-url https://api.mainnet-beta.solana.com \
-  --keypair ~/.config/solana/id.json \
-  --prompt-file interpretation.txt
+  --keypair ~/.config/solana/id.json
 ```
 
 The `--keypair` MUST be the proposer's registered `authority` — the Proposer PDA is derived as `[b"proposer", oracle, authority]` from the keypair's pubkey. The submitted tx carries the runner's **own** 97-byte payload verbatim, never recomputed. A second submit for the same `(oracle, proposer)` fails: the AiClaim PDA `[b"claim", oracle, proposer]` already exists (`DuplicateClaim`). Confirmation polls `getSignatureStatuses` to `confirmed` (~30s budget).

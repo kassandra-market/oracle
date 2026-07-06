@@ -54,7 +54,9 @@ optimistic skeleton but changes what a dispute is *about*.
 ### 1. Fixed interpretation turns subjective disputes into objective ones
 
 The creator commits the prompt **and the interpretation rules** at creation, immutable
-thereafter and pinned as `oracle.prompt_hash`. Because the rule for mapping evidence to an
+thereafter and pinned on-chain in the oracle's companion `oracle_meta` account — the
+plaintext subject plus a `uri`/`uri_hash` that binds the extended interpretation JSON.
+Because the rule for mapping evidence to an
 answer is frozen, a dispute cannot be "I read this differently." It can only be **"which
 evidence is real and relevant"** — an objective evidence question. That is what the
 [fact phase](/concepts/facts) resolves: participants stake to include or exclude candidate

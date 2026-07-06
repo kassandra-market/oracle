@@ -34,11 +34,10 @@ fn create_oracle_happy_path() {
 
     let deadline = ctx.now() + 1_000;
     let twap_window = 600;
-    let prompt_hash = [0x42; 32];
     // Emission is ON by default: create mints `reward_emission` into the vault.
     let emission = ctx.expected_creation_emission();
     assert!(emission > 0, "default config emits at genesis supply");
-    let (oracle_pda, res) = ctx.create_oracle(7, 3, deadline, twap_window, prompt_hash);
+    let (oracle_pda, res) = ctx.create_oracle(7, 3, deadline, twap_window);
     assert!(res.is_ok(), "create_oracle should succeed: {res:?}");
 
     let o = ctx.oracle(oracle_pda);
@@ -51,7 +50,6 @@ fn create_oracle_happy_path() {
     assert_eq!(o.phase_ends_at, deadline + PROPOSAL_WINDOW);
     assert_eq!(o.twap_window, twap_window);
     assert_eq!(o.options_count, 3);
-    assert_eq!(o.prompt_hash, prompt_hash);
     assert_eq!(o.proposer_count, 0);
     assert_eq!(o.surviving_count, 0);
     assert_eq!(o.fact_count, 0);
@@ -79,7 +77,7 @@ fn options_count_below_two_fails() {
     let mut ctx = TestCtx::new();
     let _ = ctx.init_protocol();
     let deadline = ctx.now() + 1_000;
-    let (_o, res) = ctx.create_oracle(1, 1, deadline, 600, [0; 32]);
+    let (_o, res) = ctx.create_oracle(1, 1, deadline, 600);
     assert_eq!(
         custom_code(&res),
         Some(KassandraError::InvalidOptionsCount as u32),
@@ -92,7 +90,7 @@ fn deadline_in_past_fails() {
     let mut ctx = TestCtx::new();
     let _ = ctx.init_protocol();
     let deadline = ctx.now() - 1;
-    let (_o, res) = ctx.create_oracle(1, 2, deadline, 600, [0; 32]);
+    let (_o, res) = ctx.create_oracle(1, 2, deadline, 600);
     assert_eq!(
         custom_code(&res),
         Some(KassandraError::InvalidDeadline as u32),
@@ -105,7 +103,7 @@ fn nonpositive_twap_window_fails() {
     let mut ctx = TestCtx::new();
     let _ = ctx.init_protocol();
     let deadline = ctx.now() + 1_000;
-    let (_o, res) = ctx.create_oracle(1, 2, deadline, 0, [0; 32]);
+    let (_o, res) = ctx.create_oracle(1, 2, deadline, 0);
     // twap_window <= 0 is a payload sanity failure → InvalidInstructionData.
     use solana_instruction_error::InstructionError;
     use solana_transaction_error::TransactionError;
@@ -130,16 +128,7 @@ fn mint_mismatch_vs_protocol_fails() {
     // A bogus KASS mint not equal to the protocol's canonical mint.
     let fake_kass = Pubkey::new_unique();
     let (oracle_pda, _) = TestCtx::oracle_pda(&ctx.program_id, 1);
-    let ix = ctx.create_oracle_ix(
-        1,
-        2,
-        deadline,
-        600,
-        [0; 32],
-        oracle_pda,
-        fake_kass,
-        ctx.usdc_mint,
-    );
+    let ix = ctx.create_oracle_ix(1, 2, deadline, 600, oracle_pda, fake_kass, ctx.usdc_mint);
     let res = ctx.send(ix, &[]);
     assert_eq!(
         custom_code(&res),
@@ -154,7 +143,6 @@ fn mint_mismatch_vs_protocol_fails() {
         2,
         deadline,
         600,
-        [0; 32],
         TestCtx::oracle_pda(&ctx.program_id, 2).0,
         ctx.kass_mint,
         fake_usdc,
@@ -172,10 +160,10 @@ fn duplicate_oracle_same_nonce_fails() {
     let mut ctx = TestCtx::new();
     let _ = ctx.init_protocol();
     let deadline = ctx.now() + 1_000;
-    let (_o, res) = ctx.create_oracle(5, 2, deadline, 600, [0; 32]);
+    let (_o, res) = ctx.create_oracle(5, 2, deadline, 600);
     assert!(res.is_ok(), "first create should succeed: {res:?}");
 
-    let (_o2, res2) = ctx.create_oracle(5, 2, deadline, 600, [0; 32]);
+    let (_o2, res2) = ctx.create_oracle(5, 2, deadline, 600);
     assert_eq!(
         custom_code(&res2),
         Some(KassandraError::InvalidAccount as u32),

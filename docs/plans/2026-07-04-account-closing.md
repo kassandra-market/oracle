@@ -1,0 +1,36 @@
+# Account closing (rent + dust recovery)
+
+**Goal:** Reclaim the rent-exempt lamports stranded in a fully-settled market's program-owned accounts (`Market`, `Contribution` ×N, and the market-PDA-owned token accounts `escrow`/`cyes`/`cno`/`lp_vault`). Rent goes back to whoever paid it; floor-division LP dust is swept so no account is left un-closeable.
+
+**Reference:** the sibling `../kassandra` program's `SweepOracle` (SPL `CloseAccount` on the escrow + closing the PDA, reclaiming both rents) is the exact CPI idiom to mirror.
+
+## Design (key decisions)
+- **Contributor counter — no layout change.** Reuse the just-freed `Market._reserved_152: [u8;2]` @152 as **`open_contributions: u16`** (count of live `Contribution` accounts). `create_market` sets it to 1 (creator); `contribute` `+= 1` only when it CREATES a new `Contribution` (not on a repeat top-up); `claim_lp`/`refund` `-= 1` and **close** the `Contribution`.
+- **Close each `Contribution` at claim/refund**, rent → the contributor (they paid it). This returns the bulk of the rent immediately, handles any N (each exit closes its own), and the account's absence becomes the natural idempotency (a second claim can't load it). `AlreadyClaimed` becomes unused (keep the variant). Keep setting `claimed = 1` before the close for clarity.
+- **Last-claimer sweeps the LP dust.** In `claim_lp`, when `open_contributions == 1` (the final claim), transfer the **entire remaining `lp_vault` balance** instead of the floor pro-rata share. So `lp_vault` ends at exactly 0 — `close_market` never has to remove/redeem dust, and the final claimer absorbs the negligible (< n_contributors base units) LP dust. Avoids any MetaDAO CPI in `close_market`.
+- **`close_market` (Ix 10, permissionless crank).** Preconditions: `status ∈ {Resolved, Void, Cancelled}`; for `Resolved/Void` also `fee_collected == 1`; and `open_contributions == 0` (everyone has exited — so no unclaimed LP/refund is stranded). Then SPL `CloseAccount` the token accounts and close the `Market` PDA, rent → the **creator** (they paid the market/escrow/pool-account rents).
+  - **Not-activated (Cancelled)**: close `escrow` + `Market` only (no pool accounts — activate never ran; `market.lp_vault == default`).
+  - **Activated (Resolved/Void)**: close `escrow` + `cyes` + `cno` + `lp_vault` + `Market`. All are 0-balance (escrow drained at activate, cyes/cno empty, lp_vault swept by the last claimer).
+  - MetaDAO accounts (question/vault/amm/mints) are NOT ours — never closed.
+- **Rent recipients:** `Contribution` → its contributor (at claim/refund); market/token-account rents → the creator (at close_market).
+- **Liveness caveat (documented, accepted):** if a contributor never claims, `open_contributions` never hits 0 and `close_market` can't run — the market's rent stays locked. Permissionless close can't force a claim. Acceptable (only the creator's rent is affected; contributors' own rent is theirs to reclaim by claiming).
+
+## Task 1 — Program
+- `state.rs`: `_reserved_152: [u8;2]` → `open_contributions: u16` @152 (offset/LEN unchanged; update `state_layout` name; update comment).
+- `create_market.rs`: set `market.open_contributions = 1`.
+- `contribute.rs`: on the branch that CREATES a new `Contribution` (not the top-up branch), load the market, `open_contributions += 1` (checked), write. (contribute already writes the market for `total_contributed`.)
+- `claim_lp.rs`: compute `share = (open_contributions == 1) ? current lp_vault balance : floor pro-rata`; program-signed LP transfer; **close the `Contribution`** (move its lamports to the contributor, zero its data) ; `open_contributions -= 1`; write market. Keep `claimed = 1` set before close.
+- `refund.rs`: after the KASS refund, **close the `Contribution`** (rent → contributor); `open_contributions -= 1`; write market.
+- **New `close_market.rs` (Ix 10):** `instruction.rs` `CloseMarket = 10`; dispatch. Guards: `load_market`; status terminal (Resolved/Void/Cancelled) else reject; if Resolved/Void require `fee_collected == 1`; `open_contributions == 0` else a new `MarketError::ContributionsOpen = 20`; `assert_key(creator, &market.creator)` (rent recipient); validate the passed token accounts vs the recorded market bindings (escrow always; cyes/cno/lp_vault iff `market.lp_vault != default`). SPL `CloseAccount` each token account (authority = market PDA, program-signed with `[b"market", oracle, [outcome_index], [bump]]`) → lamports to creator; then close the `Market` account (move lamports to creator, zero data). Mirror the sibling `SweepOracle` CloseAccount + PDA-close idiom.
+- CPI helper: an SPL `CloseAccount` wrapper (pinocchio-token `CloseAccount`), and a `close_pda_account(account, recipient)` helper (transfer all lamports out + `realloc(0)`/zero — mirror how the sibling closes a data PDA).
+- Tests (`tests/`): `state_layout` (open_contributions@152); `contribute`/`create_market` (counter increments; repeat contribution does NOT double-count); `claim_lp` (Contribution closed + rent to contributor after claim; last-claimer sweeps lp_vault to 0; counter decrements; double-claim now fails to load); `refund` (Contribution closed, counter decrements); new `close_market.rs` (Resolved+fee_collected+all-claimed → closes escrow/cyes/cno/lp_vault + Market, rent to creator, all lamports accounted; `ContributionsOpen` when a claim is outstanding; Cancelled path closes escrow+Market only; reject before fee_collected / non-terminal; double close → market gone). Update `lifecycle_active.rs` + existing claim/refund tests for the closed-Contribution behavior.
+- Two-stage review (fund-custody: moves rent + the dust-sweep + program-signed CloseAccount). `just test` + clippy green. Commit `feat: close_market + Contribution close — reclaim rent & sweep LP dust`.
+
+## Task 2 — sdk-rs + TS SDK
+- `sdk-rs`: `close_market` builder; thread through the harness. TS SDK: `Ix.CloseMarket=10`, `MarketError.ContributionsOpen=20`; `closeMarket` builder (accounts: market, creator, escrow, [cyes,cno,lp_vault], tokenProgram — match the processor); `decodeMarket.openContributions` @152; `flows.closeMarketInstruction(marketRefs)`; parity (Ix count, error count). The litesvm/surfpool harness `claim_lp`/`refund` assertions now expect a closed Contribution + returned rent; update them. Keep lifecycle e2e green (add a close step). `pnpm --filter @kassandra-market/sdk test` green.
+
+## Task 3 — App
+- A permissionless **"Close market & reclaim rent"** control on a fully-settled market (status terminal + fee_collected + open_contributions==0), routing rent to the creator; show what's reclaimable. `data/actions/closeMarket.ts` + `CloseMarketControl.tsx`, wired into `MarketActions` (Resolved/Void/Cancelled, once `openContributions==0`). The claim/refund flows already work; the app's post-claim refetch now just sees the Contribution gone. Show `openContributions` remaining ("N contributors yet to claim") as the gate. typecheck/build/lint/test green.
+
+## Deferred / not doing
+- Closing MetaDAO accounts (not ours). Forcing claims (liveness is the claimers' responsibility). Auto-close on last claim (keep close a separate explicit crank — simpler, and the last claim already has enough to do).

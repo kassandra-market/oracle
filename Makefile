@@ -4,6 +4,11 @@
 # tools (cargo, just, pnpm, and scripts/*.sh) so there is a single surface to
 # remember. Grouped: setup · build · test · lint · dev (local nodes + seed) · docs.
 #
+# This repo hosts BOTH on-chain programs — the optimistic oracle
+# (`programs/kassandra`) and the prediction market (`programs/kassandra-market`) —
+# a single web app (`app/`, both `/oracles*` and `/markets*`), and a single
+# Postgres-backed indexer (`indexer/`) that indexes both programs.
+#
 # Requirements: rust + the Solana/Anza toolchain (cargo build-sbf), `just`, pnpm,
 # and — for the e2e / dev targets — `surfpool` and Postgres (initdb/pg_ctl).
 
@@ -21,7 +26,7 @@ help: ## List all targets
 	@echo "  Common flows:  make setup  ·  make test  ·  make lint  ·  make dev"
 
 # ===== Setup ================================================================
-setup: install build-program build-sdk ## Install deps + build the program (.so) & SDK (first-run bootstrap)
+setup: install build-program build-sdk ## Install deps + build both programs (.so) & both SDKs (first-run bootstrap)
 
 install: ## Install JS workspace deps (frozen lockfile)
 	corepack enable >/dev/null 2>&1 || true
@@ -30,14 +35,15 @@ install: ## Install JS workspace deps (frozen lockfile)
 # ===== Build ================================================================
 build: build-program build-sdk build-app build-runner build-indexer ## Build everything
 
-build-program: ## Build the SBF program artifact (target/deploy/kassandra_program.so)
+build-program: ## Build BOTH SBF program artifacts (oracle + market → target/deploy/*.so)
 	just build
 
-build-sdk: ## Build the TypeScript SDK (@kassandra/sdk → dist/)
-	pnpm --filter sdk build
+build-sdk: ## Build BOTH TypeScript SDKs (@kassandra/sdk + @kassandra-market/sdk → dist/)
+	pnpm --filter ./sdk build
+	pnpm --filter ./sdk-market build
 
 build-app: build-sdk ## Build the web app (Vite → app/dist)
-	pnpm --filter app build
+	pnpm --filter ./app build
 
 build-runner: ## Build the AI runner binary
 	cargo build -p kassandra-runner
@@ -46,19 +52,20 @@ build-indexer: ## Build the indexer service (release, own lockfile)
 	cargo build --release --locked --manifest-path indexer/Cargo.toml
 
 # ===== Test =================================================================
-test: test-rust test-sdk test-app test-indexer ## Run all UNIT tests (rust workspace + sdk + app + indexer)
+test: test-rust test-sdk test-app test-indexer ## Run all UNIT tests (rust workspace + sdks + app + indexer)
 
-test-rust: build-program ## Rust workspace tests (program LiteSVM + runner + sdk-rs)
+test-rust: build-program ## Rust workspace tests (both programs' LiteSVM + runner + sdk-rs)
 	cargo test --workspace
 
-test-program: ## Program tests only (rebuilds the .so first)
+test-program: ## Both programs' tests only (rebuilds the .so files first)
 	just test
 
-test-sdk: ## SDK vitest (litesvm + decoders)
-	pnpm --filter sdk test
+test-sdk: ## Both SDKs' vitest (litesvm + decoders)
+	pnpm --filter ./sdk test
+	pnpm --filter ./sdk-market test
 
 test-app: ## App vitest (unit + render)
-	pnpm --filter app test
+	pnpm --filter ./app test
 
 test-indexer: ## Indexer cargo tests
 	cargo test --manifest-path indexer/Cargo.toml
@@ -76,13 +83,14 @@ test-all: test test-e2e test-e2e-indexer ## Every test incl. the (non-forked) br
 
 # ===== Lint / typecheck / format ===========================================
 lint: ## Lint: app (oxlint) + rust clippy (workspace + indexer)
-	pnpm --filter app lint
+	pnpm --filter ./app lint
 	cargo clippy --workspace --all-targets
 	cargo clippy --manifest-path indexer/Cargo.toml --all-targets
 
-typecheck: build-sdk ## Typecheck the SDK + app
-	pnpm --filter sdk typecheck
-	pnpm --filter app typecheck
+typecheck: build-sdk ## Typecheck both SDKs + app
+	pnpm --filter ./sdk typecheck
+	pnpm --filter ./sdk-market typecheck
+	pnpm --filter ./app typecheck
 
 fmt: ## Format Rust (cargo fmt)
 	cargo fmt --all
@@ -113,19 +121,21 @@ docs: ## Serve the Mintlify docs locally (needs Node 20 — see docs-site/README
 	pnpm --filter kassandra-docs-site dev
 
 # ===== CI mirror / housekeeping ============================================
-ci: ## Run what CI runs: build the .so, rust workspace tests, and the JS lane
-	cargo build-sbf --manifest-path programs/kassandra/Cargo.toml
+ci: ## Run what CI runs: build both .so, rust workspace tests, and the JS lane
+	just build
 	cargo test --workspace
-	pnpm --filter sdk build
-	pnpm --filter sdk test
-	pnpm --filter app typecheck
-	pnpm --filter app lint
-	pnpm --filter app test
+	pnpm --filter ./sdk build
+	pnpm --filter ./sdk-market build
+	pnpm --filter ./sdk test
+	pnpm --filter ./sdk-market test
+	pnpm --filter ./app typecheck
+	pnpm --filter ./app lint
+	pnpm --filter ./app test
 
 clean: ## Remove build artifacts (cargo target, dist, indexer target)
 	cargo clean
 	cargo clean --manifest-path indexer/Cargo.toml
-	rm -rf app/dist sdk/dist
+	rm -rf app/dist sdk/dist sdk-market/dist
 
 .PHONY: help setup install build build-program build-sdk build-app build-runner \
         build-indexer test test-rust test-program test-sdk test-app test-indexer \

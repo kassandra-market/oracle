@@ -95,7 +95,6 @@ function makeOracle(over: Partial<Oracle>): Oracle {
     bump: 254,
     resolvedOption: 0xff,
     openChallengeCount: 0,
-    promptHash: hashBytes(1),
     thresholdNum: 2n,
     thresholdDen: 3n,
     marketThresholdNum: 1n,
@@ -138,7 +137,6 @@ const ORACLES: OracleSummary[] = [
       bondPool: 12_500_000_000n,
       disputeBondTotal: 40_000_000_000n,
       openChallengeCount: 1,
-      promptHash: hashBytes(11),
     }),
   },
   {
@@ -156,7 +154,6 @@ const ORACLES: OracleSummary[] = [
       factCount: 1,
       settledCount: 1,
       openChallengeCount: 0,
-      promptHash: hashBytes(33),
     }),
   },
   {
@@ -170,7 +167,6 @@ const ORACLES: OracleSummary[] = [
       proposerCount: 1,
       survivingCount: 1,
       factCount: 0,
-      promptHash: hashBytes(22),
     }),
   },
   {
@@ -185,7 +181,6 @@ const ORACLES: OracleSummary[] = [
       survivingCount: 2,
       factCount: 0,
       bondPool: 8_000_000_000n,
-      promptHash: hashBytes(66),
     }),
   },
   {
@@ -200,7 +195,6 @@ const ORACLES: OracleSummary[] = [
       survivingCount: 2,
       factCount: 2,
       bondPool: 9_000_000_000n,
-      promptHash: hashBytes(77),
     }),
   },
   {
@@ -217,7 +211,6 @@ const ORACLES: OracleSummary[] = [
       settledCount: 1,
       bondPool: 2_000_000_000n,
       disputeBondTotal: 20_000_000_000n,
-      promptHash: hashBytes(33),
     }),
   },
   {
@@ -237,7 +230,6 @@ const ORACLES: OracleSummary[] = [
       totalCorrectProposerStake: 30_000_000_000n,
       totalApprovedFactStake: 15_000_000_000n,
       rewardPool: 6_000_000_000n,
-      promptHash: hashBytes(44),
     }),
   },
   {
@@ -253,7 +245,6 @@ const ORACLES: OracleSummary[] = [
       factCount: 2,
       resolvedOption: 0xff,
       bondPool: 40_000_000_000n,
-      promptHash: hashBytes(55),
     }),
   },
 ]

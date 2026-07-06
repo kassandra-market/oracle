@@ -1,0 +1,134 @@
+---
+title: "Accounts"
+description: "The 3 kassandra-market account structs — Config, Market, Contribution — field-by-field with byte offsets, LEN, the AccountType tag, MarketStatus, and MAX_FEE_BPS."
+---
+
+kassandra-market stores state in **3 account types**, all defined in
+`programs/kassandra-market/src/state.rs`. Every struct is `#[repr(C)]`,
+`Pod + Zeroable`, fully packed with explicit `_pad`, and read/written zero-copy via
+`bytemuck`. Each begins with an 8-byte header: `account_type: u8` at offset 0
+followed by `_pad_hdr: [u8;7]`. Sizes are pinned by `tests/state_layout.rs`.
+Throughout, `type Pubkey = [u8;32]`.
+
+## Enums & constants
+
+### AccountType (`#[repr(u8)]`)
+
+The first byte of every account, rejecting type-confusion. A freshly zeroed
+account carries `Uninitialized` (0).
+
+| Variant | Value |
+| --- | --- |
+| `Uninitialized` | 0 |
+| `Config` | 1 |
+| `Market` | 2 |
+| `Contribution` | 3 |
+
+### MarketStatus (`#[repr(u8)]`)
+
+Stored on `Market.status` (`state.rs:33`). See [Lifecycle](/market/lifecycle).
+
+| Variant | Value | Meaning |
+| --- | --- | --- |
+| `Funding` | 0 | crowdfunding toward `min_liquidity` |
+| `Active` | 1 | live cYES/cNO AMM |
+| `Resolved` | 2 | oracle resolved to a definite option |
+| `Void` | 3 | oracle `InvalidDeadend` — each leg redeems half |
+| `Cancelled` | 4 | oracle terminal before activation |
+
+### MAX_FEE_BPS
+
+`MAX_FEE_BPS: u16 = 1000` (`state.rs:48`) — the largest protocol `fee_bps` the
+futarchy may set (10%). `init_config`/`update_config` reject anything above it.
+
+### Account sizes
+
+| Account | Tag | `LEN` (bytes) |
+| --- | --- | --- |
+| `Config` | 1 | 120 |
+| `Market` | 2 | 400 |
+| `Contribution` | 3 | 88 |
+
+## Config — LEN 120
+
+The governed singleton at PDA `[b"config"]`. `authority` is the KASS futarchy DAO
+executor — only it may `update_config`. Created once by `init_config`.
+
+| Field | Type | Offset | Meaning |
+| --- | --- | --- | --- |
+| `account_type` | u8 | 0 | `AccountType::Config` |
+| `_pad_hdr` | [u8;7] | 1 | header padding |
+| `authority` | Pubkey | 8 | KASS futarchy DAO executor; gates `update_config` |
+| `kass_mint` | Pubkey | 40 | canonical KASS mint |
+| `min_liquidity` | u64 | 72 | KASS a market must raise before activation |
+| `bump` | u8 | 80 | PDA bump |
+| `_pad0` | u8 | 81 | padding |
+| `fee_bps` | u16 | 82 | protocol fee in basis points (≤ `MAX_FEE_BPS`) |
+| `fee_destination` | Pubkey | 84 | KASS token account fees route to |
+| `_pad` | [u8;4] | 116 | padding |
+
+## Market — LEN 400
+
+One sub-market per outcome per oracle, PDA `[b"market", oracle, [outcome_index]]`.
+A categorical (N-option) oracle is modeled as N independent binary sub-markets. The
+Phase-2a MetaDAO bindings are zero until recorded at `activate`. `min_liquidity`
+and `fee_bps` are **snapshot from `Config` at creation** so in-flight markets are
+immune to governance changes.
+
+| Field | Type | Offset | Meaning |
+| --- | --- | --- | --- |
+| `account_type` | u8 | 0 | `AccountType::Market` |
+| `_pad_hdr` | [u8;7] | 1 | header padding |
+| `oracle` | Pubkey | 8 | the Kassandra oracle this market resolves against |
+| `creator` | Pubkey | 40 | market creator; rent recipient at close |
+| `kass_mint` | Pubkey | 72 | canonical KASS mint |
+| `escrow_vault` | Pubkey | 104 | Market-PDA-owned KASS escrow (`[b"escrow", market]`) |
+| `min_liquidity` | u64 | 136 | funding floor, snapshot from Config |
+| `total_contributed` | u64 | 144 | total KASS contributed |
+| `open_contributions` | u16 | 152 | count of live Contribution accounts (rent-reclaim counter) |
+| `status` | u8 | 154 | `MarketStatus` |
+| `bump` | u8 | 155 | Market PDA bump |
+| `escrow_bump` | u8 | 156 | escrow PDA bump |
+| `_pad` | [u8;3] | 157 | padding |
+| `question` | Pubkey | 160 | MetaDAO binary Question (oracle-authority == this Market PDA) |
+| `vault` | Pubkey | 192 | KASS conditional vault |
+| `yes_mint` | Pubkey | 224 | conditional-KASS mint idx 0 (cYES) |
+| `no_mint` | Pubkey | 256 | conditional-KASS mint idx 1 (cNO) |
+| `amm` | Pubkey | 288 | the cYES/cNO pool |
+| `lp_mint` | Pubkey | 320 | the pool's LP mint |
+| `lp_vault` | Pubkey | 352 | Market-PDA-owned LP token account |
+| `lp_total` | u64 | 384 | LP tokens minted at activation (pro-rata claim basis) |
+| `settled` | u8 | 392 | 1 once `resolve_market` bridged the result |
+| `_pad2` | u8 | 393 | padding |
+| `fee_bps` | u16 | 394 | protocol fee snapshot from Config at creation |
+| `fee_collected` | u8 | 396 | 1 once `collect_fee` cut the fee (gates `claim_lp`) |
+| `outcome_index` | u8 | 397 | this sub-market's oracle outcome (YES = oracle resolves to it) |
+| `_pad3` | [u8;2] | 398 | padding |
+
+## Contribution — LEN 88
+
+A per-contributor stake, PDA `[b"contribution", market, contributor]`. Created at
+`create_market`/`contribute`, closed (reaped) at `refund`/`claim_lp` — its absence
+is the idempotency guard.
+
+| Field | Type | Offset | Meaning |
+| --- | --- | --- | --- |
+| `account_type` | u8 | 0 | `AccountType::Contribution` |
+| `_pad_hdr` | [u8;7] | 1 | header padding |
+| `market` | Pubkey | 8 | parent market |
+| `contributor` | Pubkey | 40 | staker; refund/LP destination owner + rent recipient |
+| `amount` | u64 | 72 | KASS contributed (raw base units) |
+| `claimed` | u8 | 80 | bool: refunded/claimed (legacy; closure is the real guard) |
+| `bump` | u8 | 81 | PDA bump |
+| `_pad` | [u8;6] | 82 | padding |
+
+## See also
+
+<CardGroup cols={2}>
+  <Card title="PDAs" icon="fingerprint" href="/market-protocol/pdas">
+    The exact seed bytes deriving each account above.
+  </Card>
+  <Card title="SDK decoders" icon="box-open" href="/sdk/market">
+    The TypeScript decoders that parse these layouts.
+  </Card>
+</CardGroup>

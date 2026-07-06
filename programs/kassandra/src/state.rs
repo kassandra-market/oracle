@@ -37,6 +37,7 @@ pub enum AccountType {
     AiClaim = 5,
     Market = 6,
     Protocol = 7,
+    OracleMeta = 8,
 }
 
 impl AccountType {
@@ -143,7 +144,11 @@ pub struct Oracle {
     // counted as surviving. (Originally fit the former `_pad1`; Oracle has since
     // grown — see the struct docstring for the current LEN.)
     pub open_challenge_count: u16,
-    pub prompt_hash: [u8; 32], // hash of fixed prompt + interpretation
+    // NOTE: the former `prompt_hash` [u8;32] lived here. It was write-only (never
+    // read on-chain); the plaintext subject now lives on-chain in the companion
+    // `[b"oracle_meta", oracle]` account, so the hash was removed. `threshold_num`
+    // (8-aligned) follows `open_challenge_count` directly — the struct shrank by
+    // 32 bytes with no padding (Pod derive enforces this).
     // ---- Governable params snapshotted from `Protocol` at create_oracle (F2) -
     // Read by the downstream processors instead of the `config.rs` consts; equal
     // to the consts by default so behavior is unchanged.

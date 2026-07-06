@@ -58,6 +58,7 @@ export enum Ix {
   CloseAiClaim = 20,
   CloseMarket = 21,
   SweepOracle = 22,
+  WriteOracleMeta = 23,
 }
 
 /**
@@ -74,6 +75,7 @@ export enum AccountType {
   AiClaim = 5,
   Market = 6,
   Protocol = 7,
+  OracleMeta = 8,
 }
 
 /**
@@ -101,7 +103,7 @@ export enum Phase {
  */
 export const ACCOUNT_SIZES = {
   Protocol: 368,
-  Oracle: 392,
+  Oracle: 360,
   Proposer: 96,
   Fact: 336,
   FactVote: 88,

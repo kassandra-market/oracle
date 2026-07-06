@@ -613,7 +613,6 @@ impl TestCtx {
         options_count: u8,
         deadline: i64,
         twap_window: i64,
-        prompt_hash: [u8; 32],
     ) -> (Pubkey, TransactionResult) {
         let (oracle_pda, _) = Self::oracle_pda(&self.program_id, nonce);
         let ix = self.create_oracle_ix(
@@ -621,13 +620,35 @@ impl TestCtx {
             options_count,
             deadline,
             twap_window,
-            prompt_hash,
             oracle_pda,
             self.kass_mint,
             self.usdc_mint,
         );
         let res = self.send(ix, &[]);
         (oracle_pda, res)
+    }
+
+    /// Send a `WriteOracleMeta` for `oracle` (creator = payer). Subject/options
+    /// go on-chain in the `oracle_meta` PDA; `uri`/`uri_hash` reference the JSON.
+    #[allow(clippy::result_large_err)]
+    pub fn write_oracle_meta(
+        &mut self,
+        oracle: Pubkey,
+        subject: &str,
+        options: &[&str],
+        uri: &str,
+        uri_hash: [u8; 32],
+    ) -> TransactionResult {
+        let ix = kassandra_sdk::ix::write_oracle_meta(
+            &self.program_id,
+            oracle,
+            self.payer.pubkey(),
+            subject,
+            options,
+            uri,
+            &uri_hash,
+        );
+        self.send(ix, &[])
     }
 
     /// Build a `CreateOracle` instruction. Exposes the oracle account and the
@@ -640,7 +661,6 @@ impl TestCtx {
         options_count: u8,
         deadline: i64,
         twap_window: i64,
-        prompt_hash: [u8; 32],
         oracle: Pubkey,
         kass_mint: Pubkey,
         usdc_mint: Pubkey,
@@ -651,7 +671,6 @@ impl TestCtx {
             options_count,
             deadline,
             twap_window,
-            &prompt_hash,
             oracle,
             kass_mint,
             usdc_mint,
@@ -757,8 +776,7 @@ impl TestCtx {
         self.next_nonce += 1;
         let (oracle, bump) = Self::oracle_pda(&self.program_id, nonce);
         let deadline = self.now() + DEADLINE_DELTA;
-        let (created, res) =
-            self.create_oracle(nonce, options_count, deadline, twap_window, [0x42; 32]);
+        let (created, res) = self.create_oracle(nonce, options_count, deadline, twap_window);
         assert!(res.is_ok(), "create_oracle should succeed: {res:?}");
         debug_assert_eq!(created, oracle);
         // Warp to the deadline: proposals open at `deadline`, window now open.
@@ -894,7 +912,6 @@ impl TestCtx {
         oracle.dispute_bond_total = total_stake;
         oracle.settled_count = 0;
         oracle.bump = bump;
-        oracle.prompt_hash = [0x11; 32];
         // F2: snapshot the governable behavioral params from the config consts,
         // exactly as `create_oracle` would (Protocol defaults == these consts),
         // so a fabricated oracle behaves identically to a real one.
@@ -2230,6 +2247,7 @@ impl TestCtx {
     /// [4] creator(w) [5] token program`. Payload = `oracle_nonce` LE. Exposes
     /// every account so tests can pass a wrong treasury / creator / vault.
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn sweep_oracle_ix(
         &self,
         oracle: Pubkey,
@@ -2238,6 +2256,7 @@ impl TestCtx {
         protocol: Pubkey,
         dao_treasury: Pubkey,
         creator: Pubkey,
+        oracle_meta: Option<Pubkey>,
     ) -> Instruction {
         kassandra_sdk::ix::sweep_oracle(
             &self.program_id,
@@ -2247,6 +2266,7 @@ impl TestCtx {
             protocol,
             dao_treasury,
             creator,
+            oracle_meta,
         )
     }
 }

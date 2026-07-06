@@ -32,6 +32,7 @@ import {
   fixedBytes,
   i64LE,
   pubkeyBytes,
+  u16LE,
   u64LE,
   u8,
   withDisc,
@@ -95,8 +96,6 @@ export async function initProtocol(args: InitProtocolArgs): Promise<TransactionI
 export interface CreateOracleArgs {
   /** Oracle nonce — seeds the oracle PDA `[b"oracle", nonce_le8]`. */
   nonce: bigint | number;
-  /** 32-byte prompt hash. */
-  promptHash: Uint8Array;
   /** Categorical option count (>= 2). */
   optionsCount: number;
   /** Creation-time deadline (unix seconds, i64). */
@@ -124,7 +123,6 @@ export async function createOracle(args: CreateOracleArgs): Promise<TransactionI
   const data = withDisc(
     Ix.CreateOracle,
     u64LE(args.nonce),
-    fixedBytes(args.promptHash, 32),
     u8(args.optionsCount),
     i64LE(args.deadline),
     i64LE(args.twapWindow),
@@ -145,6 +143,56 @@ export async function createOracle(args: CreateOracleArgs): Promise<TransactionI
       ro(mintAuthority.address),
     ],
     data,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// WriteOracleMeta (Ix=23) — processor/write_oracle_meta.rs
+// Accounts: 0 creator(w,signer) 1 oracle(ro) 2 oracle_meta(w,PDA) 3 system(ro).
+// Body (length-prefixed): subject_len u16 ++ subject ++ options_count u8 ++
+//   [option_len u16 ++ option]* ++ uri_len u16 ++ uri ++ uri_hash[32].
+// ---------------------------------------------------------------------------
+export interface WriteOracleMetaArgs {
+  /** The oracle whose metadata is being written. */
+  oracle: AddressInput;
+  /** Creator (signer): must equal the oracle's recorded creator; pays the rent. */
+  creator: AddressInput;
+  /** The plaintext question (on-chain). */
+  subject: string;
+  /** The option labels (on-chain); count must equal the oracle's options_count. */
+  options: string[];
+  /** URL of the extended off-chain metadata JSON (may be empty). */
+  uri: string;
+  /** 32-byte `sha256` of the canonical off-chain JSON (zeroed if no uri). */
+  uriHash: Uint8Array;
+  programId?: Address;
+}
+
+export async function writeOracleMeta(
+  args: WriteOracleMetaArgs,
+): Promise<TransactionInstruction> {
+  const programId = args.programId ?? KASSANDRA_PROGRAM_ID;
+  const meta = await pda.oracleMeta(addr(args.oracle), programId);
+
+  const enc = new TextEncoder();
+  const subject = enc.encode(args.subject);
+  const parts: Uint8Array[] = [u16LE(subject.length), subject, u8(args.options.length)];
+  for (const o of args.options) {
+    const b = enc.encode(o);
+    parts.push(u16LE(b.length), b);
+  }
+  const uri = enc.encode(args.uri);
+  parts.push(u16LE(uri.length), uri, fixedBytes(args.uriHash, 32));
+
+  return new TransactionInstruction({
+    programId,
+    keys: [
+      w(addr(args.creator), true),
+      ro(addr(args.oracle)),
+      w(meta.address),
+      ro(SYSTEM_PROGRAM_ID),
+    ],
+    data: withDisc(Ix.WriteOracleMeta, ...parts),
   });
 }
 

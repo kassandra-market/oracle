@@ -16,10 +16,26 @@ log = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 solana-commitment-config = { workspace = true }
 solana-instruction = { workspace = true }
+solana-message = { workspace = true }
 solana-pubkey = { workspace = true }
 solana-signature = { workspace = true }
 tokio = { workspace = true }
 tokio-postgres = { workspace = true }
 tower-http = { workspace = true }
+
+# ---- market side (account indexer over the same Postgres + one axum server) ----
+# The program crate supplies the zero-copy state layouts + `ID` (no solana-sdk).
+kassandra-market-program = { workspace = true }
+carbon-rpc-gpa-datasource = { workspace = true }
+carbon-rpc-program-subscribe-datasource = { workspace = true }
+solana-rpc-client = { workspace = true }
+solana-transaction-status = { workspace = true }
+solana-account = { workspace = true }
+solana-hash = { workspace = true }
+solana-transaction = { workspace = true }
+bincode = { workspace = true }
+bs58 = { workspace = true }
+bytemuck = { workspace = true }

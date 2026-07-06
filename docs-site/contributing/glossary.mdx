@@ -7,7 +7,9 @@ A quick reference to the vocabulary used across these docs. Each entry links to 
 
 ## Core objects
 
-**Oracle** — The on-chain account (`AccountType.Oracle`) representing one question: it commits to an interpretation (`prompt_hash`), a set of categorical options, a deadline, and a TWAP window, and moves through the lifecycle phases. See [Oracles & questions](/concepts/oracles-and-questions).
+**Oracle** — The on-chain account (`AccountType.Oracle`) representing one question: it holds a set of categorical options, a deadline, and a TWAP window, commits to its metadata via the companion `oracle_meta` account, and moves through the lifecycle phases. See [Oracles & questions](/concepts/oracles-and-questions).
+
+**Oracle metadata** — The companion `oracle_meta` PDA (seeds `[b"oracle_meta", oracle]`) written atomically with the oracle by the `write_oracle_meta` instruction: the plaintext subject (the question), the option labels, and a `uri` plus 32-byte `uri_hash` binding an extended off-chain interpretation JSON. See [Oracles & questions](/concepts/oracles-and-questions).
 
 **Proposer** — A participant who bonds KASS on a chosen option during the Proposal phase; recorded as a `Proposer` account keyed by `[b"proposer", oracle, authority]`. See [Proposals](/concepts/proposals).
 

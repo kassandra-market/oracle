@@ -1,0 +1,95 @@
+---
+title: "Crowdfunding a market"
+description: "create_market, contribute, cancel, refund — the pre-create-below-floor → crowdfund-to-min_liquidity → funded model, the Contribution accounts, and the config-as-state snapshot."
+---
+
+Phase 1 of a market's life is pure crowdfunding: no MetaDAO accounts, no trading,
+no pool. A creator stands the market up below the liquidity floor, anyone
+contributes toward it, and — until activation — every contributor funds at the same
+pre-pool basis. Deferring the heavy MetaDAO machinery to
+[activation](/market/activation) keeps this phase cheap and keeps a never-funded
+market trivially refundable.
+
+## create_market (Ix 2)
+
+`create_market` (`processor/create_market.rs`) is permissionless and lightweight.
+It reads the `Config` singleton for the canonical KASS mint and current
+`min_liquidity`/`fee_bps`, reads the Kassandra oracle as a gate, and then:
+
+<Steps>
+  <Step title="Validate the oracle binding">
+    `outcome_index` must index a real option (`< oracle.options_count`) or the call
+    fails `InvalidOutcome`; the oracle must still be non-terminal
+    (`phase < Resolved`) or it fails `OracleResolved`
+    (`create_market.rs:85-90`).
+  </Step>
+  <Step title="Allocate the Market + escrow">
+    The `Market` PDA `[b"market", oracle, [outcome_index]]` is created (one
+    sub-market per outcome — a second attempt at the same address fails
+    `InvalidAccount`), plus an SPL **escrow** token account
+    `[b"escrow", market]` on KASS whose token authority is the Market PDA.
+  </Step>
+  <Step title="Seed the first contribution">
+    The creator's `seed_amount` KASS transfers into escrow and their `Contribution`
+    is recorded. `seed_amount` may be **any positive amount, even below the floor**;
+    zero fails `ZeroAmount`.
+  </Step>
+</Steps>
+
+The written `Market` snapshots `min_liquidity` and `fee_bps` **from `Config` at
+creation time** (`create_market.rs:166-167`), sets `total_contributed =
+seed_amount`, `open_contributions = 1`, and `status = Funding`.
+
+<Note title="Config-as-state">
+Because `min_liquidity` and `fee_bps` are copied onto the `Market` at creation, an
+in-flight market is immune to later governance changes — a futarchy
+[`update_config`](/market-protocol/instructions) cannot move the goalposts on a
+market people are already funding. This mirrors the Kassandra oracle's frozen
+per-oracle parameter snapshots.
+</Note>
+
+## contribute (Ix 3)
+
+Anyone stakes more KASS toward the floor with `contribute`
+(`processor/contribute.rs`). The market must be `Funding` (else `NotFunding`) and
+the escrow must match `market.escrow_vault`. The contributor's KASS transfers into
+escrow and their `Contribution` is created or topped up.
+
+The processor detects the create-vs-top-up branch **before** moving tokens: only a
+brand-new `Contribution` increments `open_contributions`; a repeat top-up by an
+existing contributor must not double-count (`contribute.rs:53-77`).
+`total_contributed` grows by `amount` with checked math.
+
+### Contribution accounts
+
+Each `(market, contributor)` pair has exactly one `Contribution` PDA
+`[b"contribution", market, contributor]` (`programs/kassandra-market/src/state.rs:120`)
+recording `market`, `contributor`, `amount`, a `claimed` flag, and `bump`. It is
+the record both `refund` and [`claim_lp`](/market/resolution) pay against, and
+`open_contributions` on the `Market` counts the live ones — a rent-reclaim counter
+that gates `close_market`.
+
+## cancel (Ix 4) + refund (Ix 5)
+
+If the oracle goes terminal before anyone activates the market, the crowdfund
+unwinds:
+
+- **`cancel`** (`processor/cancel.rs`) — permissionless; flips a `Funding` market
+  to `Cancelled` once its oracle is terminal (`Resolved`/`InvalidDeadend`), at
+  **any** funding level. This deliberately admits fully-funded markets whose oracle
+  resolved before activation, which would otherwise strand their KASS.
+- **`refund`** (`processor/refund.rs`) — permissionless per-contributor pull. It
+  program-signs a transfer of `contribution.amount` out of escrow (authority = the
+  Market PDA) back to the contributor's KASS account, then **closes** the
+  `Contribution` (rent → contributor) and decrements `open_contributions`.
+
+<Warning>
+Because `refund` is permissionless, it verifies the destination token account's SPL
+owner equals the recorded `contribution.contributor` (`refund.rs:68`) — otherwise a
+cranker could redirect someone's refund. The closed `Contribution`'s absence is the
+idempotency guard: a second refund can't even load it (`AlreadyClaimed` is now
+unused).
+</Warning>
+
+Continue to [Activation](/market/activation) for the funded path, or see the
+[reference instructions](/market-protocol/instructions) for exact account lists.

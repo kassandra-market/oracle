@@ -1,0 +1,97 @@
+---
+title: "Using the market dApp"
+description: "The Kassandra Market web app — browsing /markets, creating a market, contributing, trading YES/NO, running the activate/resolve cranks, and claiming LP."
+---
+
+The market dApp is a React 19 + Vite web app (`app/`) built entirely on the
+[`@kassandra-market/sdk`](/sdk/market). It mirrors the sibling Kassandra oracle
+app's "Delphi" design system — the same primitives, providers, cluster switcher,
+and wallet-signed `useWriteAction` transaction idiom. Every write is a
+phase-gated, wallet-signed action; the read side talks to the indexer, never the
+RPC directly.
+
+## Browsing markets
+
+`/markets` (`app/src/pages/Markets.tsx`) lists every market on the program —
+funding, active, and resolved — with search (by address or status) and sort (TVL,
+funding %, status). Each `MarketCard` shows the status chip, funding progress, and
+implied probability. A **categorical oracle** collapses its per-outcome
+sub-markets into a single grouped `CategoricalCard`; binary/single-outcome oracles
+render as an individual card.
+
+<Note>
+If the program's `Config` singleton is absent for the selected cluster, the list
+surfaces a clear **"not set up"** empty state rather than looking like a live but
+empty program (`Markets.tsx:76-77`) — the on-chain `Config` must be initialized
+before markets can appear.
+</Note>
+
+## The market detail page
+
+`/markets/:pubkey` (`app/src/pages/MarketDetail.tsx`) is the workbench for one
+sub-market:
+
+<CardGroup cols={2}>
+  <Card title="Status + resolution" icon="flag">
+    The status chip, the outcome this sub-market binds to ("YES pays if the oracle
+    resolves to outcome N"), and whether it has settled on-chain.
+  </Card>
+  <Card title="Funding" icon="chart-simple">
+    Raised vs. floor (`min_liquidity`), the protocol fee, and whether the fee has
+    been collected.
+  </Card>
+  <Card title="Implied probability" icon="percent">
+    For Active markets, the live cYES/cNO reserves and the implied YES probability
+    `cYES / (cYES + cNO)`.
+  </Card>
+  <Card title="Bindings + contributions" icon="link">
+    The oracle, escrow, and the MetaDAO Question/vault/mints/AMM/LP addresses (shown
+    as "set at activation" until composed), plus the contribution list.
+  </Card>
+</CardGroup>
+
+The `MarketActions` block renders whichever writes are valid for the current
+status.
+
+## The lifecycle, as user actions
+
+<Steps>
+  <Step title="Create a market">
+    `/markets/new` (`app/src/pages/CreateMarket.tsx`) picks a Kassandra oracle + an
+    outcome index and seeds an opening amount of KASS — builds `create_market`.
+  </Step>
+  <Step title="Contribute">
+    On a `Funding` market, stake KASS toward the floor — builds `contribute`. Every
+    contributor funds at the same pre-pool basis.
+  </Step>
+  <Step title="Activate (permissionless crank)">
+    Once the floor is met, anyone composes the MetaDAO accounts and activates — the
+    SDK flow derives and stitches the Question/vault/AMM, then builds `activate`.
+  </Step>
+  <Step title="Trade YES/NO">
+    On an `Active` market, buy or sell a net YES/NO position. The SDK's `buy`/`sell`
+    flows do the split-and-swap so the UI never exposes conditional tokens; entry
+    from any token routes through Jupiter (KASS is the on-chain denomination).
+  </Step>
+  <Step title="Resolve (permissionless crank)">
+    Once the oracle is terminal, anyone cranks `resolve_market` to bridge the
+    result; the market flips to Resolved or Void.
+  </Step>
+  <Step title="Collect fee, claim LP, close">
+    Contributors claim their pro-rata LP (`claim_lp`) after the fee crank; a
+    fully-exited terminal market can be closed to reclaim rent to the creator.
+  </Step>
+</Steps>
+
+## Cancel / refund
+
+If the oracle goes terminal while a market is still `Funding`, the detail page
+exposes the `cancel` crank and per-contributor `refund` — the escape path that
+returns all staked KASS. See [Crowdfunding](/market/crowdfunding).
+
+<Note>
+The market app and the oracle app are two front-ends over two programs, each with
+its own SDK (`@kassandra-market/sdk` and `@kassandra/sdk`). See the
+[SDK page](/sdk/market) for how the flows wrap these raw builders into whole user
+actions.
+</Note>

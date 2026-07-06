@@ -18,7 +18,7 @@ fn create_and_measure(ctx: &mut TestCtx, nonce: u64) -> (u64, u64) {
     let bal_before = ctx.token_balance(ctx.payer_kass);
     let sup_before = ctx.mint_supply(ctx.kass_mint);
     let deadline = ctx.now() + 1_000_000;
-    let (oracle, res) = ctx.create_oracle(nonce, 2, deadline, 600, [0x33; 32]);
+    let (oracle, res) = ctx.create_oracle(nonce, 2, deadline, 600);
     assert!(res.is_ok(), "create_oracle should succeed: {res:?}");
     let bal_after = ctx.token_balance(ctx.payer_kass);
     let sup_after = ctx.mint_supply(ctx.kass_mint);

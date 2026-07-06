@@ -1,0 +1,109 @@
+---
+title: "Market SDK"
+description: "The @kassandra-market/sdk TypeScript package — IDL-free instruction builders, account decoders, PDA helpers, MetaDAO composition, and high-level buy/sell/redeem flows."
+---
+
+`@kassandra-market/sdk` is the hand-written TypeScript client for the
+[kassandra-market](/market-protocol/overview) program. It builds every instruction,
+derives every PDA, and decodes every on-chain account — with **no IDL**. The wire
+formats are mirrored verbatim from the Rust program (the source of truth) and
+guarded by a parity test (`test/parity.test.ts`), so the SDK stays byte-for-byte in
+lockstep with `programs/kassandra-market`.
+
+<Note>
+This is a **separate package** from `@kassandra/sdk` (the oracle SDK). The market
+SDK depends on the oracle SDK only to read the `Oracle` account it resolves against.
+The one dApp consumes both.
+</Note>
+
+## Design
+
+Three conventions run through the surface, mirroring the oracle SDK:
+
+<Steps>
+  <Step title="No IDL — payloads packed by hand">
+    Each instruction's `data` is `[disc, ...payload_LE]`, where `disc` is the `Ix`
+    discriminant and the payload is little-endian. The packers live in
+    `src/instructions/payload.ts` (`u8`, `u16LE`, `u64LE`, `pubkeyBytes`, `withDisc`, …).
+  </Step>
+  <Step title="PDA derivers are async and return { address, bump }">
+    web3.js `3.0.0-rc.2` exposes only the **async** `Address.findProgramAddress`
+    (no sync variant), so every helper in `src/pda.ts` returns `Promise<Pda>` where
+    `Pda = { address: Address; bump: number }`, accepts an `AddressInput = Address |
+    string`, and takes an optional `programId?` override.
+  </Step>
+  <Step title="Builders return classic web3.js instructions">
+    Each of the 11 builders returns `Promise<TransactionInstruction>` (the classic
+    web3.js API) with the exact account-meta list in the processor's documented
+    order and the correct signer/writable roles. PDAs the builder can derive
+    internally are derived for you, so callers pass only the "real" pubkeys.
+  </Step>
+</Steps>
+
+## Module map
+
+Everything is re-exported from the barrel `src/index.ts`. Flat helpers sit at the
+top level; external-protocol and flow surfaces are namespaced.
+
+| Module | Import path / namespace | What it provides |
+| --- | --- | --- |
+| Constants | `src/constants.ts` | `MARKET_PROGRAM_ID`, `Ix`, `AccountType`, `MarketStatus`, `MarketError` + `decodeError`, `MAX_FEE_BPS`, `ACCOUNT_SIZES`, `EXTERNAL_PROGRAM_IDS`. |
+| Instruction builders | `src/instructions/` | The 11 builders (Ix 0–10) + their `*Args` types + payload helpers. |
+| Account decoders | `src/accounts/` | `decodeConfig` / `decodeMarket` / `decodeContribution` + a minimal `Oracle` reader. |
+| PDAs | `pda.*` (`src/pda.ts`) | `config`, `programData`, `market`, `escrow`, `contribution`, `cyes`, `cno`, `lpVault`, `associatedTokenAccount`. |
+| `metadao.*` | `src/metadao/` | MetaDAO v0.4 conditional-vault + AMM builders, PDA derivers, and decoders (the composed accounts `activate` verifies). |
+| `flows.*` | `src/flows/` | High-level whole-user-actions: compose/activate, buy/sell, redeem, collect-fee, close, Jupiter entry, ATAs. |
+| litesvm interop | `src/litesvm-interop.ts` | the web3.js v3 → litesvm bridge for tests. |
+
+## Instruction builders
+
+Every builder maps 1:1 to a [program instruction](/market-protocol/instructions).
+For example, `createMarket` derives the market/escrow/contribution PDAs for you and
+packs `seed_amount ++ outcome_index`:
+
+```ts title="create a binary sub-market"
+import { createMarket, MARKET_PROGRAM_ID } from "@kassandra-market/sdk";
+
+const ix = await createMarket({
+  creator,            // signer
+  oracle,             // the Kassandra oracle
+  kassMint,           // == config.kass_mint
+  creatorKassAta,     // KASS source
+  seedAmount: 1_000_000n,
+  outcomeIndex: 0,    // binary; a categorical oracle uses 0..options_count
+});
+```
+
+The lifecycle builders — `contribute`, `cancel`, `refund`, `activate`, `claimLp`,
+`resolveMarket`, `collectFee`, `closeMarket` — follow the same shape; the two heavy
+cranks (`activate`, `collectFee`) take the caller-supplied MetaDAO addresses, which
+the flows layer derives and composes.
+
+## Account decoders
+
+Each `decodeX(data: Uint8Array)` reads the pinned little-endian offsets from
+[`state.rs`](/market-protocol/accounts), validates the `account_type` tag + size
+against `ACCOUNT_SIZES`, and returns a fully typed object (`u64`/`i64` as `bigint`,
+pubkeys as web3.js `Address`). The bundled `Oracle` reader exposes just the four
+gated fields (`options_count`, `phase`, `resolved_option`) the market resolves on.
+
+## High-level flows
+
+The `flows.*` layer wraps the raw builders into whole actions so callers never
+reason about conditional tokens:
+
+- **`composeMarketInstructions` / `activateInstruction`** — the keeper "compose →
+  activate" bring-up.
+- **`buyInstructions` / `sellInstructions`** — take/close a net YES or NO position
+  via split-and-swap (buy = `split_tokens` then swap the unwanted leg; sell is the
+  mirror, ending in `merge_tokens` back to KASS).
+- **`redeemInstructions`** — claim the resolved payout.
+- **`collectFeeInstruction`** / **`closeMarketInstruction`** — the fee crank and the
+  rent reclaim, with every MetaDAO address wired from a decoded `Market` + `Config`.
+- **`buildJupiterEntryRequest` / `composeWithEntry`** — the offline any-token-entry
+  boundary (KASS is the on-chain denomination).
+
+<Card title="Reference" icon="cube" href="/market-protocol/instructions">
+The on-chain surface these builders and decoders map onto — instructions, accounts,
+PDAs, and errors.
+</Card>

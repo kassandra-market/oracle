@@ -1,3 +1,5 @@
 packages:
   - "sdk"
+  - "sdk-market"
   - "app"
+  - "docs-site"
