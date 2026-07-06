@@ -112,6 +112,69 @@ export async function fetchOracleMeta(
   }
 }
 
+/** Decode base64 (the indexer serves raw Pod account bytes as base64) to bytes. */
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64)
+  const out = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i)
+  return out
+}
+
+/** One indexed account: its pubkey + raw Pod bytes (decoded by the caller with the SDK). */
+export interface IndexedAccount {
+  pubkey: string
+  data: Uint8Array
+}
+
+/** A detail-view account, tagged by its on-chain `account_type`. */
+export interface IndexedChildAccount extends IndexedAccount {
+  accountType: number
+}
+
+/**
+ * Every indexed Oracle account (raw bytes) from the indexer's account mirror
+ * (`oracle_accounts`, kept fresh by gpa snapshot + programSubscribe). Returns
+ * `null` when the indexer isn't configured or the request fails, so the caller
+ * falls back to a direct `getProgramAccounts`.
+ */
+export async function fetchOracleAccounts(signal?: AbortSignal): Promise<IndexedAccount[] | null> {
+  if (!indexerBaseUrl()) return null
+  try {
+    const body = await getJson<{ accounts: { pubkey: string; data: string }[] }>(
+      '/oracles/accounts',
+      signal,
+    )
+    return body.accounts.map((a) => ({ pubkey: a.pubkey, data: base64ToBytes(a.data) }))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The oracle account + its children (Proposer/Fact/FactVote/AiClaim/Market), tagged
+ * by `accountType`, from the indexer's account mirror. `null` → caller falls back
+ * to `getProgramAccounts`.
+ */
+export async function fetchOracleDetailAccounts(
+  oracle: string,
+  signal?: AbortSignal,
+): Promise<IndexedChildAccount[] | null> {
+  if (!indexerBaseUrl()) return null
+  try {
+    const body = await getJson<{ accounts: { pubkey: string; accountType: number; data: string }[] }>(
+      `/oracles/${oracle}/accounts`,
+      signal,
+    )
+    return body.accounts.map((a) => ({
+      pubkey: a.pubkey,
+      accountType: a.accountType,
+      data: base64ToBytes(a.data),
+    }))
+  } catch {
+    return null
+  }
+}
+
 /**
  * POST the extended metadata JSON to the app's OWN metadata host (a relative URL;
  * the app server proxies it to the private indexer). Best-effort — errors are

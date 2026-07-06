@@ -15,6 +15,7 @@ mod db;
 mod decoder;
 mod market;
 mod meta_fetch;
+mod oracle_accounts;
 mod processor;
 mod state;
 
@@ -63,6 +64,7 @@ async fn main() -> Result<()> {
 
     let client = db::connect(&database_url).await?;
     market::db::create_schema(&client).await?;
+    oracle_accounts::create_schema(&client).await?;
     let session = state::shared_session();
 
     // Market side config.
@@ -163,6 +165,50 @@ async fn main() -> Result<()> {
             client.clone(),
             market_program_id,
             reconcile_interval,
+        ));
+    }
+
+    // Oracle ACCOUNT pipeline (distinct from the tx crawler below): a gpa snapshot
+    // on startup + a live programSubscribe tail mirror every Oracle + child account
+    // into `oracle_accounts`, so the app reads oracle lists/detail from Postgres
+    // instead of slow client-side getProgramAccounts. A periodic gpa reconcile is
+    // the only path that prunes accounts closed on-chain (the tail can't see a close).
+    {
+        let oracle_program = program_id();
+        let gpa = GpaDatasource::new(rpc_url.clone(), oracle_program);
+        let mut builder = Pipeline::builder().datasource(gpa);
+        match std::env::var("SOLANA_WS_URL") {
+            Ok(ws_url) => {
+                builder = builder.datasource(RpcProgramSubscribe::new(
+                    ws_url,
+                    SubscribeFilters::new(oracle_program, None),
+                ));
+            }
+            Err(_) => log::warn!(
+                "[oracle-acct] no SOLANA_WS_URL; gpa snapshot + periodic reconcile only (no live tail)"
+            ),
+        }
+        let mut oracle_acct_pipeline = builder
+            .account(
+                oracle_accounts::OracleAccountDecoder {
+                    program_id: oracle_program,
+                },
+                oracle_accounts::OracleAccountProcessor {
+                    client: client.clone(),
+                },
+            )
+            .build()?;
+        log::info!("[oracle-acct] account pipeline starting for {oracle_program}");
+        tokio::spawn(async move {
+            if let Err(e) = oracle_acct_pipeline.run().await {
+                log::warn!("[oracle-acct] pipeline exited (reconcile keeps accounts fresh): {e}");
+            }
+        });
+        tokio::spawn(oracle_accounts::reconcile_loop(
+            market_rpc.clone(),
+            client.clone(),
+            oracle_program,
+            MARKET_PRUNE_INTERVAL_MS,
         ));
     }
 

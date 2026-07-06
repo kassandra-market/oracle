@@ -40,6 +40,8 @@ import {
   type Oracle,
   type Proposer,
 } from "@kassandra/sdk";
+import { fetchOracleAccounts, fetchOracleDetailAccounts } from "./indexer";
+import type { IndexedChildAccount } from "./indexer";
 
 /** Byte offset of the parent `oracle` pubkey in every child account (right after the 8-byte header). */
 export const CHILD_ORACLE_OFFSET = 8;
@@ -147,21 +149,25 @@ async function enumerate<T>(
  * skipped. Never throws on a bad account; RPC failures reject (caller handles).
  */
 export async function fetchOracles(connection: Connection): Promise<OracleSummary[]> {
-  const found = await enumerate(
-    connection,
-    AccountType.Oracle,
-    ACCOUNT_SIZES.Oracle,
-    decodeOracle,
+  // Prefer the indexer's account mirror (an indexed Postgres read, kept fresh by a
+  // gpa snapshot + programSubscribe) over a slow client-side getProgramAccounts.
+  // Fall back to the direct scan when the indexer is absent or has nothing yet.
+  const indexed = await fetchOracleAccounts();
+  const summaries: OracleSummary[] =
+    indexed && indexed.length > 0
+      ? indexed.flatMap((a) => {
+          try {
+            return [{ pubkey: a.pubkey, oracle: decodeOracle(a.data) }];
+          } catch {
+            return []; // malformed/foreign row — skip, keep the rest
+          }
+        })
+      : (await enumerate(connection, AccountType.Oracle, ACCOUNT_SIZES.Oracle, decodeOracle)).map(
+          ({ pubkey, value }) => ({ pubkey, oracle: value }),
+        );
+  return summaries.sort((a, b) =>
+    b.oracle.deadline > a.oracle.deadline ? 1 : b.oracle.deadline < a.oracle.deadline ? -1 : 0,
   );
-  return found
-    .map(({ pubkey, value }) => ({ pubkey, oracle: value }))
-    .sort((a, b) =>
-      b.oracle.deadline > a.oracle.deadline
-        ? 1
-        : b.oracle.deadline < a.oracle.deadline
-          ? -1
-          : 0,
-    );
 }
 
 /**
@@ -171,10 +177,65 @@ export async function fetchOracles(connection: Connection): Promise<OracleSummar
  * {@link CHILD_ORACLE_OFFSET}. Throws {@link OracleNotFoundError} if the oracle
  * account is absent or the wrong type; a missing market yields `market: undefined`.
  */
+/**
+ * Assemble an {@link OracleDetail} from the indexer's account mirror (the oracle +
+ * its children, tagged by `accountType`). Returns `null` when the oracle account
+ * isn't in the set (indexer lagging / oracle absent) so the caller falls back to
+ * direct reads. Each decoder re-checks its own tag+size; a bad row is skipped.
+ */
+function assembleDetailFromIndexed(
+  oraclePubkey: string,
+  accounts: IndexedChildAccount[],
+): OracleDetail | null {
+  const oracleAcct = accounts.find(
+    (a) => a.accountType === AccountType.Oracle && a.pubkey === oraclePubkey,
+  );
+  if (!oracleAcct) return null;
+  let oracle: Oracle;
+  try {
+    oracle = decodeOracle(oracleAcct.data);
+  } catch {
+    return null;
+  }
+  const facts: OracleDetail["facts"] = [];
+  const proposers: OracleDetail["proposers"] = [];
+  const aiClaims: OracleDetail["aiClaims"] = [];
+  let market: OracleDetail["market"];
+  for (const a of accounts) {
+    try {
+      switch (a.accountType) {
+        case AccountType.Fact:
+          facts.push({ pubkey: a.pubkey, fact: decodeFact(a.data) });
+          break;
+        case AccountType.Proposer:
+          proposers.push({ pubkey: a.pubkey, proposer: decodeProposer(a.data) });
+          break;
+        case AccountType.AiClaim:
+          aiClaims.push({ pubkey: a.pubkey, aiClaim: decodeAiClaim(a.data) });
+          break;
+        case AccountType.Market:
+          if (!market) market = { pubkey: a.pubkey, market: decodeMarket(a.data) };
+          break;
+      }
+    } catch {
+      // malformed/foreign child — skip
+    }
+  }
+  return { pubkey: oraclePubkey, oracle, facts, proposers, aiClaims, market };
+}
+
 export async function fetchOracleDetail(
   connection: Connection,
   oraclePubkey: string,
 ): Promise<OracleDetail> {
+  // Prefer the indexer's account mirror; fall back to direct reads when it's
+  // absent, lagging, or doesn't yet have this oracle.
+  const indexedChildren = await fetchOracleDetailAccounts(oraclePubkey);
+  if (indexedChildren && indexedChildren.length > 0) {
+    const detail = assembleDetailFromIndexed(oraclePubkey, indexedChildren);
+    if (detail) return detail;
+  }
+
   const info = await connection.getAccountInfo(new Address(oraclePubkey));
   if (!info || info.data.length === 0) throw new OracleNotFoundError(oraclePubkey);
   let oracle: Oracle;
@@ -184,25 +245,42 @@ export async function fetchOracleDetail(
     throw new OracleNotFoundError(oraclePubkey);
   }
 
-  // Every child stores its parent oracle at offset 8; memcmp scopes to this oracle.
-  const oracleMemcmp: GetProgramAccountsFilter[] = [
-    { memcmp: { offset: CHILD_ORACLE_OFFSET, bytes: oraclePubkey } },
-  ];
+  // Every child (Fact/Proposer/AiClaim/Market) stores its parent oracle at the SAME
+  // offset 8, so ONE getProgramAccounts scoped by that memcmp returns them all — then
+  // partition by the account_type tag byte. This collapses what used to be FOUR
+  // full-program `getProgramAccounts` scans (the expensive op) into a single scan.
+  const children = await connection.getProgramAccounts(KASSANDRA_PROGRAM_ID, {
+    filters: [{ memcmp: { offset: CHILD_ORACLE_OFFSET, bytes: oraclePubkey } }],
+  });
 
-  const [facts, proposers, aiClaims, markets] = await Promise.all([
-    enumerate(connection, AccountType.Fact, ACCOUNT_SIZES.Fact, decodeFact, oracleMemcmp),
-    enumerate(connection, AccountType.Proposer, ACCOUNT_SIZES.Proposer, decodeProposer, oracleMemcmp),
-    enumerate(connection, AccountType.AiClaim, ACCOUNT_SIZES.AiClaim, decodeAiClaim, oracleMemcmp),
-    enumerate(connection, AccountType.Market, ACCOUNT_SIZES.Market, decodeMarket, oracleMemcmp),
-  ]);
+  const facts: OracleDetail["facts"] = [];
+  const proposers: OracleDetail["proposers"] = [];
+  const aiClaims: OracleDetail["aiClaims"] = [];
+  let market: OracleDetail["market"];
+  for (const { pubkey, account } of children) {
+    const data = account.data;
+    const key = pubkey.toString();
+    try {
+      // Each decoder re-checks its own tag + size, so a partition slip can't
+      // mis-decode; a malformed/foreign child is skipped, keeping the rest.
+      switch (data[ACCOUNT_TYPE_OFFSET]) {
+        case AccountType.Fact:
+          facts.push({ pubkey: key, fact: decodeFact(data) });
+          break;
+        case AccountType.Proposer:
+          proposers.push({ pubkey: key, proposer: decodeProposer(data) });
+          break;
+        case AccountType.AiClaim:
+          aiClaims.push({ pubkey: key, aiClaim: decodeAiClaim(data) });
+          break;
+        case AccountType.Market:
+          if (!market) market = { pubkey: key, market: decodeMarket(data) };
+          break;
+      }
+    } catch {
+      // Malformed / type-confused child — skip it, keep the rest.
+    }
+  }
 
-  const firstMarket = markets[0];
-  return {
-    pubkey: oraclePubkey,
-    oracle,
-    facts: facts.map(({ pubkey, value }) => ({ pubkey, fact: value })),
-    proposers: proposers.map(({ pubkey, value }) => ({ pubkey, proposer: value })),
-    aiClaims: aiClaims.map(({ pubkey, value }) => ({ pubkey, aiClaim: value })),
-    market: firstMarket ? { pubkey: firstMarket.pubkey, market: firstMarket.value } : undefined,
-  };
+  return { pubkey: oraclePubkey, oracle, facts, proposers, aiClaims, market };
 }

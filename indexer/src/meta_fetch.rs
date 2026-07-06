@@ -88,7 +88,10 @@ async fn fetch_and_verify(
     if !resp.status().is_success() {
         return None;
     }
-    if resp.content_length().is_some_and(|l| l as usize > MAX_META_BYTES) {
+    if resp
+        .content_length()
+        .is_some_and(|l| l as usize > MAX_META_BYTES)
+    {
         return None;
     }
     let bytes = resp.bytes().await.ok()?;
@@ -105,7 +108,10 @@ async fn fetch_and_verify(
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// Scheme + resolved-IP guard: http/https only, and EVERY resolved address must be
@@ -180,7 +186,9 @@ mod tests {
         assert!(is_disallowed("fe80::1".parse::<Ipv6Addr>().unwrap().into()));
         assert!(is_disallowed("fc00::1".parse::<Ipv6Addr>().unwrap().into()));
         // ::ffff:127.0.0.1 (v4-mapped loopback)
-        assert!(is_disallowed("::ffff:127.0.0.1".parse::<Ipv6Addr>().unwrap().into()));
+        assert!(is_disallowed(
+            "::ffff:127.0.0.1".parse::<Ipv6Addr>().unwrap().into()
+        ));
     }
 
     #[test]
@@ -191,13 +199,20 @@ mod tests {
                 "{ip} should be allowed"
             );
         }
-        assert!(!is_disallowed("2606:4700:4700::1111".parse::<Ipv6Addr>().unwrap().into()));
+        assert!(!is_disallowed(
+            "2606:4700:4700::1111".parse::<Ipv6Addr>().unwrap().into()
+        ));
     }
 
     #[tokio::test]
     async fn rejects_non_http_schemes() {
         // The scheme check short-circuits before any network lookup.
-        for uri in ["file:///etc/passwd", "ftp://x/y", "gopher://x", "data:text/plain,hi"] {
+        for uri in [
+            "file:///etc/passwd",
+            "ftp://x/y",
+            "gopher://x",
+            "data:text/plain,hi",
+        ] {
             assert!(!is_fetchable(uri).await, "{uri} should be rejected");
         }
     }

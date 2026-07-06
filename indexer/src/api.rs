@@ -14,7 +14,10 @@ use serde::Deserialize;
 use tokio_postgres::Client;
 use tower_http::cors::{Any, CorsLayer};
 
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+
 use crate::db;
+use crate::oracle_accounts;
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -53,6 +56,13 @@ pub fn router(state: ApiState) -> Router {
         // `/oracles/{pubkey}/meta` is the single-oracle detail read.
         .route("/oracles/meta", get(oracles_meta))
         .route("/oracles/{pubkey}/meta", get(oracle_meta))
+        // Indexed ACCOUNT reads (raw base64 Pod bytes; the app decodes with the SDK)
+        // — served from `oracle_accounts` (gpa snapshot + programSubscribe), so the
+        // browse list + detail avoid slow client-side getProgramAccounts.
+        // `/oracles/accounts` = every Oracle; `/oracles/{pk}/accounts` = the oracle
+        // + its children (Proposer/Fact/FactVote/AiClaim/Market), tagged by type.
+        .route("/oracles/accounts", get(oracles_accounts))
+        .route("/oracles/{pubkey}/accounts", get(oracle_accounts_detail))
         // Extended off-chain metadata JSON host (called by the PUBLIC app server,
         // which proxies its `/api/oracle/{pk}/metadata.json` here — the indexer is
         // private). POST stores the app-supplied JSON; GET serves it ONLY when its
@@ -163,6 +173,47 @@ async fn oracle_meta(State(s): State<ApiState>, Path(pubkey): Path<String>) -> i
             Json(serde_json::json!({ "error": "no metadata for this oracle" })),
         )
             .into_response(),
+        Err(e) => err(e).into_response(),
+    }
+}
+
+/// Every indexed Oracle account as raw base64 Pod bytes (the app decodes with the
+/// SDK's `decodeOracle`). Served from `oracle_accounts` — no getProgramAccounts.
+async fn oracles_accounts(State(s): State<ApiState>) -> impl IntoResponse {
+    match oracle_accounts::list_oracles(&s.client).await {
+        Ok(list) => {
+            let accounts: Vec<_> = list
+                .iter()
+                .map(|a| serde_json::json!({ "pubkey": a.pubkey, "data": BASE64.encode(&a.data) }))
+                .collect();
+            Json(serde_json::json!({ "count": accounts.len(), "accounts": accounts }))
+                .into_response()
+        }
+        Err(e) => err(e).into_response(),
+    }
+}
+
+/// The oracle account + every child scoped to it, each tagged by `accountType`
+/// (1=Oracle 2=Proposer 3=Fact 4=FactVote 5=AiClaim 6=Market) with raw base64 data.
+async fn oracle_accounts_detail(
+    State(s): State<ApiState>,
+    Path(pubkey): Path<String>,
+) -> impl IntoResponse {
+    match oracle_accounts::list_by_oracle(&s.client, &pubkey).await {
+        Ok(rows) => {
+            let accounts: Vec<_> = rows
+                .iter()
+                .map(|(ty, a)| {
+                    serde_json::json!({
+                        "pubkey": a.pubkey,
+                        "accountType": ty,
+                        "data": BASE64.encode(&a.data),
+                    })
+                })
+                .collect();
+            Json(serde_json::json!({ "count": accounts.len(), "accounts": accounts }))
+                .into_response()
+        }
         Err(e) => err(e).into_response(),
     }
 }
