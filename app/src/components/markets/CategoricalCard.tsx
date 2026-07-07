@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { MarketStatus } from "@kassandra-market/sdk";
 import { Card } from "../ui";
 import { StatusChip } from "./StatusChip";
 import type { OracleGroup } from "../../market/data/markets";
@@ -48,8 +49,20 @@ export function CategoricalCard({ group }: { group: OracleGroup }) {
                 </span>
                 <StatusChip status={row.status} />
               </span>
-              <span className="font-inter text-[13px] font-medium text-ember-orange">
-                {formatProbability(row.probability)}
+              <span className="flex items-center gap-2">
+                <span className="font-inter text-[13px] font-medium text-ember-orange">
+                  {formatProbability(row.probability)}
+                </span>
+                {/* An Active outcome sub-market is tradeable — point into its
+                    trading interface (that sub-market's detail TradePanel). */}
+                {row.status === MarketStatus.Active ? (
+                  <span
+                    aria-hidden="true"
+                    className="font-inter text-[13px] text-ember-orange transition-transform group-hover:translate-x-0.5"
+                  >
+                    →
+                  </span>
+                ) : null}
               </span>
             </Link>
           </li>

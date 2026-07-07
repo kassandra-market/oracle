@@ -2,6 +2,18 @@
 
 > Empirical findings against **surfpool 1.0.0** (`~/.local/bin/surfpool`),
 > `solana-cli 3.1.7`, on this machine. Date: 2026-06-30.
+>
+> **Update 2026-07-07 — bumped to surfpool 1.4.0.** The websocket
+> `programSubscribe` method is now implemented (1.0.0 stubbed it — it logged
+> `Websocket method 'program_subscribe' is uninmplemented` and rejected the
+> subscription), so the indexer's live program-account tail (carbon
+> `RpcProgramSubscribe`, and the per-pool `accountSubscribe` price feed) works on
+> simnet instead of only via the getProgramAccounts reconcile fallback.
+> `programSubscribe` takes the standard `[pubkey, config?]` params (a `null`
+> config is accepted). `getVersion` now returns `{"surfnet-version":"1.4.0", ...}`
+> (`solana-core 4.0.0`). WS still defaults to :8900; set `--ws-port` for a
+> non-default port. The boot / block-production / timeTravel notes below still
+> hold as re-verified against 1.4.0.
 
 ## TL;DR — the working rig
 

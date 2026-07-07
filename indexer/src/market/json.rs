@@ -27,6 +27,29 @@ fn status_label(status: u8) -> &'static str {
     }
 }
 
+/// One OHLC candle of implied YES probability (`0..1`) over a time bucket. `time`
+/// is the bucket-start unix seconds (the format lightweight-charts expects).
+#[derive(Serialize)]
+pub struct CandleDto {
+    pub time: i64,
+    pub open: f64,
+    pub high: f64,
+    pub low: f64,
+    pub close: f64,
+}
+
+impl CandleDto {
+    pub fn new(c: &crate::market::db::Candle) -> Self {
+        Self {
+            time: c.time,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+        }
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigDto {

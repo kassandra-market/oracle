@@ -6,6 +6,7 @@ import { StatusChip } from "../components/markets/StatusChip";
 import { FundingBar } from "../components/markets/FundingBar";
 import { ProbabilityBar } from "../components/markets/ProbabilityBar";
 import { Truncated } from "../components/markets/Truncated";
+import { PriceChart } from "../components/markets/PriceChart";
 import { MarketActions } from "../components/markets/actions/MarketActions";
 import { useMarketDetail } from "../market/hooks/useMarketDetail";
 import { MarketNotFoundError, type MarketDetail as MarketDetailData } from "../market/data/markets";
@@ -70,7 +71,7 @@ function DetailBody({
   detail: MarketDetailData;
   refetch: () => void;
 }) {
-  const { market, contributions, oracle, reserves } = detail;
+  const { pubkey, market, contributions, oracle, reserves } = detail;
   const isActive = market.status === MarketStatus.Active;
   // A settled (terminal) market can eventually be closed to reclaim its account
   // rent — but only once every contributor has exited (openContributions === 0).
@@ -167,6 +168,14 @@ function DetailBody({
         </Panel>
       </div>
 
+      {/* Price history — candlesticks of implied YES probability from the
+          indexer's ws-subscribed price series. Active only (pool exists). */}
+      {isActive ? (
+        <Panel title="Price history">
+          <PriceChart pubkey={pubkey} />
+        </Panel>
+      ) : null}
+
       {/* Linked oracle */}
       <Panel title="Linked oracle">
         {oracle ? (
@@ -241,7 +250,8 @@ function DetailBody({
         )}
       </Panel>
 
-      {/* Status-gated write actions (contribute / cancel / refund; trade etc. in Task 4). */}
+      {/* Status-gated write actions: contribute (Funding), the TradePanel buy/sell
+          surface (Active), and the redeem/claim/close cranks (terminal). */}
       <MarketActions detail={detail} refetch={refetch} />
     </div>
   );

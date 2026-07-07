@@ -81,6 +81,15 @@ solana-rpc-client = { version = "3", default-features = false }
 solana-rpc-client-api = "3"
 solana-transaction-status = "3"
 
+# Per-market AMM price subscription (websocket accountSubscribe → price series):
+# the nonblocking pubsub client + the config/response + UiAccount types its
+# `account_subscribe` uses. Pinned to the same v3 line as the rpc client (already
+# in the lockfile transitively via the carbon program-subscribe datasource).
+solana-pubsub-client = { version = "3", default-features = false }
+solana-rpc-client-types = "3"
+solana-account-decoder-client-types = "3"
+futures-util = "0.3"
+
 # Dependency-resolution fix (carried from kassandra-market): the carbon gpa /
 # program-subscribe datasources pull `solana-client -> solana-keypair -> five8 ->
 # five8_core 0.1.x`, which gates `impl Error for DecodeError` behind a `std`

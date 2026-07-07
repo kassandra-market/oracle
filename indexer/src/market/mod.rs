@@ -15,6 +15,7 @@ pub mod api;
 pub mod db;
 pub mod decoder;
 pub mod json;
+pub mod price_subscribe;
 pub mod processor;
 pub mod rpc;
 
@@ -36,3 +37,40 @@ pub fn default_program_id() -> Pubkey {
 /// `kassandra_market_sdk::metadao::AMM_ACCOUNT_DISCRIMINATOR`) to avoid the
 /// solana-sdk-v2 SDK dependency.
 pub const AMM_ACCOUNT_DISCRIMINATOR: [u8; 8] = [0x8f, 0xf5, 0xc8, 0x11, 0x4a, 0xd6, 0xc4, 0x87];
+
+/// MetaDAO `Amm` reserve offsets (base/quote `u64` LE), after the 8-byte Anchor
+/// account discriminator. base = cYES, quote = cNO.
+const AMM_BASE_AMOUNT_OFFSET: usize = 115;
+const AMM_QUOTE_AMOUNT_OFFSET: usize = 123;
+
+/// Decode a MetaDAO `Amm` account's `(base, quote)` reserves — `(cYES, cNO)` raw
+/// base units — after verifying the account discriminator. Returns `None` for a
+/// non-AMM / truncated account. Shared by the read API (live reserves) and the
+/// reconcile-loop price sampler.
+pub fn decode_amm_reserves(data: &[u8]) -> Option<(u64, u64)> {
+    if data.len() < AMM_QUOTE_AMOUNT_OFFSET + 8 {
+        return None;
+    }
+    if data.get(..8) != Some(&AMM_ACCOUNT_DISCRIMINATOR[..]) {
+        return None;
+    }
+    let read = |off: usize| -> Option<u64> {
+        let bytes: [u8; 8] = data.get(off..off + 8)?.try_into().ok()?;
+        Some(u64::from_le_bytes(bytes))
+    };
+    Some((
+        read(AMM_BASE_AMOUNT_OFFSET)?,
+        read(AMM_QUOTE_AMOUNT_OFFSET)?,
+    ))
+}
+
+/// Implied YES probability `P(YES) = quote / (base + quote)` from `(base, quote)`
+/// reserves, or `None` when the pool is empty (probability undefined). Mirrors the
+/// app's `impliedYesProbability`.
+pub fn implied_yes_probability(base: u64, quote: u64) -> Option<f64> {
+    let total = (base as u128) + (quote as u128);
+    if total == 0 {
+        return None;
+    }
+    Some(quote as f64 / total as f64)
+}

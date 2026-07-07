@@ -33,6 +33,8 @@ That combination gives at-least-once, gap-free indexing across restarts.
 | `GET /status` | program id, event count, current cursor |
 | `GET /events?type=&account=&beforeSlot=&limit=` | recent events, filterable |
 | `GET /accounts/{pubkey}/events` | events touching an account (e.g. an oracle) |
+| `GET /api/markets` · `GET /api/markets/{pubkey}` | market-program accounts (config, markets, one market's detail) |
+| `GET /api/markets/{pubkey}/candles?interval=&limit=` | OHLC candles of implied YES probability, from the ws-subscribed price series |
 
 An `event` is one program instruction: `signature`, `slot`, `blockTime`,
 `ixType` (e.g. `propose`, `submit_fact`, `open_challenge` — from the on-chain

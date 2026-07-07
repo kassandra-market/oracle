@@ -29,7 +29,9 @@ const SURFPOOL_PORT = 8960
 const INDEXER_PORT = 3111
 const PG_PORT = 5599
 const WALLET_FILE = join(process.cwd(), 'e2e', 'indexer', '.wallet.json')
-const INDEXER_BIN = join(process.cwd(), '..', 'indexer', 'target', 'release', 'kassandra-indexer')
+// The indexer is a workspace member, so `cargo build -p kassandra-indexer` emits
+// to the WORKSPACE target dir, not `indexer/target/`. Point at the workspace binary.
+const INDEXER_BIN = join(process.cwd(), '..', 'target', 'release', 'kassandra-indexer')
 
 async function waitForIndexer(url: string, minEvents: number, timeoutMs = 60_000): Promise<void> {
   const deadline = Date.now() + timeoutMs

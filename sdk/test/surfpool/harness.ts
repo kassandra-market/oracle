@@ -77,6 +77,14 @@ function augmentedPath(): string {
 export interface HarnessOptions {
   /** RPC port (default 8899). */
   port?: number;
+  /**
+   * Websocket (pubsub) port (`--ws-port`). Surfpool defaults its WS listener to a
+   * FIXED 8900 regardless of the RPC port, so set this (conventionally RPC port +
+   * 1) when a test needs `accountSubscribe`/`programSubscribe` on a known port —
+   * e.g. the indexer e2e points the price subscriber's `SOLANA_WS_URL` here.
+   * Exposed as {@link SurfpoolHarness.wsUrl} once set.
+   */
+  wsPort?: number;
   /** Readiness timeout in ms (default 30000). */
   readyTimeoutMs?: number;
   /**
@@ -108,6 +116,8 @@ export class SurfpoolHarness {
     /** Effective slot time (s) — surfpool maps unix_timestamp ≈ slot × slotTime,
      * so timeTravel jumps are sized from this. Default 0.4 (surfpool's default). */
     private readonly slotTimeSec: number = 0.4,
+    /** The pubsub websocket url, when a {@link HarnessOptions.wsPort} was set. */
+    readonly wsUrl: string | undefined = undefined,
   ) {}
 
   /** Spawn surfpool, wait for readiness, and deploy the program. */
@@ -134,6 +144,7 @@ export class SurfpoolHarness {
         ...(opts.fork ? ["--network", opts.fork] : []),
         "--port",
         String(port),
+        ...(opts.wsPort ? ["--ws-port", String(opts.wsPort)] : []),
       ],
       {
         stdio: ["ignore", "ignore", "ignore"],
@@ -148,6 +159,7 @@ export class SurfpoolHarness {
       rpcUrl,
       connection,
       opts.slotTimeMs ? opts.slotTimeMs / 1000 : 0.4,
+      opts.wsPort ? `ws://127.0.0.1:${opts.wsPort}` : undefined,
     );
 
     try {

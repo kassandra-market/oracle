@@ -32,6 +32,10 @@ kassandra-market-program = { workspace = true }
 carbon-rpc-gpa-datasource = { workspace = true }
 carbon-rpc-program-subscribe-datasource = { workspace = true }
 solana-rpc-client = { workspace = true }
+solana-pubsub-client = { workspace = true }
+solana-rpc-client-types = { workspace = true }
+solana-account-decoder-client-types = { workspace = true }
+futures-util = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-account = { workspace = true }
 solana-hash = { workspace = true }

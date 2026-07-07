@@ -26,6 +26,17 @@ export function MarketCard({ summary }: { summary: MarketSummary }) {
       <Card className="flex h-full flex-col gap-3 transition-colors group-hover:border-driftwood">
         <div className="flex items-center justify-between gap-2">
           <StatusChip status={market.status} />
+          {/* Active markets are tradeable — surface the trade entry right on the
+              card so every interface showing a tradeable market points into its
+              trading interface (the detail's TradePanel). */}
+          {isActive ? (
+            <span className="inline-flex items-center gap-1 font-inter text-[12px] font-medium text-ember-orange">
+              Trade
+              <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">
+                →
+              </span>
+            </span>
+          ) : null}
         </div>
 
         <h3 className="font-mono text-subheading font-light text-sepia" title={pubkey}>

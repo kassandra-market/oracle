@@ -79,6 +79,9 @@ test-e2e-fork: ## Browser E2E: mainnet-forked challenge-market cluster
 test-e2e-indexer: ## Browser E2E: surfpool + Postgres + indexer + app ActivityFeed
 	scripts/e2e-playwright-indexer.sh
 
+test-e2e-candles: ## Browser E2E: surfpool + ws + Postgres + indexer + app candlestick chart
+	scripts/e2e-playwright-candles.sh
+
 test-all: test test-e2e test-e2e-indexer ## Every test incl. the (non-forked) browser E2E suites
 
 # ===== Lint / typecheck / format ===========================================

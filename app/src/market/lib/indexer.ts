@@ -72,6 +72,19 @@ export interface ReservesDto {
   quote: string;
 }
 
+/**
+ * One OHLC candle of implied YES probability (`0..1`) from
+ * `GET /api/markets/{pubkey}/candles`. `time` is bucket-start unix seconds — the
+ * shape lightweight-charts consumes directly.
+ */
+export interface CandleDto {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
 /** `GET /api/markets/{pubkey}` — a market plus children + oracle + reserves. */
 export interface MarketDetailDto {
   market: MarketDto;
@@ -161,6 +174,22 @@ export class IndexerClient {
     const res = await fetch(`${this.base}/markets/${pubkey}`);
     if (res.status === 404) return null;
     return jsonOrThrow<MarketDetailDto>(res, "getMarket");
+  }
+
+  /**
+   * `GET /api/markets/{pubkey}/candles` → OHLC candles of implied YES probability.
+   * `intervalSecs` is the candle width (bucket seconds); `limit` caps the count of
+   * most-recent candles. Returns `[]` for a market with no price points yet.
+   */
+  async getCandles(
+    pubkey: string,
+    intervalSecs: number,
+    limit = 300,
+  ): Promise<CandleDto[]> {
+    const res = await fetch(
+      `${this.base}/markets/${pubkey}/candles?interval=${intervalSecs}&limit=${limit}`,
+    );
+    return jsonOrThrow<CandleDto[]>(res, "getCandles");
   }
 
   /**

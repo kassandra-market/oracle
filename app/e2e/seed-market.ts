@@ -40,7 +40,7 @@ const METADAO_FIXTURES = [
   { id: 'AMMyu265tkBpRW21iGQxKGLaves3gKm2JcMUqfXNSpqD', file: 'metadao_amm.so' },
 ]
 
-const MIN_LIQUIDITY = 1_000_000_000n // 1 KASS (9 decimals) funding floor
+export const MIN_LIQUIDITY = 1_000_000_000n // 1 KASS (9 decimals) funding floor
 const BELOW_FLOOR = 100_000_000n // a partially-funded (Funding) seed
 const FEE_BPS = 100 // 1%
 
@@ -55,15 +55,14 @@ async function deployElf(ctx: SeedCtx, id: string, soPath: string): Promise<void
 }
 
 /**
- * Deploy + init the market and pre-create demo markets on the seeded oracles.
- * `oracles` is the map the oracle seeder built (phase → { address, ... }). Returns
- * the created market addresses for the wallet fixture. Best-effort: throws on a
- * hard failure so `make dev` surfaces it (the caller tears down).
+ * Deploy the market program + the MetaDAO v0.4 fixtures it CPIs, fabricate the
+ * upgrade-authority `ProgramData` so `init_config` passes, fund the payer's KASS
+ * ATA (the market-creation / fee-destination account), and init the governed
+ * `Config` singleton. Returns the payer's KASS ATA (base58). Idempotent enough to
+ * run once per surfpool node; shared by {@link seedMarkets} and the active-market
+ * seed used by the candle e2e.
  */
-export async function seedMarkets(
-  ctx: SeedCtx,
-  oracles: Record<string, Record<string, string>>,
-): Promise<Record<string, unknown>> {
+export async function deployAndInitMarket(ctx: SeedCtx): Promise<string> {
   const h = ctx.harness
   const payer = ctx.payer.publicKey.toString()
   const kassMint = ctx.kassMint.publicKey.toString()
@@ -112,6 +111,25 @@ export async function seedMarkets(
       feeDestination: payerKass,
     }),
   )
+  return payerKass
+}
+
+/**
+ * Deploy + init the market and pre-create demo markets on the seeded oracles.
+ * `oracles` is the map the oracle seeder built (phase → { address, ... }). Returns
+ * the created market addresses for the wallet fixture. Best-effort: throws on a
+ * hard failure so `make dev` surfaces it (the caller tears down).
+ */
+export async function seedMarkets(
+  ctx: SeedCtx,
+  oracles: Record<string, Record<string, string>>,
+): Promise<Record<string, unknown>> {
+  const payer = ctx.payer.publicKey.toString()
+  const kassMint = ctx.kassMint.publicKey.toString()
+
+  // 1-4) Deploy the program + fixtures, fabricate ProgramData, fund the payer KASS
+  //       ATA, and init the Config singleton.
+  const payerKass = await deployAndInitMarket(ctx)
 
   // 5) Pre-create demo markets on the already-seeded oracles.
   const createOne = async (oracle: string, outcomeIndex: number, seedAmount: bigint) => {

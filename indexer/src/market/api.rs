@@ -9,7 +9,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
     routing::{get, post},
@@ -25,21 +25,16 @@ use tokio_postgres::Client;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::market::json::{
-    AccountDto, ConfigDto, ContributionDto, MarketDetailDto, MarketDto, OracleDto, ReservesDto,
+    AccountDto, CandleDto, ConfigDto, ContributionDto, MarketDetailDto, MarketDto, OracleDto,
+    ReservesDto,
 };
 use crate::market::rpc::Rpc;
-use crate::market::AMM_ACCOUNT_DISCRIMINATOR;
 
 // KASSANDRA oracle account field offsets (the oracle belongs to the Kassandra
 // program, not ours — the 3 status bytes are read directly).
 const ORACLE_OPTIONS_COUNT_OFFSET: usize = 160;
 const ORACLE_PHASE_OFFSET: usize = 161;
 const ORACLE_RESOLVED_OPTION_OFFSET: usize = 197;
-
-// MetaDAO `Amm` account reserve offsets (base/quote `u64` LE), after the 8-byte
-// Anchor account discriminator.
-const AMM_BASE_AMOUNT_OFFSET: usize = 115;
-const AMM_QUOTE_AMOUNT_OFFSET: usize = 123;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -68,6 +63,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/config", get(get_config))
         .route("/api/markets", get(get_markets))
         .route("/api/markets/{pubkey}", get(get_market_detail))
+        .route("/api/markets/{pubkey}/candles", get(get_market_candles))
         .route("/api/account/{pubkey}", get(get_account))
         .route("/api/blockhash", get(get_blockhash))
         .route("/api/transaction", post(post_transaction))
@@ -161,6 +157,32 @@ async fn get_market_detail(
     Ok(Json(detail))
 }
 
+#[derive(Deserialize)]
+pub struct CandleQuery {
+    /// Bucket width in seconds (candle interval). Default 1h; clamped to [1, 1 day].
+    interval: Option<i64>,
+    /// Max number of (most-recent) candles. Default 300; clamped to [1, 2000].
+    limit: Option<i64>,
+}
+
+/// `GET /api/markets/{pubkey}/candles?interval=&limit=` — OHLC candles of the
+/// market's implied YES probability, aggregated from the ws-subscribed price
+/// series (`market_price`). Returns `[]` (200) for a market with no points yet, so
+/// the chart renders an empty state rather than erroring.
+async fn get_market_candles(
+    State(state): State<Arc<AppState>>,
+    Path(pubkey): Path<String>,
+    Query(q): Query<CandleQuery>,
+) -> Result<Json<Vec<CandleDto>>, ApiError> {
+    parse_pubkey(&pubkey)?;
+    let interval = q.interval.unwrap_or(3600).clamp(1, 86_400);
+    let limit = q.limit.unwrap_or(300).clamp(1, 2000);
+    let candles = crate::market::db::get_candles(&state.client, &pubkey, interval, limit)
+        .await
+        .map_err(db_err)?;
+    Ok(Json(candles.iter().map(CandleDto::new).collect()))
+}
+
 fn decode_oracle(data: &[u8]) -> Option<OracleDto> {
     Some(OracleDto {
         options_count: *data.get(ORACLE_OPTIONS_COUNT_OFFSET)?,
@@ -170,23 +192,11 @@ fn decode_oracle(data: &[u8]) -> Option<OracleDto> {
 }
 
 fn decode_reserves(data: &[u8]) -> Option<ReservesDto> {
-    if data.len() < AMM_QUOTE_AMOUNT_OFFSET + 8 {
-        return None;
-    }
-    if data.get(..8) != Some(&AMM_ACCOUNT_DISCRIMINATOR[..]) {
-        return None;
-    }
-    let base = read_u64_le(data, AMM_BASE_AMOUNT_OFFSET)?;
-    let quote = read_u64_le(data, AMM_QUOTE_AMOUNT_OFFSET)?;
+    let (base, quote) = crate::market::decode_amm_reserves(data)?;
     Some(ReservesDto {
         base: base.to_string(),
         quote: quote.to_string(),
     })
-}
-
-fn read_u64_le(data: &[u8], offset: usize) -> Option<u64> {
-    let bytes: [u8; 8] = data.get(offset..offset + 8)?.try_into().ok()?;
-    Some(u64::from_le_bytes(bytes))
 }
 
 async fn get_account(

@@ -230,9 +230,11 @@ jobs:
       # The snap `latest` channel is stale — it serves 0.9.5, whose `--version`
       # even exits non-zero, and it predates the 1.0.0 boot behavior the harness
       # relies on. Bump SURFPOOL_VERSION deliberately, re-checking the harness.
+      # v1.4.0: adds a working websocket `programSubscribe` (v1.0.0 stubbed it as
+      # "unimplemented"), so the indexer's live account tail works on simnet.
       - name: Install surfpool
         env:
-          SURFPOOL_VERSION: v1.0.0
+          SURFPOOL_VERSION: v1.4.0
         run: |
           curl -fsSL "https://github.com/txtx/surfpool/releases/download/${SURFPOOL_VERSION}/surfpool-linux-x64.tar.gz" \
             | sudo tar -xz -C /usr/local/bin surfpool
