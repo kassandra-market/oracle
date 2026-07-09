@@ -1327,6 +1327,31 @@ impl TestCtx {
         self.read_pod(key)
     }
 
+    /// Test-only: overwrite an already-created oracle's snapshotted `min_stake`
+    /// floor, to exercise the activity-scaled stake gate directly (without driving
+    /// the fee-EMA up through many creations).
+    pub fn set_oracle_min_stake(&mut self, oracle: Pubkey, min_stake: u64) {
+        let mut o = self.oracle(oracle);
+        o.min_stake = min_stake;
+        self.set_program_account(oracle, bytemuck::bytes_of(&o).to_vec());
+    }
+
+    /// Test-only: set the Protocol's stake-floor curve params, so a subsequent
+    /// `create_oracle` snapshots a floor derived from the decayed fee-EMA.
+    pub fn set_protocol_stake_floor(
+        &mut self,
+        protocol: Pubkey,
+        threshold: u64,
+        cap: u64,
+        max: u64,
+    ) {
+        let mut p = self.protocol(protocol);
+        p.stake_floor_ema_threshold = threshold;
+        p.stake_floor_ema_cap = cap;
+        p.stake_floor_max = max;
+        self.set_program_account(protocol, bytemuck::bytes_of(&p).to_vec());
+    }
+
     /// Read an SPL token account's `(mint, owner, amount)`, with `mint`/`owner`
     /// as raw 32-byte arrays so callers can compare against `Pubkey::to_bytes()`
     /// without crossing the `solana_program` / `solana_sdk` Pubkey type boundary.

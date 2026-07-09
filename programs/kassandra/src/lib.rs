@@ -21,6 +21,7 @@ pub mod price;
 pub mod processor;
 pub mod rent;
 pub mod reward;
+pub mod stake_floor;
 pub mod state;
 
 pub const ID: Pubkey = Pubkey::from_str_const("KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY");

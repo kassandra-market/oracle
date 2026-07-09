@@ -115,6 +115,7 @@ function makeOracle(over: Partial<Oracle>): Oracle {
     totalApprovedFactStake: 0n,
     rewardPool: 0n,
     rewardEmission: 0n,
+    minStake: 0n,
   }
   return { ...base, ...over }
 }

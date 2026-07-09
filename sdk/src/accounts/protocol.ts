@@ -74,6 +74,11 @@ export interface Protocol {
   /** KASS fee on a SUCCESSFUL challenge (→ challenger). */
   challengeSuccessKassFeeNum: bigint;
   challengeSuccessKassFeeDen: bigint;
+  /** Activity-scaled stake-floor curve (bootstrapping). fee-EMA below which the
+   * floor is 0; at which it reaches the max; and the max floor (0 = disabled). */
+  stakeFloorEmaThreshold: bigint;
+  stakeFloorEmaCap: bigint;
+  stakeFloorMax: bigint;
 }
 
 /**
@@ -116,5 +121,8 @@ export function decodeProtocol(data: Uint8Array): Protocol {
     challengeFailUsdcFeeDen: readU64LE(dv, 344),
     challengeSuccessKassFeeNum: readU64LE(dv, 352),
     challengeSuccessKassFeeDen: readU64LE(dv, 360),
+    stakeFloorEmaThreshold: readU64LE(dv, 368),
+    stakeFloorEmaCap: readU64LE(dv, 376),
+    stakeFloorMax: readU64LE(dv, 384),
   };
 }

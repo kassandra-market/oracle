@@ -13,10 +13,11 @@ import { defineConfig, devices } from '@playwright/test'
  */
 export default defineConfig({
   testDir: './e2e',
-  // The forked (playwright.fork.config.ts) and indexer (playwright.indexer.config.ts)
-  // projects have their own configs, ports, and extra infra (mainnet fork /
-  // Postgres + the indexer binary) — keep them out of this default run.
-  testIgnore: ['**/fork/**', '**/indexer/**'],
+  // The forked (playwright.fork.config.ts), indexer (playwright.indexer.config.ts),
+  // and candle (playwright.candles.config.ts) projects have their own configs,
+  // ports, and extra infra (mainnet fork / Postgres + the indexer binary + ws) —
+  // keep them out of this default run.
+  testIgnore: ['**/fork/**', '**/indexer/**', '**/candles/**'],
   timeout: 120_000,
   expect: { timeout: 30_000 },
   fullyParallel: false,

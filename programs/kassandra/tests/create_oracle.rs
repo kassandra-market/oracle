@@ -170,3 +170,35 @@ fn duplicate_oracle_same_nonce_fails() {
         "duplicate nonce must fail InvalidAccount: {res2:?}"
     );
 }
+
+#[test]
+fn create_oracle_snapshots_activity_scaled_min_stake() {
+    // Bootstrapping: create_oracle snapshots `min_stake` from the decayed fee-EMA
+    // through `stake_floor`. Genesis (fee_ema == 0) → floor 0; once activity has
+    // pumped the EMA past the (patched) cap, a later oracle snapshots the max floor.
+    let mut ctx = TestCtx::new();
+    let (protocol, res) = ctx.init_protocol();
+    assert!(res.is_ok(), "init_protocol: {res:?}");
+    // threshold 0 + a tiny cap so any post-first-creation EMA saturates to the max.
+    ctx.set_protocol_stake_floor(protocol, 0, 500_000_000, 1_000);
+
+    let deadline = ctx.now() + DEADLINE_DELTA;
+
+    // First creation: fee_ema is still 0 → floor 0 (free bootstrap oracle).
+    let (o1, res) = ctx.create_oracle(1, 2, deadline, 600);
+    assert!(res.is_ok(), "create_oracle #1: {res:?}");
+    assert_eq!(
+        ctx.oracle(o1).min_stake,
+        0,
+        "genesis oracle floor must be 0"
+    );
+
+    // Second creation: the EMA was bumped by #1, now well past the cap → max floor.
+    let (o2, res) = ctx.create_oracle(2, 2, deadline, 600);
+    assert!(res.is_ok(), "create_oracle #2: {res:?}");
+    assert_eq!(
+        ctx.oracle(o2).min_stake,
+        1_000,
+        "post-activity oracle floor must saturate to the max"
+    );
+}

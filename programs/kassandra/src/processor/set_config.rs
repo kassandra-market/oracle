@@ -52,15 +52,18 @@
 //!   exceed the bond) — else `settle_challenge`'s carve-out underflows and bricks
 //!   the market. Checked cross-multiplied in u128.
 //!
-//! No bound on `total_supply_cap`, `fee_per_ema_unit`, `fee_ema_increment`
-//! (any value, incl. 0, is meaningful: 0 cap / 0 fee / 0 bump).
+//! No bound on `total_supply_cap`, `fee_per_ema_unit`, `fee_ema_increment`, or the
+//! three `stake_floor_*` curve params (any value, incl. 0, is meaningful: 0 cap /
+//! 0 fee / 0 bump; `stake_floor_max == 0` disables the floor, and `stake_floor`
+//! itself treats a degenerate `cap <= threshold` as disabled — see
+//! `crate::stake_floor`).
 //!
 //! # Accounts
 //! 0. protocol PDA  — writable; the `[b"protocol"]` singleton
 //! 1. dao_authority — signer; must equal `protocol.dao_authority`
 //!
-//! # Instruction payload (after the 1-byte discriminant), exactly 176 bytes
-//! 22 little-endian 8-byte fields, in this fixed order:
+//! # Instruction payload (after the 1-byte discriminant), exactly 200 bytes
+//! 25 little-endian 8-byte fields, in this fixed order:
 //! `emission_num u64` ++ `emission_den u64` ++ `total_supply_cap u64` ++
 //! `fee_ema_halflife i64` ++ `fee_per_ema_unit u64` ++ `fee_ema_increment u64`
 //! ++ `threshold_num u64` ++ `threshold_den u64` ++ `market_threshold_num u64`
@@ -69,8 +72,10 @@
 //! ++ `fact_vote_slash_den u64` ++ `reward_proposer_weight u64` ++
 //! `reward_fact_weight u64` ++ `challenge_fail_usdc_fee_num u64` ++
 //! `challenge_fail_usdc_fee_den u64` ++ `challenge_success_kass_fee_num u64` ++
-//! `challenge_success_kass_fee_den u64` (the last 4 are the Task C1 challenge
-//! fees: each `den > 0`, `num <= den`).
+//! `challenge_success_kass_fee_den u64` (these 4 are the Task C1 challenge fees:
+//! each `den > 0`, `num <= den`) ++ `stake_floor_ema_threshold u64` ++
+//! `stake_floor_ema_cap u64` ++ `stake_floor_max u64` (the bootstrapping
+//! stake-floor curve — unbounded; `max == 0` disables it).
 
 use pinocchio::{
     account::AccountView as AccountInfo, address::Address as Pubkey, error::ProgramError,
@@ -83,8 +88,8 @@ use crate::{
     state::Protocol,
 };
 
-/// Exact payload length: 22 × 8-byte fields.
-const PAYLOAD_LEN: usize = 22 * 8;
+/// Exact payload length: 25 × 8-byte fields.
+const PAYLOAD_LEN: usize = 25 * 8;
 
 /// Read the `i`-th 8-byte little-endian field as `u64`.
 #[inline]
@@ -131,6 +136,9 @@ pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]
     let challenge_fail_usdc_fee_den = u64_at(payload, 19);
     let challenge_success_kass_fee_num = u64_at(payload, 20);
     let challenge_success_kass_fee_den = u64_at(payload, 21);
+    let stake_floor_ema_threshold = u64_at(payload, 22);
+    let stake_floor_ema_cap = u64_at(payload, 23);
+    let stake_floor_max = u64_at(payload, 24);
 
     // --- gate: DAO authority signs (load_protocol pins the singleton) -------
     let mut protocol = load_protocol(protocol_ai, program_id)?;
@@ -212,6 +220,9 @@ pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]
     protocol.challenge_fail_usdc_fee_den = challenge_fail_usdc_fee_den;
     protocol.challenge_success_kass_fee_num = challenge_success_kass_fee_num;
     protocol.challenge_success_kass_fee_den = challenge_success_kass_fee_den;
+    protocol.stake_floor_ema_threshold = stake_floor_ema_threshold;
+    protocol.stake_floor_ema_cap = stake_floor_ema_cap;
+    protocol.stake_floor_max = stake_floor_max;
     {
         let mut data = protocol_ai.try_borrow_mut()?;
         data[..Protocol::LEN].copy_from_slice(bytemuck::bytes_of(&protocol));

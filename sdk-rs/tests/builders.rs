@@ -125,10 +125,10 @@ fn submit_ai_claim_component_equals_raw() {
 }
 
 #[test]
-fn set_config_payload_is_176_bytes() {
+fn set_config_payload_is_200_bytes() {
     let ix = ix::set_config(&PROGRAM_ID, pk(1), pk(2), &ConfigParams::defaults());
     assert_eq!(ix.data[0], Ix::SetConfig as u8);
-    assert_eq!(ix.data.len(), 1 + 176);
+    assert_eq!(ix.data.len(), 1 + 200);
 }
 
 #[test]

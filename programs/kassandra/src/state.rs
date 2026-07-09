@@ -89,7 +89,8 @@ impl Phase {
     }
 }
 
-/// Top-level dispute account. `size_of == 392`.
+/// Top-level dispute account. `size_of == 368` (was 360 before the `min_stake`
+/// bootstrapping field; the earlier `392` predated the `prompt_hash` removal).
 ///
 /// # Governable params snapshot (Task F2)
 /// The behavioral governable params (`threshold_*`, `market_threshold_*`,
@@ -201,6 +202,14 @@ pub struct Oracle {
     // dead-end leaks no emission. 0 when emission is disabled (`total_supply_cap
     // == 0` or `emission_num == 0`) — the genesis/disabled default.
     pub reward_emission: u64,
+    // ---- Activity-scaled stake floor (bootstrapping) -------------------------
+    // The minimum stake (KASS base units) required by `propose` / `submit_fact` /
+    // `vote_fact` on this oracle, snapshotted at `create_oracle` from the decayed
+    // fee-EMA via `crate::stake_floor::stake_floor`. 0 at genesis / low activity
+    // (free participation, no premined KASS) and while the magnitude is disabled
+    // (`Protocol.stake_floor_max == 0`). Frozen for the oracle's whole life so a
+    // later governance retune never moves an in-flight oracle's floor.
+    pub min_stake: u64,
 }
 
 impl Oracle {
@@ -523,6 +532,15 @@ pub struct Protocol {
     pub challenge_fail_usdc_fee_den: u64,
     pub challenge_success_kass_fee_num: u64,
     pub challenge_success_kass_fee_den: u64,
+    // ---- Activity-scaled stake-floor curve (bootstrapping; snapshotted to Oracle)
+    // The governable curve `create_oracle` evaluates against the decayed fee-EMA to
+    // snapshot `Oracle.min_stake` (see `crate::stake_floor`). `init_protocol`
+    // defaults threshold/cap to the recommended shape (`STAKE_FLOOR_EMA_*`) and the
+    // magnitude `stake_floor_max` to 0 = disabled (participation always free) until
+    // governance activates it via `set_config`.
+    pub stake_floor_ema_threshold: u64, // fee-EMA below which the floor is 0
+    pub stake_floor_ema_cap: u64,       // fee-EMA at which the floor reaches max
+    pub stake_floor_max: u64,           // max floor (KASS base units); 0 = disabled
 }
 
 impl Protocol {

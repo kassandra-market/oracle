@@ -132,18 +132,47 @@ fn propose_option_out_of_range_fails() {
 }
 
 #[test]
-fn propose_zero_bond_fails() {
+fn propose_zero_bond_ok_when_floor_zero() {
+    // Bootstrapping: at genesis / low activity the snapshotted `min_stake` is 0, so
+    // a 0 bond is accepted — anyone can propose with no premined KASS. (A 0-bond
+    // proposer is weightless but still counted by plurality.)
     let mut ctx = TestCtx::new();
     let oracle = setup(&mut ctx, 1, 3);
+    assert_eq!(
+        ctx.oracle(oracle).min_stake,
+        0,
+        "genesis oracle floor must be 0"
+    );
     ctx.warp(DEADLINE_DELTA);
 
     let authority = Keypair::new();
     let (_pda, res) = ctx.propose(oracle, &authority, 1, 0);
+    assert!(
+        res.is_ok(),
+        "bond == 0 must succeed when floor is 0: {res:?}"
+    );
+}
+
+#[test]
+fn propose_below_floor_fails() {
+    // Once activity has raised the floor, a bond below it is rejected; a bond that
+    // clears it succeeds.
+    let mut ctx = TestCtx::new();
+    let oracle = setup(&mut ctx, 1, 3);
+    ctx.set_oracle_min_stake(oracle, 1_000);
+    ctx.warp(DEADLINE_DELTA);
+
+    let below = Keypair::new();
+    let (_pda, res) = ctx.propose(oracle, &below, 1, 999);
     assert_eq!(
         custom_code(&res),
-        Some(KassandraError::ZeroStake as u32),
-        "bond == 0 must fail ZeroStake: {res:?}"
+        Some(KassandraError::BelowMinStake as u32),
+        "bond below the floor must fail BelowMinStake: {res:?}"
     );
+
+    let at = Keypair::new();
+    let (_pda, res) = ctx.propose(oracle, &at, 1, 1_000);
+    assert!(res.is_ok(), "bond == floor must succeed: {res:?}");
 }
 
 #[test]

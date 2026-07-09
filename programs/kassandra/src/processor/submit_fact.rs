@@ -78,11 +78,6 @@ impl<'a> Args<'a> {
 pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]) -> ProgramResult {
     let args = Args::parse(payload)?;
 
-    // A zero-stake fact would pollute quorum for free; require a positive bond.
-    if args.stake == 0 {
-        return Err(KassandraError::ZeroStake.into());
-    }
-
     let [oracle_ai, fact_ai, submitter_ai, submitter_kass_ai, vault_ai, token_prog_ai, system_prog_ai, ..] =
         accounts
     else {
@@ -96,6 +91,12 @@ pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]
 
     // Owner + size + account_type check, then an owned copy for later mutation.
     let mut oracle: Oracle = load_oracle(oracle_ai, program_id)?;
+
+    // Bootstrapping: the fact stake must clear the oracle's snapshotted
+    // activity-scaled floor (0 at genesis / low activity → any stake, incl. 0).
+    if args.stake < oracle.min_stake {
+        return Err(KassandraError::BelowMinStake.into());
+    }
 
     // Vault must be exactly the one this oracle escrows into.
     assert_key(vault_ai, &oracle.stake_vault)?;

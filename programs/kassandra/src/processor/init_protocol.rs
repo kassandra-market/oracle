@@ -165,6 +165,12 @@ pub fn process(
     protocol.challenge_fail_usdc_fee_den = crate::config::CHALLENGE_FAIL_USDC_FEE_DEN;
     protocol.challenge_success_kass_fee_num = crate::config::CHALLENGE_SUCCESS_KASS_FEE_NUM;
     protocol.challenge_success_kass_fee_den = crate::config::CHALLENGE_SUCCESS_KASS_FEE_DEN;
+    // Activity-scaled stake-floor curve (bootstrapping): default the threshold/cap
+    // to the recommended shape and the magnitude to 0 = disabled (participation
+    // always free) until governance activates it via `set_config`.
+    protocol.stake_floor_ema_threshold = crate::config::STAKE_FLOOR_EMA_THRESHOLD;
+    protocol.stake_floor_ema_cap = crate::config::STAKE_FLOOR_EMA_CAP;
+    protocol.stake_floor_max = crate::config::STAKE_FLOOR_MAX;
     {
         let mut data = protocol_ai.try_borrow_mut()?;
         data.copy_from_slice(bytemuck::bytes_of(&protocol));

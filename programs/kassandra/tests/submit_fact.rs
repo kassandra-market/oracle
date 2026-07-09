@@ -238,7 +238,9 @@ fn submit_fact_after_window_fails() {
 }
 
 #[test]
-fn submit_fact_zero_stake_fails() {
+fn submit_fact_zero_stake_ok_when_floor_zero() {
+    // Bootstrapping: with a 0 floor (genesis / low activity) a 0-stake fact is
+    // accepted — participation needs no premined KASS.
     let stake = 500u64;
     let Fixture {
         mut ctx,
@@ -249,8 +251,12 @@ fn submit_fact_zero_stake_fails() {
         fact,
         content_hash,
     } = fixture(stake);
+    assert_eq!(
+        ctx.oracle(oracle).min_stake,
+        0,
+        "genesis oracle floor must be 0"
+    );
 
-    // Stake of zero must be rejected before anything else happens.
     let ix = submit_fact_ix(
         &ctx,
         oracle,
@@ -260,12 +266,42 @@ fn submit_fact_zero_stake_fails() {
         vault,
         payload(&content_hash, 0, b"x"),
     );
+    assert!(
+        ctx.send(ix, &[&submitter]).is_ok(),
+        "0-stake fact must succeed when floor is 0"
+    );
+}
+
+#[test]
+fn submit_fact_below_floor_fails() {
+    // Once activity raises the floor, a stake below it is rejected.
+    let stake = 500u64;
+    let Fixture {
+        mut ctx,
+        oracle,
+        vault,
+        submitter,
+        submitter_kass,
+        fact,
+        content_hash,
+    } = fixture(stake);
+    ctx.set_oracle_min_stake(oracle, 1_000);
+
+    let ix = submit_fact_ix(
+        &ctx,
+        oracle,
+        fact,
+        submitter.pubkey(),
+        submitter_kass,
+        vault,
+        payload(&content_hash, 999, b"x"),
+    );
     let err = ctx.send(ix, &[&submitter]).unwrap_err().err;
     assert_eq!(
         err,
         TransactionError::InstructionError(
             0,
-            InstructionError::Custom(KassandraError::ZeroStake as u32),
+            InstructionError::Custom(KassandraError::BelowMinStake as u32),
         ),
     );
 }

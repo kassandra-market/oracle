@@ -59,11 +59,6 @@ pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]
     let option = payload[0];
     let bond = u64::from_le_bytes(payload[1..9].try_into().unwrap());
 
-    // A zero bond would register a weightless proposer for free.
-    if bond == 0 {
-        return Err(KassandraError::ZeroStake.into());
-    }
-
     let [oracle_ai, proposer_ai, authority_ai, authority_kass_ai, vault_ai, token_prog_ai, system_prog_ai, ..] =
         accounts
     else {
@@ -77,6 +72,14 @@ pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]
 
     // Owner + size + account_type check, then an owned copy for later mutation.
     let mut oracle: Oracle = load_oracle(oracle_ai, program_id)?;
+
+    // Bootstrapping: the bond must clear the oracle's snapshotted activity-scaled
+    // floor. At genesis / low activity the floor is 0, so a 0 bond (a weightless
+    // proposer — still counted by plurality) is accepted; the floor grows with
+    // creation activity to re-price Sybil registration once KASS circulates.
+    if bond < oracle.min_stake {
+        return Err(KassandraError::BelowMinStake.into());
+    }
 
     // Vault must be exactly the one this oracle escrows into.
     assert_key(vault_ai, &oracle.stake_vault)?;

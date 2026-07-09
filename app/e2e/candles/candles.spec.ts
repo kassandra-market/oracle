@@ -56,8 +56,8 @@ test('MarketDetail renders the candlestick chart from indexed data', async ({ pa
   await page.goto(`/markets/${fixture.market}`)
   await expect(page.getByRole('button', { name: /^Connected:/ })).toBeVisible()
 
-  // The Price-history panel is present (Active market → chart is shown).
-  await expect(page.getByRole('heading', { name: 'Price history' })).toBeVisible()
+  // The Trade panel is present (Active market → the chart + buy/sell form share it).
+  await expect(page.getByRole('heading', { name: 'Trade' })).toBeVisible()
 
   // The chart mounted and loaded data: the container is not in its empty state, and
   // lightweight-charts painted a canvas inside it.
@@ -65,6 +65,10 @@ test('MarketDetail renders the candlestick chart from indexed data', async ({ pa
   await expect(chart).toBeVisible()
   await expect(page.getByTestId('price-chart-empty')).toHaveCount(0)
   await expect(chart.locator('canvas').first()).toBeVisible()
+
+  // The trading actions live in the SAME panel as the chart (the Trade card).
+  const tradeCard = page.locator('div', { has: chart }).filter({ hasText: 'Trade' }).last()
+  await expect(tradeCard.getByRole('group', { name: 'Buy or sell' })).toBeVisible()
 
   // The interval toggle is wired (switching re-queries the series without error).
   await page.getByRole('button', { name: '1m' }).click()

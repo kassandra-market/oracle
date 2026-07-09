@@ -12,8 +12,10 @@
 //!
 //! # Instruction payload (after the 1-byte discriminant)
 //! `kind: u8` (`VOTE_APPROVE = 0` / `VOTE_DUPLICATE = 1`) ++ `stake: u64 LE`.
-//! Any other `kind` is rejected as `InvalidInstructionData`; `stake == 0` is
-//! rejected as [`KassandraError::ZeroStake`].
+//! Any other `kind` is rejected as `InvalidInstructionData`; a `stake` below the
+//! oracle's snapshotted activity-scaled floor is rejected as
+//! [`KassandraError::BelowMinStake`] (the floor is 0 at genesis / low activity, so
+//! any stake — including 0 — is then accepted).
 //!
 //! # Accounts
 //! 0. oracle           — writable, owned by this program
@@ -64,11 +66,6 @@ impl Args {
 pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]) -> ProgramResult {
     let args = Args::parse(payload)?;
 
-    // A zero-stake vote would move quorum tallies for free.
-    if args.stake == 0 {
-        return Err(KassandraError::ZeroStake.into());
-    }
-
     let [oracle_ai, fact_ai, fact_vote_ai, voter_ai, voter_kass_ai, vault_ai, token_prog_ai, system_prog_ai, ..] =
         accounts
     else {
@@ -82,6 +79,12 @@ pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]
 
     let mut oracle: Oracle = load_oracle(oracle_ai, program_id)?;
     assert_key(vault_ai, &oracle.stake_vault)?;
+
+    // Bootstrapping: the vote stake must clear the oracle's snapshotted
+    // activity-scaled floor (0 at genesis / low activity → any stake, incl. 0).
+    if args.stake < oracle.min_stake {
+        return Err(KassandraError::BelowMinStake.into());
+    }
 
     // --- phase / window gates -----------------------------------------------
     require_phase(&oracle, Phase::FactVoting)?;

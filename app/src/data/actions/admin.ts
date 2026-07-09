@@ -48,6 +48,11 @@ export const DEFAULT_CONFIG: SetConfigParams = {
   challengeFailUsdcFeeDen: 100n,
   challengeSuccessKassFeeNum: 1n,
   challengeSuccessKassFeeDen: 100n,
+  // Bootstrapping stake floor: curve pre-set to ~10/day → ~1000/day, magnitude
+  // disabled (0) so participation stays free until governance activates it.
+  stakeFloorEmaThreshold: 15_000_000_000n,
+  stakeFloorEmaCap: 1_443_000_000_000n,
+  stakeFloorMax: 0n,
 };
 
 /** `resolve_deadend` — DAO-gated final outcome for an Invalid-dead-end oracle. */

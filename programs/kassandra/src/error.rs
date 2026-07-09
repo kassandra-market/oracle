@@ -162,6 +162,13 @@ pub enum KassandraError {
     /// (`ATA(dao_authority, kass_mint)`). The residual dust may only be routed to
     /// the DAO's own treasury ATA, never an arbitrary account.
     InvalidTreasury = 35,
+
+    /// A participation stake (`propose` bond / `submit_fact` stake / `vote_fact`
+    /// stake) was below the oracle's snapshotted activity-scaled `min_stake` floor
+    /// (`crate::stake_floor`). At genesis / low activity the floor is 0, so any
+    /// stake (incl. 0) is accepted; this fires only once activity has raised the
+    /// floor and the caller under-staked.
+    BelowMinStake = 36,
 }
 
 impl From<KassandraError> for ProgramError {

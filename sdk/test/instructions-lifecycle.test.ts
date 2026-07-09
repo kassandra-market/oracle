@@ -243,7 +243,7 @@ describe("D3a instruction builders — data bytes + account metas", () => {
     ]);
   });
 
-  it("setConfig: 22-field 176-byte LE payload, exact field order", async () => {
+  it("setConfig: 25-field 200-byte LE payload, exact field order", async () => {
     // Distinct values per field index so a misordering is caught.
     const params: SetConfigParams = {
       emissionNum: 100n,
@@ -268,6 +268,9 @@ describe("D3a instruction builders — data bytes + account metas", () => {
       challengeFailUsdcFeeDen: 119n,
       challengeSuccessKassFeeNum: 120n,
       challengeSuccessKassFeeDen: 121n,
+      stakeFloorEmaThreshold: 122n,
+      stakeFloorEmaCap: 123n,
+      stakeFloorMax: 124n,
     };
 
     // Independently pack the 22 fields in the documented order (indices 0..=21,
@@ -295,17 +298,20 @@ describe("D3a instruction builders — data bytes + account metas", () => {
       params.challengeFailUsdcFeeDen,
       params.challengeSuccessKassFeeNum,
       params.challengeSuccessKassFeeDen,
+      params.stakeFloorEmaThreshold,
+      params.stakeFloorEmaCap,
+      params.stakeFloorMax,
     ];
     const payload: number[] = [];
     for (const v of ordered) payload.push(...leU64(v));
-    expect(payload.length).toBe(176);
+    expect(payload.length).toBe(200);
 
     // The encoder helper must match the independent packing.
     expect(encodeSetConfigParams(params)).toEqual(new Uint8Array(payload));
 
     const ix = await setConfig({ authority: AUTHORITY, params });
     expect(ix.data).toEqual(bytesOf(Ix.SetConfig, payload));
-    expect(ix.data.length).toBe(1 + 176);
+    expect(ix.data.length).toBe(1 + 200);
 
     const protocol = await pda.protocol();
     expect(metaTriples(ix.keys)).toEqual([

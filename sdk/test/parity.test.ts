@@ -102,8 +102,8 @@ describe("parity guard: Phase (state.rs 0..=8)", () => {
 describe("parity guard: account sizes (tests/state_layout.rs)", () => {
   // Pinned absolute on-chain ABI sizes from `account_sizes_are_stable`.
   const PINNED = {
-    Protocol: 368,
-    Oracle: 360,
+    Protocol: 392,
+    Oracle: 368,
     Proposer: 96,
     Fact: 336,
     FactVote: 88,
@@ -116,7 +116,7 @@ describe("parity guard: account sizes (tests/state_layout.rs)", () => {
   });
 });
 
-describe("parity guard: KassandraError (error.rs 0..=35)", () => {
+describe("parity guard: KassandraError (error.rs 0..=36)", () => {
   // Pinned from programs/kassandra/src/error.rs.
   const PINNED: Record<string, number> = {
     NotImplemented: 0,
@@ -155,6 +155,7 @@ describe("parity guard: KassandraError (error.rs 0..=35)", () => {
     SweepGraceNotElapsed: 33,
     GovernanceNotSet: 34,
     InvalidTreasury: 35,
+    BelowMinStake: 36,
   };
 
   it("matches every KassandraError by name and value", () => {
@@ -163,9 +164,9 @@ describe("parity guard: KassandraError (error.rs 0..=35)", () => {
     }
   });
 
-  it("has exactly 36 errors (0..=35)", () => {
+  it("has exactly 37 errors (0..=36)", () => {
     const numericValues = Object.values(KassandraError).filter((v) => typeof v === "number");
-    expect(numericValues.length).toBe(36);
+    expect(numericValues.length).toBe(37);
   });
 
   it("decodeError maps a custom code to its name + a non-empty message", () => {

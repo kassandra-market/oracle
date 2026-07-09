@@ -600,6 +600,9 @@ function paramsFromProtocol(p: Protocol): SetConfigParams {
     challengeFailUsdcFeeDen: p.challengeFailUsdcFeeDen,
     challengeSuccessKassFeeNum: p.challengeSuccessKassFeeNum,
     challengeSuccessKassFeeDen: p.challengeSuccessKassFeeDen,
+    stakeFloorEmaThreshold: p.stakeFloorEmaThreshold,
+    stakeFloorEmaCap: p.stakeFloorEmaCap,
+    stakeFloorMax: p.stakeFloorMax,
   };
 }
 

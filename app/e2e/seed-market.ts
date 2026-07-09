@@ -15,17 +15,24 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { Address, ComputeBudgetProgram } from '@solana/web3.js'
+
 import { TOKEN_PROGRAM_ID, associatedTokenAccount } from '@kassandra/sdk'
 import {
   BPF_UPGRADEABLE_LOADER_ID,
   MARKET_PROGRAM_ID,
+  MarketStatus,
   createMarket,
+  flows,
   initConfig,
+  metadao,
   pda as marketPda,
 } from '@kassandra-market/sdk'
 
 import { toHex, tokenAccountBytes } from '../../sdk/test/surfpool/harness.ts'
-import { sendIx, type SeedCtx } from './seed.ts'
+import { sendIx, sendIxs, type SeedCtx } from './seed.ts'
+
+type MarketRefs = flows.MarketRefs
 
 const here = dirname(fileURLToPath(import.meta.url))
 const MARKET_SO = resolve(here, '../../target/deploy/kassandra_market_program.so')
@@ -114,6 +121,123 @@ export async function deployAndInitMarket(ctx: SeedCtx): Promise<string> {
   return payerKass
 }
 
+/** Compute-unit limits for the MetaDAO composition / activation / trade CPIs. */
+const COMPOSE_CU = 400_000
+const ACTIVATE_CU = 1_400_000
+const TRADE_CU = 400_000
+
+/** Prepend a compute-unit-limit ix so the compose/activate/trade CPIs fit. */
+function withCu(units: number, ...ixs: Parameters<typeof sendIxs>[1]): Parameters<typeof sendIxs>[1] {
+  return [ComputeBudgetProgram.setComputeUnitLimit({ units }), ...ixs]
+}
+
+/** A stood-up active market: its address, compose refs, and the payer's cYES/cNO ATAs. */
+export interface ActiveMarketSeed {
+  market: string
+  refs: MarketRefs
+  /** The payer's cYES / cNO ATAs (a swap inventory when created with `split`). */
+  cyesAta: Address
+  cnoAta: Address
+}
+
+/** Options for {@link createAndActivateMarket}. */
+export interface CreateActiveMarketOpts {
+  /** The oracle outcome this sub-market binds to (default 0). */
+  outcomeIndex?: number
+  /** KASS to seed the market with (default {@link MIN_LIQUIDITY} = the floor). */
+  seedAmount?: bigint
+  /**
+   * When true, fabricate the payer's cYES/cNO ATAs and split 5 KASS of each leg to
+   * them — a trading inventory for the candle e2e's swaps. `make dev` doesn't need
+   * it (users split/swap through the UI against the seeded pool).
+   */
+  split?: boolean
+}
+
+/**
+ * Create a market on `oracle` funded to `seedAmount`, compose its MetaDAO
+ * question/vault/AMM, and activate it — leaving it **Active** (its cYES/cNO pool is
+ * live, so the app shows the trade panel). Assumes the market program + MetaDAO
+ * fixtures are deployed and `Config` is initialized (see {@link deployAndInitMarket}),
+ * and that `oracle` is non-terminal (activation requires a live oracle). Returns the
+ * {@link ActiveMarketSeed}; throws if activation didn't take.
+ */
+export async function createAndActivateMarket(
+  ctx: SeedCtx,
+  oracle: string,
+  payerKass: string,
+  opts: CreateActiveMarketOpts = {},
+): Promise<ActiveMarketSeed> {
+  const outcomeIndex = opts.outcomeIndex ?? 0
+  const seedAmount = opts.seedAmount ?? MIN_LIQUIDITY
+  const h = ctx.harness
+  const payer = ctx.payer.publicKey.toString()
+  const kassMint = ctx.kassMint.publicKey.toString()
+
+  // createMarket with seed == floor funds the market fully in one shot (Funding →
+  // activatable). Outcome i = YES pays if the oracle resolves to option i.
+  const market = (await marketPda.market(oracle, outcomeIndex)).address.toString()
+  await sendIx(
+    ctx,
+    await createMarket({ creator: payer, oracle, kassMint, creatorKassAta: payerKass, seedAmount, outcomeIndex }),
+  )
+
+  // Compose the MetaDAO market (3 ixs), then activate (drains escrow → seeds pool).
+  const { instructions: composeIxs, refs } = await flows.composeMarketInstructions({
+    market,
+    oracle,
+    kassMint,
+    payer,
+  })
+  await sendIxs(ctx, withCu(COMPOSE_CU, composeIxs[0]))
+  await sendIxs(ctx, withCu(COMPOSE_CU, composeIxs[1]))
+  await sendIxs(ctx, withCu(COMPOSE_CU, composeIxs[2]))
+  await sendIxs(ctx, withCu(ACTIVATE_CU, await flows.activateInstruction({ refs, payer })))
+
+  const cyesAta = (await associatedTokenAccount(payer, refs.yesMint.toString())).address
+  const cnoAta = (await associatedTokenAccount(payer, refs.noMint.toString())).address
+  if (opts.split) {
+    // Fabricate the payer's cYES / cNO ATAs (empty), then split KASS into a cYES+cNO
+    // inventory so a swap can push the price either way.
+    for (const [ata, mint] of [
+      [cyesAta, refs.yesMint],
+      [cnoAta, refs.noMint],
+    ] as const) {
+      await h.setAccount(ata.toString(), {
+        lamports: 5_000_000,
+        owner: TOKEN_PROGRAM_ID.toString(),
+        executable: false,
+        data: toHex(tokenAccountBytes(mint.toBytes(), ctx.payer.publicKey.toBytes(), 0n)),
+      })
+    }
+    await sendIxs(
+      ctx,
+      withCu(
+        TRADE_CU,
+        await metadao.splitTokens({
+          question: refs.question,
+          vault: refs.vault,
+          vaultUnderlyingAta: refs.vaultUnderlyingAta,
+          authority: payer,
+          userUnderlyingAta: payerKass,
+          conditionalMints: [refs.yesMint, refs.noMint],
+          userConditionalAtas: [cyesAta, cnoAta],
+          amount: 5_000_000_000n, // 5 KASS of each conditional leg
+        }),
+      ),
+    )
+  }
+
+  // Verify Active: the `Market.status` byte sits at offset 154 (account_type[1] +
+  // _pad_hdr[7] + 4×Pubkey[128] + min_liquidity[8] + total_contributed[8] +
+  // open_contributions[2]). MarketStatus.Active == 1.
+  const info = await h.connection.getAccountInfo(new Address(market))
+  if (!info || info.data[154] !== MarketStatus.Active) {
+    throw new Error(`market ${market} did not reach Active after activate (status=${info?.data[154]})`)
+  }
+  return { market, refs, cyesAta, cnoAta }
+}
+
 /**
  * Deploy + init the market and pre-create demo markets on the seeded oracles.
  * `oracles` is the map the oracle seeder built (phase → { address, ... }). Returns
@@ -123,7 +247,7 @@ export async function deployAndInitMarket(ctx: SeedCtx): Promise<string> {
 export async function seedMarkets(
   ctx: SeedCtx,
   oracles: Record<string, Record<string, string>>,
-): Promise<Record<string, unknown>> {
+): Promise<{ seeded: Record<string, unknown>; active: ActiveMarketSeed | null }> {
   const payer = ctx.payer.publicKey.toString()
   const kassMint = ctx.kassMint.publicKey.toString()
 
@@ -149,10 +273,32 @@ export async function seedMarkets(
     seeded.categoricalOracle = oracles.proposal.address
     seeded.categoricalMarkets = categorical
   }
-  // A 2-option oracle → one market seeded AT the floor (funded / activatable).
+  // A 2-option oracle → a spread across the market lifecycle:
+  //   • outcome 0: funded to the floor, then composed + ACTIVATED → a live cYES/cNO
+  //     pool. `make dev` must always surface at least one tradable + funded market
+  //     (the app renders the trade panel for an Active market). Created WITH a split
+  //     inventory so the caller can drive swaps that populate the price chart.
+  //   • outcome 1: funded to the floor but left in Funding — the "ready to activate"
+  //     state, so the Activate flow is still demoable.
+  // Activation is best-effort: if the MetaDAO compose/activate CPI fails, fall back
+  // to leaving outcome 0 funded-but-inactive so the rest of the seed still stands.
+  let active: ActiveMarketSeed | null = null
   if (oracles.factProposal?.address) {
-    seeded.fundedMarket = await createOne(oracles.factProposal.address, 0, MIN_LIQUIDITY)
+    try {
+      active = await createAndActivateMarket(ctx, oracles.factProposal.address, payerKass, {
+        outcomeIndex: 0,
+        split: true,
+      })
+      seeded.activeMarket = active.market
+    } catch (e) {
+      // Loud, not silent: a missing active market is exactly the "no tradable market"
+      // symptom, so surface why it fell back instead of quietly degrading.
+      // eslint-disable-next-line no-console
+      console.warn(`[dev] ⚠ market activation failed, seeding a funded market instead: ${(e as Error).message}`)
+      seeded.fundedMarket = await createOne(oracles.factProposal.address, 0, MIN_LIQUIDITY)
+    }
+    seeded.activatableMarket = await createOne(oracles.factProposal.address, 1, MIN_LIQUIDITY)
   }
 
-  return seeded
+  return { seeded, active }
 }

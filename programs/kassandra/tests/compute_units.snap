@@ -1,15 +1,15 @@
 
 === compute-unit metering (max CU per instruction) ===
   advance_phase            451 CU   (x1)
-  claim_proposer          3923 CU   (x1)
-  create_oracle          14113 CU   (x1)
+  claim_proposer          3924 CU   (x1)
+  create_oracle          14143 CU   (x1)
   finalize_ai_claims      1189 CU   (x1)
   finalize_facts          2460 CU   (x1)
   finalize_oracle         5702 CU   (x1)
-  finalize_proposals       905 CU   (x1)
-  init_protocol           3941 CU   (x1)
-  propose                 6181 CU   (x2)
+  finalize_proposals       909 CU   (x1)
+  init_protocol           3946 CU   (x1)
+  propose                 6183 CU   (x2)
   submit_ai_claim         5123 CU   (x2)
-  submit_fact             6174 CU   (x1)
-  vote_fact               4810 CU   (x1)
+  submit_fact             6178 CU   (x1)
+  vote_fact               4820 CU   (x1)
 =======================================================

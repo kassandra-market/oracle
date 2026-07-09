@@ -291,7 +291,8 @@ fn vote_fact_wrong_phase_fails() {
 }
 
 #[test]
-fn vote_fact_zero_stake_fails() {
+fn vote_fact_zero_stake_ok_when_floor_zero() {
+    // Bootstrapping: a 0-stake vote is accepted while the oracle's floor is 0.
     let Setup {
         mut ctx,
         oracle,
@@ -299,6 +300,11 @@ fn vote_fact_zero_stake_fails() {
         facts,
     } = setup(1, true);
     let fact = facts[0];
+    assert_eq!(
+        ctx.oracle(oracle).min_stake,
+        0,
+        "genesis oracle floor must be 0"
+    );
 
     let (voter, voter_kass) = fund_voter(&mut ctx, 1_000);
     let (fact_vote, _) = TestCtx::vote_pda(&ctx.program_id, &fact, &voter.pubkey());
@@ -313,12 +319,43 @@ fn vote_fact_zero_stake_fails() {
         vault,
         vote_payload(VOTE_APPROVE, 0),
     );
+    assert!(
+        ctx.send(ix, &[&voter]).is_ok(),
+        "0-stake vote must succeed when floor is 0"
+    );
+}
+
+#[test]
+fn vote_fact_below_floor_fails() {
+    // Once activity raises the floor, a vote stake below it is rejected.
+    let Setup {
+        mut ctx,
+        oracle,
+        vault,
+        facts,
+    } = setup(1, true);
+    let fact = facts[0];
+    ctx.set_oracle_min_stake(oracle, 1_000);
+
+    let (voter, voter_kass) = fund_voter(&mut ctx, 1_000);
+    let (fact_vote, _) = TestCtx::vote_pda(&ctx.program_id, &fact, &voter.pubkey());
+
+    let ix = vote_fact_ix(
+        &ctx,
+        oracle,
+        fact,
+        fact_vote,
+        voter.pubkey(),
+        voter_kass,
+        vault,
+        vote_payload(VOTE_APPROVE, 999),
+    );
     let err = ctx.send(ix, &[&voter]).unwrap_err().err;
     assert_eq!(
         err,
         TransactionError::InstructionError(
             0,
-            InstructionError::Custom(KassandraError::ZeroStake as u32),
+            InstructionError::Custom(KassandraError::BelowMinStake as u32),
         ),
     );
 }

@@ -15,13 +15,15 @@ fn account_sizes_are_stable() {
     // Absolute pinned on-chain ABI sizes. Changing a struct's layout must
     // be a deliberate, visible break of these constants. Each carries an
     // 8-byte header (account_type: u8 + _pad_hdr: [u8;7]) at offset 0.
-    assert_eq!(Oracle::LEN, 360);
+    // Oracle 360→368 and Protocol 368→392 grew by the bootstrapping stake-floor
+    // fields (Oracle.min_stake; Protocol.stake_floor_ema_threshold/cap/max).
+    assert_eq!(Oracle::LEN, 368);
     assert_eq!(Proposer::LEN, 96);
     assert_eq!(Fact::LEN, 336);
     assert_eq!(FactVote::LEN, 88);
     assert_eq!(AiClaim::LEN, 208);
     assert_eq!(Market::LEN, 416);
-    assert_eq!(Protocol::LEN, 368);
+    assert_eq!(Protocol::LEN, 392);
 }
 
 #[test]
@@ -72,6 +74,8 @@ fn field_offsets_are_pinned() {
     assert_eq!(offset_of!(Oracle, reward_pool), 344);
     // S3 emission minted at creation, packed after the S1 totals.
     assert_eq!(offset_of!(Oracle, reward_emission), 352);
+    // Bootstrapping stake floor, appended after reward_emission.
+    assert_eq!(offset_of!(Oracle, min_stake), 360);
 
     assert_eq!(offset_of!(Proposer, bond), 72);
     assert_eq!(offset_of!(Proposer, ai_finalized), 86);
@@ -137,6 +141,10 @@ fn field_offsets_are_pinned() {
     assert_eq!(offset_of!(Protocol, challenge_fail_usdc_fee_den), 344);
     assert_eq!(offset_of!(Protocol, challenge_success_kass_fee_num), 352);
     assert_eq!(offset_of!(Protocol, challenge_success_kass_fee_den), 360);
+    // Bootstrapping stake-floor curve, appended after the challenge fees.
+    assert_eq!(offset_of!(Protocol, stake_floor_ema_threshold), 368);
+    assert_eq!(offset_of!(Protocol, stake_floor_ema_cap), 376);
+    assert_eq!(offset_of!(Protocol, stake_floor_max), 384);
 }
 
 #[test]

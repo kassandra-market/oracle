@@ -330,11 +330,11 @@ export async function setGovernance(args: SetGovernanceArgs): Promise<Transactio
 // ---------------------------------------------------------------------------
 // SetConfig (Ix=14) — processor/set_config.rs
 // Accounts: 0 protocol(w) 1 dao_authority(ro,signer).
-// Payload (176): 22 little-endian 8-byte fields in the FIXED order below.
+// Payload (200): 25 little-endian 8-byte fields in the FIXED order below.
 // ---------------------------------------------------------------------------
 /**
- * The 22 governable parameters overwritten wholesale by `set_config`, in the
- * EXACT processor order (`set_config.rs` `u64_at`/`i64_at` indices 0..=21).
+ * The 25 governable parameters overwritten wholesale by `set_config`, in the
+ * EXACT processor order (`set_config.rs` `u64_at`/`i64_at` indices 0..=24).
  * Fields documented as `i64` are encoded signed; the rest unsigned. All are
  * `bigint` so the full u64 range round-trips.
  */
@@ -364,9 +364,15 @@ export interface SetConfigParams {
   challengeFailUsdcFeeDen: bigint;
   challengeSuccessKassFeeNum: bigint;
   challengeSuccessKassFeeDen: bigint;
+  /** Bootstrapping stake-floor curve: fee-EMA below which the floor is 0. */
+  stakeFloorEmaThreshold: bigint;
+  /** Bootstrapping stake-floor curve: fee-EMA at which the floor reaches max. */
+  stakeFloorEmaCap: bigint;
+  /** Bootstrapping stake-floor curve: the max floor (KASS base units); 0 = disabled. */
+  stakeFloorMax: bigint;
 }
 
-/** Encode {@link SetConfigParams} as the 176-byte `set_config` payload (no disc). */
+/** Encode {@link SetConfigParams} as the 200-byte `set_config` payload (no disc). */
 export function encodeSetConfigParams(p: SetConfigParams): Uint8Array {
   return concatBytes([
     u64LE(p.emissionNum), // 0
@@ -391,6 +397,9 @@ export function encodeSetConfigParams(p: SetConfigParams): Uint8Array {
     u64LE(p.challengeFailUsdcFeeDen), // 19
     u64LE(p.challengeSuccessKassFeeNum), // 20
     u64LE(p.challengeSuccessKassFeeDen), // 21
+    u64LE(p.stakeFloorEmaThreshold), // 22
+    u64LE(p.stakeFloorEmaCap), // 23
+    u64LE(p.stakeFloorMax), // 24
   ]);
 }
 

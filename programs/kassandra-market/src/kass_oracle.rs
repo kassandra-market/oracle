@@ -14,9 +14,10 @@
 //!   - tag / phase / offsets ← `kassandra/programs/kassandra/src/state.rs`
 //!     (`AccountType::Oracle == 1`, `Phase::Resolved == 7`,
 //!     `Phase::InvalidDeadend == 8`, `Oracle` is `#[repr(C)]` packed with
-//!     `size_of == 360`; `options_count`/`phase`/`resolved_option` sit at the
-//!     offsets below). The market test harness stamps the same offsets, and the
-//!     oracle-gated create/cancel/activate/resolve tests prove the reads match.
+//!     `size_of == 368`; `options_count`/`phase`/`resolved_option` sit at the
+//!     offsets below (all `< 360`). The market test harness stamps the same
+//!     offsets, and the oracle-gated create/cancel/activate/resolve tests prove
+//!     the reads match.
 
 use pinocchio::address::Address;
 
@@ -28,9 +29,13 @@ pub const KASSANDRA_PROGRAM_ID: Address =
 /// `AccountType::Oracle` discriminant, stored as byte 0 (type-confusion guard).
 pub const ORACLE_ACCOUNT_TYPE: u8 = 1;
 
-/// `size_of::<kassandra::state::Oracle>()`; minimum data length of a real oracle.
-/// (Was 392 before `prompt_hash` was removed from the Oracle — a stale value here
-/// rejected every real 360-byte oracle with `InvalidAccount`, breaking create_market.)
+/// Minimum data length of a real oracle this program must read. The market only
+/// reads `options_count`/`phase`/`resolved_option` (offsets `< 360`), so this is a
+/// MIN-length guard (`data_len() < ORACLE_LEN` → reject), not the exact size. The
+/// upstream Oracle has since grown to 368 (a `min_stake` bootstrapping field was
+/// appended); keeping this at 360 stays correct — a longer oracle passes the guard
+/// and the trailing bytes are ignored. (Do NOT bump it to an exact size: it was
+/// once 392 and wrongly rejected every real oracle, breaking create_market.)
 pub const ORACLE_LEN: usize = 360;
 
 /// Byte offset of `options_count: u8` within the `Oracle` struct.

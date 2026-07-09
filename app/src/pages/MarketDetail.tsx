@@ -6,7 +6,7 @@ import { StatusChip } from "../components/markets/StatusChip";
 import { FundingBar } from "../components/markets/FundingBar";
 import { ProbabilityBar } from "../components/markets/ProbabilityBar";
 import { Truncated } from "../components/markets/Truncated";
-import { PriceChart } from "../components/markets/PriceChart";
+import { TradePanel } from "../components/markets/actions/TradePanel";
 import { MarketActions } from "../components/markets/actions/MarketActions";
 import { useMarketDetail } from "../market/hooks/useMarketDetail";
 import { MarketNotFoundError, type MarketDetail as MarketDetailData } from "../market/data/markets";
@@ -150,11 +150,11 @@ function DetailBody({
                 <dl className="flex flex-wrap gap-x-6 gap-y-1 font-inter text-[13px] text-bronze">
                   <div className="flex gap-1">
                     <dt className="text-driftwood">cYES reserve</dt>
-                    <dd className="font-mono text-sepia">{reserves.base.toString()}</dd>
+                    <dd className="font-medium text-sepia">{formatKass(reserves.base)}</dd>
                   </div>
                   <div className="flex gap-1">
                     <dt className="text-driftwood">cNO reserve</dt>
-                    <dd className="font-mono text-sepia">{reserves.quote.toString()}</dd>
+                    <dd className="font-medium text-sepia">{formatKass(reserves.quote)}</dd>
                   </div>
                 </dl>
               ) : null}
@@ -168,12 +168,12 @@ function DetailBody({
         </Panel>
       </div>
 
-      {/* Price history — candlesticks of implied YES probability from the
-          indexer's ws-subscribed price series. Active only (pool exists). */}
+      {/* Trade — the candlestick chart + the buy/sell form in ONE panel, so a
+          trader reads the price history and acts without leaving the card. Active
+          only (the cYES/cNO pool exists). Secondary Active actions (resolve, LP
+          claim) stay in the status-gated MarketActions below. */}
       {isActive ? (
-        <Panel title="Price history">
-          <PriceChart pubkey={pubkey} />
-        </Panel>
+        <TradePanel pubkey={pubkey} market={market} reserves={reserves} onSuccess={refetch} />
       ) : null}
 
       {/* Linked oracle */}
@@ -250,8 +250,9 @@ function DetailBody({
         )}
       </Panel>
 
-      {/* Status-gated write actions: contribute (Funding), the TradePanel buy/sell
-          surface (Active), and the redeem/claim/close cranks (terminal). */}
+      {/* Status-gated write actions: contribute (Funding), and the redeem/claim/
+          close/resolve cranks (Active + terminal). The Active buy/sell TradePanel
+          is rendered above (co-located with the chart). */}
       <MarketActions detail={detail} refetch={refetch} />
     </div>
   );

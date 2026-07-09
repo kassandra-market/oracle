@@ -102,8 +102,8 @@ export enum Phase {
  * exactly this many bytes; the parity guard asserts these against the program.
  */
 export const ACCOUNT_SIZES = {
-  Protocol: 368,
-  Oracle: 360,
+  Protocol: 392,
+  Oracle: 368,
   Proposer: 96,
   Fact: 336,
   FactVote: 88,
@@ -152,6 +152,7 @@ export enum KassandraError {
   SweepGraceNotElapsed = 33,
   GovernanceNotSet = 34,
   InvalidTreasury = 35,
+  BelowMinStake = 36,
 }
 
 /** Human-readable message per {@link KassandraError} (condensed from error.rs docs). */
@@ -192,6 +193,7 @@ const ERROR_MESSAGES: Record<KassandraError, string> = {
   [KassandraError.SweepGraceNotElapsed]: "sweep_oracle was called before the dust-sweep grace elapsed (now < oracle.phase_ends_at + SWEEP_GRACE).",
   [KassandraError.GovernanceNotSet]: "sweep_oracle was called while the Protocol has no DAO linkage (governance_set == 0); the treasury ATA does not exist yet.",
   [KassandraError.InvalidTreasury]: "sweep_oracle was given a dao_treasury that is not the canonical KASS ATA(dao_authority, kass_mint).",
+  [KassandraError.BelowMinStake]: "The stake was below the oracle's activity-scaled min_stake floor (0 at genesis / low activity; grows with creation activity).",
 };
 
 /**

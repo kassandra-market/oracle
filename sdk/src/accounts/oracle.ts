@@ -81,6 +81,12 @@ export interface Oracle {
   rewardPool: bigint;
   /** KASS emission minted into the stake vault at creation. */
   rewardEmission: bigint;
+  /**
+   * Activity-scaled minimum stake (KASS base units) for propose / submit_fact /
+   * vote_fact on this oracle, snapshotted at creation. 0 at genesis / low activity
+   * (free participation) or while the floor is disabled.
+   */
+  minStake: bigint;
 }
 
 /**
@@ -134,5 +140,6 @@ export function decodeOracle(data: Uint8Array): Oracle {
     totalApprovedFactStake: readU64LE(dv, 336),
     rewardPool: readU64LE(dv, 344),
     rewardEmission: readU64LE(dv, 352),
+    minStake: readU64LE(dv, 360),
   };
 }

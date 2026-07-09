@@ -124,6 +124,35 @@ pub const FEE_EMA_INCREMENT: u64 = FEE_EMA_SCALE as u64;
 /// Governance-tunable.
 pub const FEE_PER_EMA_UNIT: u64 = 1_000_000_000;
 
+// ── Activity-scaled minimum-stake floor (bootstrapping) ─────────────────────────
+// The minimum stake for propose / submit_fact / vote_fact starts at 0 and ramps
+// with the fee-EMA creation-activity signal, so the first oracles are free to
+// create + participate in (no premined KASS). See `crate::stake_floor` +
+// design `2026-07-08-oracle-stake-floor-bootstrap`. These are the RECOMMENDED
+// governance values snapshotted into `Protocol` by `init_protocol`; the curve
+// shape (threshold/cap) is pre-set, and the MAGNITUDE (`STAKE_FLOOR_MAX`) defaults
+// to 0 (disabled — always-free) so governance activates the ramp deliberately,
+// exactly like the emission switch.
+//
+// At a steady rate of `n` oracles/day the fee-EMA settles at
+// `E(n) = FEE_EMA_INCREMENT / (1 − 2^(−1/n))`, so the fee-EMA values below map to
+// creation rates: `E(10) ≈ 1.49e10`, `E(1000) ≈ 1.44e12`.
+
+/// Fee-EMA at/below which the stake floor is 0 (the free bootstrap band).
+/// ≈ 10 oracles/day. Governance-tunable via `set_config`.
+pub const STAKE_FLOOR_EMA_THRESHOLD: u64 = 15_000_000_000;
+
+/// Fee-EMA at/above which the stake floor reaches [`STAKE_FLOOR_MAX`].
+/// ≈ 1000 oracles/day. Governance-tunable via `set_config`.
+pub const STAKE_FLOOR_EMA_CAP: u64 = 1_443_000_000_000;
+
+/// The maximum stake floor (KASS base units) at full activity. **0 at genesis =
+/// disabled** (floor always 0, participation always free) until governance sets it
+/// to the token's value via `set_config` — mirroring the emission/`total_supply_cap`
+/// switch. Kept a governable magnitude because it depends on KASS's market value,
+/// which does not exist at genesis.
+pub const STAKE_FLOOR_MAX: u64 = 0;
+
 // Compile-time guards: every fee const used as a divisor on the `create_oracle`
 // path MUST be positive, so a future governance retune can never introduce a
 // divide-by-zero runtime panic. `decay_fee_ema` divides by

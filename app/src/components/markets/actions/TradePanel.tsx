@@ -14,6 +14,7 @@ import { useWriteAction } from "../../../market/hooks/useWriteAction";
 import { useKassBalance } from "../../../market/hooks/useKassBalance";
 import { formatKass, formatProbability, impliedYesProbability } from "../../../market/lib/marketView";
 import { parseKassAmount, kassBalanceGateError } from "../../../market/data/amount";
+import { PriceChart } from "../PriceChart";
 import { ConnectGate } from "./ConnectGate";
 import { Field, KassBalanceLine, SubmitButton, TextInput } from "./formPrimitives";
 import { WriteStatusRegion } from "./WriteStatusRegion";
@@ -157,6 +158,11 @@ export function TradePanel({
           <p className="font-serif text-heading-sm font-light text-sepia">{formatProbability(outcomeProb)}</p>
         </div>
       </div>
+
+      {/* The price-history chart lives in the same panel as the trade form, so a
+          trader reads the market and acts without leaving the card. Always visible
+          (above the connect gate); the buy/sell form below is wallet-gated. */}
+      <PriceChart pubkey={pubkey} />
 
       <ConnectGate connected={action.connected}>
         <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>

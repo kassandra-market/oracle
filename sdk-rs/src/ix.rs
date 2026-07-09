@@ -486,7 +486,7 @@ pub fn set_governance(
 }
 
 // ===================================================================== Ix 14
-/// `SetConfig` (Ix 14) — overwrite the governable params. Payload = the 176-byte
+/// `SetConfig` (Ix 14) — overwrite the governable params. Payload = the 200-byte
 /// packed [`crate::ConfigParams`].
 pub fn set_config(
     program_id: &Pubkey,
@@ -494,7 +494,7 @@ pub fn set_config(
     dao_authority: Pubkey,
     params: &crate::ConfigParams,
 ) -> Instruction {
-    let mut data = Vec::with_capacity(1 + 176);
+    let mut data = Vec::with_capacity(1 + 200);
     data.push(Ix::SetConfig as u8);
     data.extend_from_slice(&params.to_payload());
     build(

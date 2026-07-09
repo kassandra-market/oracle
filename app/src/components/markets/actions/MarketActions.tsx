@@ -6,7 +6,6 @@ import { ContributeForm } from "./ContributeForm";
 import { CancelControl } from "./CancelControl";
 import { RefundControl } from "./RefundControl";
 import { ActivateControl } from "./ActivateControl";
-import { TradePanel } from "./TradePanel";
 import { ClaimLpControl } from "./ClaimLpControl";
 import { ResolveControl } from "./ResolveControl";
 import { RedeemControl } from "./RedeemControl";
@@ -38,8 +37,9 @@ function ContributorsRemaining({ open }: { open: number }) {
  *                 oracle); plus CancelControl when the oracle is terminal AND the
  *                 market is still under its floor (an under-funded market whose
  *                 oracle already resolved can only be cancelled → refunded).
- *   - Active    → TradePanel + ClaimLpControl; plus ResolveControl once the oracle
- *                 is terminal.
+ *   - Active    → ClaimLpControl; plus ResolveControl once the oracle is terminal.
+ *                 (The buy/sell TradePanel — with the price chart — renders
+ *                 prominently in the detail body, not here.)
  *   - Resolved / Void → RedeemControl + CollectFeeControl (the permissionless
  *                 protocol-fee crank, shown while a non-zero fee is uncollected) +
  *                 ClaimLpControl (which waits for fee collection before it opens);
@@ -59,7 +59,7 @@ export function MarketActions({
   detail: MarketDetail;
   refetch: () => void;
 }) {
-  const { pubkey, market, oracle, reserves, contributions } = detail;
+  const { pubkey, market, oracle, contributions } = detail;
   const oracleTerminal = oracle ? isTerminal(oracle.phase) : false;
   const config = useConfig();
   // The permissionless fee crank is available on a settled market that carries a
@@ -81,9 +81,10 @@ export function MarketActions({
     }
 
     case MarketStatus.Active:
+      // The buy/sell TradePanel (with the chart) renders prominently in the detail
+      // body; here we keep only the secondary Active actions.
       return (
         <div className="mt-6 flex flex-col gap-6">
-          <TradePanel pubkey={pubkey} market={market} reserves={reserves} onSuccess={refetch} />
           {oracleTerminal ? <ResolveControl pubkey={pubkey} market={market} onSuccess={refetch} /> : null}
           <ClaimLpControl
             pubkey={pubkey}

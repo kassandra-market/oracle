@@ -293,7 +293,7 @@ mod tests {
 
         // Oracle account (tag 1): parent is itself → child_oracle None (resolved to
         // the pubkey in the processor).
-        let mut oracle_data = vec![0u8; 360];
+        let mut oracle_data = vec![0u8; 368];
         oracle_data[0] = TAG_ORACLE;
         let d = dec.decode_account(&account(prog, oracle_data)).unwrap();
         assert_eq!(d.data.tag, TAG_ORACLE);
@@ -314,7 +314,7 @@ mod tests {
 
         // Foreign owner → skipped.
         assert!(dec
-            .decode_account(&account(Pubkey::new_unique(), vec![TAG_ORACLE; 360]))
+            .decode_account(&account(Pubkey::new_unique(), vec![TAG_ORACLE; 368]))
             .is_none());
         // Unknown tag (Protocol=7 / OracleMeta=8) → skipped.
         let mut proto = vec![0u8; 100];

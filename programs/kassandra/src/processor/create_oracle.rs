@@ -282,6 +282,15 @@ pub fn process(program_id: &Pubkey, accounts: &mut [AccountInfo], payload: &[u8]
     oracle.challenge_fail_usdc_fee_den = protocol.challenge_fail_usdc_fee_den;
     oracle.challenge_success_kass_fee_num = protocol.challenge_success_kass_fee_num;
     oracle.challenge_success_kass_fee_den = protocol.challenge_success_kass_fee_den;
+    // Bootstrapping: snapshot the activity-scaled minimum-stake floor from the SAME
+    // decayed fee-EMA used for the creation fee (so the floor tracks recent creation
+    // activity). 0 at genesis / low activity or while disabled → free participation.
+    oracle.min_stake = crate::stake_floor::stake_floor(
+        decayed_ema,
+        protocol.stake_floor_ema_threshold,
+        protocol.stake_floor_ema_cap,
+        protocol.stake_floor_max,
+    );
     {
         let mut data = oracle_ai.try_borrow_mut()?;
         data.copy_from_slice(bytemuck::bytes_of(&oracle));
