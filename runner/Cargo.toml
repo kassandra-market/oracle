@@ -31,6 +31,8 @@ bytemuck = { workspace = true }
 # small, pure-Rust; no solana-client / solana-sdk pulled in.
 bs58 = { workspace = true }
 base64 = { workspace = true }
+# Byte<->hex for the canonical hash/payload string form (`to_hex`) + content_hash parse.
+hex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }

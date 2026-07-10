@@ -108,10 +108,7 @@ async fn fetch_and_verify(
 }
 
 pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    hex::encode(Sha256::digest(bytes))
 }
 
 /// Scheme + resolved-IP guard: http/https only, and EVERY resolved address must be

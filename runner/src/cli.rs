@@ -362,18 +362,14 @@ fn normalize_hex(s: &str) -> String {
 /// Parse exactly 32 bytes from a 64-char hex string (optional `0x` prefix).
 fn parse_hex32(s: &str) -> anyhow::Result<[u8; 32]> {
     let s = s.strip_prefix("0x").unwrap_or(s);
-    if s.len() != 64 {
-        anyhow::bail!(
-            "content_hash must be 64 hex chars (32 bytes), got {} chars",
-            s.len()
-        );
-    }
-    let mut out = [0u8; 32];
-    for (i, byte) in out.iter_mut().enumerate() {
-        *byte = u8::from_str_radix(&s[2 * i..2 * i + 2], 16)
-            .map_err(|e| anyhow::anyhow!("invalid hex in content_hash: {e}"))?;
-    }
-    Ok(out)
+    let bytes =
+        hex::decode(s).map_err(|e| anyhow::anyhow!("invalid hex in content_hash: {e}"))?;
+    bytes.as_slice().try_into().map_err(|_| {
+        anyhow::anyhow!(
+            "content_hash must be 32 bytes (64 hex chars), got {} bytes",
+            bytes.len()
+        )
+    })
 }
 
 /// Load the config from `--config <path>` or, when `None`, stdin.

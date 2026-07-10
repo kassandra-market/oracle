@@ -238,13 +238,7 @@ impl ClaimMetadata {
 /// Lowercase hex-encode bytes (no `0x` prefix) — the canonical string form for
 /// the runner's hashes and payloads. Shared by cli / fetch / prompt / rpc.
 pub fn to_hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for &b in bytes {
-        s.push(HEX[(b >> 4) as usize] as char);
-        s.push(HEX[(b & 0x0f) as usize] as char);
-    }
-    s
+    hex::encode(bytes)
 }
 
 #[cfg(test)]
@@ -252,13 +246,6 @@ mod tests {
     use super::*;
     use crate::provider::{CategoricalOptions, ModelConfig};
 
-    fn hex(bytes: &[u8]) -> String {
-        let mut s = String::with_capacity(bytes.len() * 2);
-        for b in bytes {
-            s.push_str(&format!("{b:02x}"));
-        }
-        s
-    }
 
     fn sample_config() -> ModelConfig {
         ModelConfig {
@@ -299,7 +286,7 @@ mod tests {
     fn model_id_known_answer() {
         // sha256("claude-opus-4-8"), cross-checked with `shasum -a 256`.
         assert_eq!(
-            hex(&hash_model_id("claude-opus-4-8")),
+            hex::encode(hash_model_id("claude-opus-4-8")),
             "47a46a22f0c9fb105db3f0d8bda83ad51bd59369ab8c8c30cc32ba6356ac5a4a"
         );
     }
@@ -309,7 +296,7 @@ mod tests {
         let config = sample_config();
         let params = CanonicalParams::from_config(&config);
         assert_eq!(
-            hex(&hash_params(&params)),
+            hex::encode(hash_params(&params)),
             "a08e048d8f780ebcc8122268ee6f2e796e8176632b817f3874d8dc4fc405f9c4"
         );
     }
@@ -322,7 +309,7 @@ mod tests {
             r#"{"option_index":1}"#,
         );
         assert_eq!(
-            hex(&io),
+            hex::encode(io),
             "e24990bd43a9d570ea938da194cb7323cb9b1df388211a48f7abaf37479d87c7"
         );
     }

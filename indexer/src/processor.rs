@@ -41,7 +41,7 @@ fn parse_write_oracle_meta(data: &[u8]) -> Option<(String, serde_json::Value, St
     let uri_len = read_u16(data, &mut off)?;
     let uri = read_str(data, &mut off, uri_len)?;
     let uri_hash = data.get(off..off + 32)?;
-    let uri_hash_hex: String = uri_hash.iter().map(|b| format!("{b:02x}")).collect();
+    let uri_hash_hex = hex::encode(uri_hash);
 
     Some((
         subject,

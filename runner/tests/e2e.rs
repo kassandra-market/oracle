@@ -33,23 +33,7 @@ const INTERPRETATION: &str =
 fn content_hash_hex(content: &[u8]) -> String {
     let mut h = Sha256::new();
     h.update(content);
-    to_hex(&h.finalize())
-}
-
-fn to_hex(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        s.push_str(&format!("{b:02x}"));
-    }
-    s
-}
-
-/// Decode a hex string into raw bytes (test-side decomposition of the payload).
-fn from_hex(hex: &str) -> Vec<u8> {
-    assert!(hex.len().is_multiple_of(2), "odd-length hex");
-    (0..hex.len() / 2)
-        .map(|i| u8::from_str_radix(&hex[2 * i..2 * i + 2], 16).unwrap())
-        .collect()
+    hex::encode(h.finalize())
 }
 
 /// A fully-fixed config (one verified fact, two labelled options). Used for the
@@ -109,11 +93,11 @@ async fn pipeline_emits_decomposable_97_byte_payload() {
 
     // The payload decomposes EXACTLY as model_id[32] ++ params_hash[32] ++
     // io_hash[32] ++ option[1].
-    let payload = from_hex(&out.submit_ai_claim_payload_hex);
+    let payload = hex::decode(&out.submit_ai_claim_payload_hex).unwrap();
     assert_eq!(payload.len(), 97, "payload is exactly 97 bytes");
-    assert_eq!(to_hex(&payload[0..32]), out.model_id_hex);
-    assert_eq!(to_hex(&payload[32..64]), out.params_hash_hex);
-    assert_eq!(to_hex(&payload[64..96]), out.io_hash_hex);
+    assert_eq!(hex::encode(&payload[0..32]), out.model_id_hex);
+    assert_eq!(hex::encode(&payload[32..64]), out.params_hash_hex);
+    assert_eq!(hex::encode(&payload[64..96]), out.io_hash_hex);
     assert_eq!(payload[96], out.option_index, "trailing byte is the option");
     assert_eq!(payload[96], 1);
 
