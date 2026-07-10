@@ -1,18 +1,18 @@
 //! On-chain protocol constants reused by the runner.
 //!
 //! These are RE-EXPORTED / DERIVED through the Rust SDK's account re-exports
-//! (`kassandra_sdk::accounts`, whose source of truth is the on-chain program)
+//! (`kassandra_oracles_sdk::accounts`, whose source of truth is the on-chain program)
 //! rather than mirrored, so there is no risk of the runner drifting from the
 //! source of truth. The compile-time assertions below pin the `submit_ai_claim`
 //! payload layout to the actual [`AiClaim`] account struct: if the program's
 //! field order or widths ever change, this crate fails to build.
 
 use core::mem::offset_of;
-use kassandra_sdk::accounts::AiClaim;
+use kassandra_oracles_sdk::accounts::AiClaim;
 
 /// `Proposer.claim_option` sentinel: no AI claim submitted yet. Re-exported
 /// through the SDK so the runner and chain agree on the 0xFF "none" value.
-pub use kassandra_sdk::accounts::CLAIM_OPTION_NONE;
+pub use kassandra_oracles_sdk::accounts::CLAIM_OPTION_NONE;
 
 /// Width of `model_id` in the `submit_ai_claim` payload (bytes).
 pub const MODEL_ID_LEN: usize = 32;

@@ -16,7 +16,7 @@
  * {@link SendError} (carrying the signature + any program logs) the caller renders.
  */
 import { Address, Keypair, Transaction, type TransactionInstruction } from "@solana/web3.js";
-import { MARKET_PROGRAM_ID, MARKET_ERROR_MESSAGES, decodeError } from "@kassandra-market/sdk";
+import { MARKET_PROGRAM_ID, MARKET_ERROR_MESSAGES, decodeError } from "@kassandra-market/markets";
 import { IndexerTxError, type IndexerClient } from "../lib/indexer";
 
 /** Signs a prepared (feePayer + blockhash set) legacy {@link Transaction} in place. */

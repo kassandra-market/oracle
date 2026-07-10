@@ -45,7 +45,7 @@ function injectE2eWallet(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [injectE2eWallet(), react(), tailwindcss()],
-  // Both `@kassandra/sdk` and `@kassandra-market/sdk` (and the app) resolve
+  // Both `@kassandra-market/oracles` and `@kassandra-market/markets` (and the app) resolve
   // `@solana/web3.js` — dedupe to ONE copy so `Address`/`instanceof` checks pass
   // across the app + both SDKs.
   resolve: { dedupe: ['@solana/web3.js'] },
@@ -71,10 +71,10 @@ export default defineConfig({
           // The two workspace SDKs resolve to their dist/ (NOT node_modules), so
           // key on either the package name or the dist path.
           if (
-            id.includes('@kassandra/sdk') ||
-            id.includes('/sdk/dist/') ||
-            id.includes('@kassandra-market/sdk') ||
-            id.includes('/sdk-market/dist/')
+            id.includes('@kassandra-market/oracles') ||
+            id.includes('/sdks/oracles/ts/dist/') ||
+            id.includes('@kassandra-market/markets') ||
+            id.includes('/sdks/markets/ts/dist/')
           ) {
             return 'sdk'
           }

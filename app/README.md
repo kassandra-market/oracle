@@ -6,15 +6,15 @@ Vite + React 19 + TypeScript + Tailwind v4 SPA, styled in the **Delphi** visual 
 
 ## Run / build
 
-> **Build the SDK first.** The app links `@kassandra/sdk` via the pnpm workspace and
-> resolves its types from `sdk/dist/` (which is gitignored). On a fresh clone, run
-> `pnpm --filter @kassandra/sdk build` (or `pnpm -r build`) **before** the app's
+> **Build the SDK first.** The app links `@kassandra-market/oracles` via the pnpm workspace and
+> resolves its types from `sdks/oracles/ts/dist/` (which is gitignored). On a fresh clone, run
+> `pnpm --filter @kassandra-market/oracles build` (or `pnpm -r build`) **before** the app's
 > typecheck/build, or the SDK import won't resolve. (Slice 1 only link-proofs the
 > import; the functional-dApp milestone will depend on the SDK types for real, so CI
 > must build the SDK first.)
 
 ```bash
-pnpm --filter @kassandra/sdk build   # build the SDK first (types → sdk/dist)
+pnpm --filter @kassandra-market/oracles build   # build the SDK first (types → sdks/oracles/ts/dist)
 pnpm --filter app dev        # dev server (HMR)
 pnpm --filter app typecheck  # tsc -b
 pnpm --filter app lint       # oxlint
@@ -33,7 +33,7 @@ The build is **route-code-split + vendor-chunked**: `src/App.tsx` wraps each pag
 `React.lazy` + `<Suspense>` (nav/shell outside the boundary, so it stays instant), and
 `vite.config.ts` `build.rollupOptions.output.manualChunks` groups the heavy libs into
 separate cacheable chunks (`solana` = wallet-adapter + web3.js + deps, `sdk` =
-`@kassandra/sdk`, `react-vendor` = React + router). The entry chunk is ~21 kB (from a prior
+`@kassandra-market/oracles`, `react-vendor` = React + router). The entry chunk is ~21 kB (from a prior
 752 kB single chunk); each page ships as its own lazily-loaded chunk. No chunk exceeds the
 500 kB warning.
 
@@ -218,4 +218,4 @@ E2Es use surfpool). The challenge-market surface is now complete — a **live vi
 **trade/crank/settle** (CU2, settle is **one-click**: the account set is derived from the Market,
 no JSON paste) + **client-side compose→open** (CU3, no runner JSON) — each proven by
 a gated forked-mainnet E2E over the real MetaDAO v0.4 conditional-vault + AMM. The app only ever
-consumes the built `@kassandra/sdk`; programs/runner/SDK-src are untouched.
+consumes the built `@kassandra-market/oracles`; programs/runner/SDK-src are untouched.

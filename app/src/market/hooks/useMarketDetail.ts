@@ -8,11 +8,11 @@
  * Settled/funding markets don't poll.
  */
 import { useCallback, useEffect, useRef } from "react";
-import { MarketStatus } from "@kassandra-market/sdk";
+import { MarketStatus } from "@kassandra-market/markets";
 import { useIndexer } from "../lib/indexer";
 import { fetchConfig, fetchMarketDetail, type MarketDetail } from "../data/markets";
 import { useAsync, type AsyncState } from "./useAsync";
-import type { Config } from "@kassandra-market/sdk";
+import type { Config } from "@kassandra-market/markets";
 
 /** Poll interval (ms) while a live, Active market is on screen. */
 const POLL_MS = 15_000;

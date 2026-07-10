@@ -4,7 +4,7 @@ description: "Runnable Kassandra SDK snippets — init + decode Protocol, create
 ---
 
 Practical, copy-pasteable snippets, taken verbatim from `sdk/examples/quickstart.ts` (the
-example-shaped twin of `sdk/test/e2e.test.ts`). They run against **litesvm** for local
+example-shaped twin of `sdks/oracles/ts/test/e2e.test.ts`). They run against **litesvm** for local
 testing; against a live cluster you would `await tx.serialize()` and send the wire bytes
 through your own `Connection`/RPC. For the full narrated walkthrough, see the
 [Quickstart](/guide/quickstart).
@@ -33,7 +33,7 @@ import {
   pda,
   propose,
   toLiteSvmTransaction,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 ```
 
 ## The submit bridge (web3.js v3 → litesvm)
@@ -152,7 +152,7 @@ async function submit(
     Challenge-market decision AMMs use the `ammV04.*` submodule. Building a buy swap:
 
     ```ts
-    import { ammV04 } from "@kassandra/sdk";
+    import { ammV04 } from "@kassandra-market/oracles";
 
     const ix = await ammV04.swap({
       payer, baseMint, quoteMint,

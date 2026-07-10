@@ -61,7 +61,7 @@ pub struct TestCtx {
 /// reads: `u32 LE variant == 3 @0`, `u64 LE slot @4`, `Option::Some tag == 1 @12`,
 /// then the 32-byte authority `@13..45`. The account is loader-owned + rent-exempt.
 fn set_program_data(svm: &mut LiteSVM, program_id: &Pubkey, authority: &Pubkey) {
-    let (program_data, _) = kassandra_market_sdk::pda::program_data(program_id);
+    let (program_data, _) = kassandra_markets_sdk::pda::program_data(program_id);
     let mut data = vec![0u8; 45];
     data[0..4].copy_from_slice(&3u32.to_le_bytes()); // ProgramData variant
                                                      // bytes [4..12] = slot (0)
@@ -72,7 +72,7 @@ fn set_program_data(svm: &mut LiteSVM, program_id: &Pubkey, authority: &Pubkey) 
         Account {
             lamports: 1_000_000_000,
             data,
-            owner: kassandra_market_sdk::pda::BPF_UPGRADEABLE_LOADER_ID,
+            owner: kassandra_markets_sdk::pda::BPF_UPGRADEABLE_LOADER_ID,
             executable: false,
             rent_epoch: 0,
         },
@@ -129,7 +129,7 @@ impl TestCtx {
         fee_bps: u16,
         fee_destination: Pubkey,
     ) -> TransactionResult {
-        let ix = kassandra_market_sdk::ix::init_config(
+        let ix = kassandra_markets_sdk::ix::init_config(
             &signer.pubkey(),
             &kass_mint,
             &authority,
@@ -392,8 +392,8 @@ impl TestCtx {
         fee_bps: u16,
         fee_destination: Pubkey,
     ) -> (Pubkey, TransactionResult) {
-        let (config, _) = kassandra_market_sdk::pda::config();
-        let ix = kassandra_market_sdk::ix::init_config(
+        let (config, _) = kassandra_markets_sdk::pda::config();
+        let ix = kassandra_markets_sdk::ix::init_config(
             &self.payer.pubkey(),
             &kass_mint,
             &authority,
@@ -432,8 +432,8 @@ impl TestCtx {
         seed: u64,
         outcome_index: u8,
     ) -> (Pubkey, TransactionResult) {
-        let (market, _) = kassandra_market_sdk::pda::market(&oracle, outcome_index);
-        let ix = kassandra_market_sdk::ix::create_market(
+        let (market, _) = kassandra_markets_sdk::pda::market(&oracle, outcome_index);
+        let ix = kassandra_markets_sdk::ix::create_market(
             &creator.pubkey(),
             &oracle,
             &kass_mint,
@@ -455,8 +455,8 @@ impl TestCtx {
         contributor_ata: Pubkey,
         amount: u64,
     ) -> litesvm::types::TransactionResult {
-        let (escrow, _) = kassandra_market_sdk::pda::escrow(&market);
-        let ix = kassandra_market_sdk::ix::contribute(
+        let (escrow, _) = kassandra_markets_sdk::pda::escrow(&market);
+        let ix = kassandra_markets_sdk::ix::contribute(
             &contributor.pubkey(),
             &market,
             &escrow,
@@ -477,7 +477,7 @@ impl TestCtx {
     ) -> Pubkey {
         use bytemuck::Zeroable;
         use kassandra_market_program::state::{AccountType, Market};
-        let (market, bump) = kassandra_market_sdk::pda::market(&oracle, 0);
+        let (market, bump) = kassandra_markets_sdk::pda::market(&oracle, 0);
         let mut m = Market::zeroed();
         m.account_type = AccountType::Market.as_u8();
         m.oracle = oracle.to_bytes().into();
@@ -508,7 +508,7 @@ impl TestCtx {
     /// Send a `Cancel` instruction (permissionless). Returns the LiteSVM result.
     #[allow(clippy::result_large_err)]
     pub fn cancel(&mut self, market: Pubkey, oracle: Pubkey) -> litesvm::types::TransactionResult {
-        let ix = kassandra_market_sdk::ix::cancel(&market, &oracle);
+        let ix = kassandra_markets_sdk::ix::cancel(&market, &oracle);
         self.send(ix, &[])
     }
 
@@ -522,9 +522,9 @@ impl TestCtx {
         contributor: Pubkey,
         contributor_ata: Pubkey,
     ) -> litesvm::types::TransactionResult {
-        let (escrow, _) = kassandra_market_sdk::pda::escrow(&market);
-        let (contribution, _) = kassandra_market_sdk::pda::contribution(&market, &contributor);
-        let ix = kassandra_market_sdk::ix::refund(
+        let (escrow, _) = kassandra_markets_sdk::pda::escrow(&market);
+        let (contribution, _) = kassandra_markets_sdk::pda::contribution(&market, &contributor);
+        let ix = kassandra_markets_sdk::ix::refund(
             &market,
             &escrow,
             &contribution,
@@ -542,7 +542,7 @@ impl TestCtx {
         oracle: Pubkey,
         creator: Pubkey,
     ) -> litesvm::types::TransactionResult {
-        let ix = kassandra_market_sdk::ix::close_market(&oracle, &creator, 0);
+        let ix = kassandra_markets_sdk::ix::close_market(&oracle, &creator, 0);
         self.send(ix, &[])
     }
 
@@ -556,11 +556,11 @@ impl TestCtx {
         contributor: Pubkey,
         dest_ata: Pubkey,
     ) -> litesvm::types::TransactionResult {
-        let (escrow, _) = kassandra_market_sdk::pda::escrow(&market);
-        let (contribution, _) = kassandra_market_sdk::pda::contribution(&market, &contributor);
+        let (escrow, _) = kassandra_markets_sdk::pda::escrow(&market);
+        let (contribution, _) = kassandra_markets_sdk::pda::contribution(&market, &contributor);
         // Recorded contributor is `contributor`; the wrong-dest guard fires before
         // the contributor binding is checked, so pass the real contributor here.
-        let ix = kassandra_market_sdk::ix::refund(
+        let ix = kassandra_markets_sdk::ix::refund(
             &market,
             &escrow,
             &contribution,
@@ -582,11 +582,11 @@ impl TestCtx {
         contribution: Pubkey,
         dest_ata: Pubkey,
     ) -> litesvm::types::TransactionResult {
-        let (escrow, _) = kassandra_market_sdk::pda::escrow(&market);
+        let (escrow, _) = kassandra_markets_sdk::pda::escrow(&market);
         // The cross-market guard fires before the contributor binding is checked, so
         // the placeholder contributor (`dest_ata`) is never validated.
         let ix =
-            kassandra_market_sdk::ix::refund(&market, &escrow, &contribution, &dest_ata, &dest_ata);
+            kassandra_markets_sdk::ix::refund(&market, &escrow, &contribution, &dest_ata, &dest_ata);
         self.send(ix, &[])
     }
 
@@ -611,7 +611,7 @@ impl TestCtx {
     }
 
     /// Compose the MetaDAO market for `market`/`oracle` (the client precondition
-    /// for `activate`), using the sdk-rs builders: `initialize_question`
+    /// for `activate`), using the sdks/oracles/rust builders: `initialize_question`
     /// (oracle-authority = the MARKET PDA, question_id = the kassandra oracle
     /// address bytes, num_outcomes = 2), `initialize_conditional_vault`
     /// (underlying = `kass_mint`, creating cYES/cNO mints idx 0/1), and
@@ -623,7 +623,7 @@ impl TestCtx {
         oracle: Pubkey,
         kass_mint: Pubkey,
     ) -> MetaDaoRefs {
-        use kassandra_market_sdk::metadao as md;
+        use kassandra_markets_sdk::metadao as md;
         let payer = self.payer.pubkey();
         let question_id = oracle.to_bytes();
 
@@ -686,7 +686,7 @@ impl TestCtx {
         kass_mint: Pubkey,
         outcome_index: u8,
     ) -> TransactionResult {
-        let ix = kassandra_market_sdk::ix::activate(
+        let ix = kassandra_markets_sdk::ix::activate(
             &self.payer.pubkey(),
             &oracle,
             &kass_mint,
@@ -705,9 +705,9 @@ impl TestCtx {
         contributor: Pubkey,
         contributor_lp_ata: Pubkey,
     ) -> litesvm::types::TransactionResult {
-        let (lp_vault, _) = kassandra_market_sdk::pda::lp_vault(&market);
-        let (contribution, _) = kassandra_market_sdk::pda::contribution(&market, &contributor);
-        let ix = kassandra_market_sdk::ix::claim_lp(
+        let (lp_vault, _) = kassandra_markets_sdk::pda::lp_vault(&market);
+        let (contribution, _) = kassandra_markets_sdk::pda::contribution(&market, &contributor);
+        let ix = kassandra_markets_sdk::ix::claim_lp(
             &market,
             &lp_vault,
             &contribution,
@@ -728,10 +728,10 @@ impl TestCtx {
         contribution: Pubkey,
         dest_ata: Pubkey,
     ) -> litesvm::types::TransactionResult {
-        let (lp_vault, _) = kassandra_market_sdk::pda::lp_vault(&market);
+        let (lp_vault, _) = kassandra_markets_sdk::pda::lp_vault(&market);
         // The cross-market guard fires before the contributor binding is checked, so
         // the placeholder contributor (`dest`) is never validated.
-        let ix = kassandra_market_sdk::ix::claim_lp(
+        let ix = kassandra_markets_sdk::ix::claim_lp(
             &market,
             &lp_vault,
             &contribution,
@@ -752,11 +752,11 @@ impl TestCtx {
         contributor: Pubkey,
         dest_ata: Pubkey,
     ) -> litesvm::types::TransactionResult {
-        let (lp_vault, _) = kassandra_market_sdk::pda::lp_vault(&market);
-        let (contribution, _) = kassandra_market_sdk::pda::contribution(&market, &contributor);
+        let (lp_vault, _) = kassandra_markets_sdk::pda::lp_vault(&market);
+        let (contribution, _) = kassandra_markets_sdk::pda::contribution(&market, &contributor);
         // Recorded contributor is `contributor`; the wrong-dest guard fires before
         // the contributor binding is checked, so pass the real contributor here.
-        let ix = kassandra_market_sdk::ix::claim_lp(
+        let ix = kassandra_markets_sdk::ix::claim_lp(
             &market,
             &lp_vault,
             &contribution,
@@ -812,10 +812,10 @@ impl TestCtx {
         oracle: Pubkey,
         question: Pubkey,
     ) -> TransactionResult {
-        use kassandra_market_sdk::metadao as md;
+        use kassandra_markets_sdk::metadao as md;
         let (cv_event_auth, _) = md::event_authority(&md::CONDITIONAL_VAULT_ID);
         let ix =
-            kassandra_market_sdk::ix::resolve_market(&market, &oracle, &question, &cv_event_auth);
+            kassandra_markets_sdk::ix::resolve_market(&market, &oracle, &question, &cv_event_auth);
         self.send_many(&[ix], &[])
     }
 
@@ -829,14 +829,14 @@ impl TestCtx {
         kass_mint: Pubkey,
         fee_destination: Pubkey,
     ) -> TransactionResult {
-        let ix = kassandra_market_sdk::ix::collect_fee(&oracle, &kass_mint, &fee_destination, 0);
+        let ix = kassandra_markets_sdk::ix::collect_fee(&oracle, &kass_mint, &fee_destination, 0);
         self.send_many(&[ix], &[])
     }
 
     /// Read the `Config` singleton's `fee_destination` (a KASS token account).
     pub fn config_fee_destination(&self) -> Pubkey {
         use kassandra_market_program::state::Config;
-        let (config, _) = kassandra_market_sdk::pda::config();
+        let (config, _) = kassandra_markets_sdk::pda::config();
         Pubkey::new_from_array(self.read_pod::<Config>(config).fee_destination.to_bytes())
     }
 
@@ -850,11 +850,11 @@ impl TestCtx {
         refs: &MetaDaoRefs,
         user_cyes: Pubkey,
         user_cno: Pubkey,
-        swap_type: kassandra_market_sdk::metadao::SwapType,
+        swap_type: kassandra_markets_sdk::metadao::SwapType,
         input_amount: u64,
         min_out: u64,
     ) -> TransactionResult {
-        use kassandra_market_sdk::metadao as md;
+        use kassandra_markets_sdk::metadao as md;
         let ix = md::swap(
             &user.pubkey(),
             &refs.yes_mint,
@@ -881,7 +881,7 @@ impl TestCtx {
         user_cno: Pubkey,
         amount: u64,
     ) -> TransactionResult {
-        use kassandra_market_sdk::metadao as md;
+        use kassandra_markets_sdk::metadao as md;
         let ix = md::split_tokens(
             &user.pubkey(),
             &refs.question,
@@ -909,7 +909,7 @@ impl TestCtx {
         user_cyes: Pubkey,
         user_cno: Pubkey,
     ) -> TransactionResult {
-        use kassandra_market_sdk::metadao as md;
+        use kassandra_markets_sdk::metadao as md;
         let ix = md::redeem_tokens(
             &user.pubkey(),
             &refs.question,
@@ -948,7 +948,7 @@ impl TestCtx {
         fee_bps: u16,
         fee_destination: Pubkey,
     ) -> litesvm::types::TransactionResult {
-        let ix = kassandra_market_sdk::ix::update_config(
+        let ix = kassandra_markets_sdk::ix::update_config(
             &authority.pubkey(),
             min_liquidity,
             fee_bps,

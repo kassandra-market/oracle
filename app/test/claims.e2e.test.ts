@@ -3,7 +3,7 @@
  *
  * Proves the RF2 payout action layer end-to-end against a REAL surfpool
  * validator: a disputed oracle is driven to Resolved (the SDK setup builders,
- * mirroring `sdk/test/surfpool/settlement-e2e.test.ts`), then EVERY settlement
+ * mirroring `sdks/oracles/ts/test/surfpool/settlement-e2e.test.ts`), then EVERY settlement
  * builder is driven through the REAL program over the app's
  * {@link keypairSender}/{@link sendAndConfirm} seam:
  *
@@ -58,8 +58,8 @@ import {
   submitAiClaim,
   submitFact,
   voteFact,
-} from "@kassandra/sdk";
-import * as pda from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
+import * as pda from "@kassandra-market/oracles";
 
 import {
   SurfpoolHarness,
@@ -68,7 +68,7 @@ import {
   toHex,
   tokenAccountAmount,
   tokenAccountBytes,
-} from "../../sdk/test/surfpool/harness.ts";
+} from "../../sdks/oracles/ts/test/surfpool/harness.ts";
 import {
   buildClaimFactIxs,
   buildClaimFactVoteIxs,

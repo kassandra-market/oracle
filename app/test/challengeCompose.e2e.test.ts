@@ -33,7 +33,7 @@ import {
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
-import { buildDaoBlob } from "../../sdk/test/surfpool/futarchy-dao.ts";
+import { buildDaoBlob } from "../../sdks/oracles/ts/test/surfpool/futarchy-dao.ts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -56,8 +56,8 @@ import {
   setGovernance,
   submitFact,
   voteFact,
-} from "@kassandra/sdk";
-import * as pda from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
+import * as pda from "@kassandra-market/oracles";
 
 import {
   SurfpoolHarness,
@@ -66,7 +66,7 @@ import {
   toHex,
   tokenAccountAmount,
   tokenAccountBytes,
-} from "../../sdk/test/surfpool/harness.ts";
+} from "../../sdks/oracles/ts/test/surfpool/harness.ts";
 import { buildComposeAndOpenChallengeIxs } from "../src/data/actions/challengeCompose.ts";
 import { buildSubmitAiClaimIxs } from "../src/data/actions/challenge.ts";
 import { keypairSender, sendAndConfirm } from "../src/data/send.ts";

@@ -12,7 +12,7 @@
  * the funded keypair + the seeded market inputs to `e2e/fork/.wallet.json`.
  */
 import { writeFileSync } from 'node:fs'
-import { buildDaoBlob } from '../../../sdk/test/surfpool/futarchy-dao.ts'
+import { buildDaoBlob } from '../../../sdks/oracles/ts/test/surfpool/futarchy-dao.ts'
 import { join } from 'node:path'
 
 import { Keypair } from '@solana/web3.js'
@@ -22,9 +22,9 @@ import {
   associatedTokenAccount,
   futarchy,
   setGovernance,
-} from '@kassandra/sdk'
+} from '@kassandra-market/oracles'
 
-import { toHex, tokenAccountBytes } from '../../../sdk/test/surfpool/harness.ts'
+import { toHex, tokenAccountBytes } from '../../../sdks/oracles/ts/test/surfpool/harness.ts'
 import { bootAndInit, createOracleReal, driveToChallengeSurviving, sendIx } from '../seed.ts'
 
 const PORT = 8940

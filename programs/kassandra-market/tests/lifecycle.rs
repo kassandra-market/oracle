@@ -68,7 +68,7 @@ fn full_crowdfunding_lifecycle_cancel_and_refund() {
     // Each refund CLOSED its Contribution (reaped, rent → contributor); the counter
     // drained to 0.
     for who in [creator.pubkey(), c1.pubkey(), c2.pubkey()] {
-        let (cpda, _) = kassandra_market_sdk::pda::contribution(&market, &who);
+        let (cpda, _) = kassandra_markets_sdk::pda::contribution(&market, &who);
         assert_eq!(ctx.lamports(cpda), 0, "Contribution closed by refund");
     }
     assert_eq!(

@@ -2,7 +2,7 @@
  * RF1 — the FINALIZE / CRANK action layer (pure ix-builders, NO React).
  *
  * Five permissionless "crank" builders that advance an oracle through its
- * dispute phases by assembling the `@kassandra/sdk` finalize builders with the
+ * dispute phases by assembling the `@kassandra-market/oracles` finalize builders with the
  * oracle + its child tail (the proposer / fact PDAs the read layer
  * `fetchOracleDetail` already returns):
  *
@@ -52,7 +52,7 @@ import {
   finalizeProposals,
   pda,
   sendFinalizeViaAlt,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 import { ValidationError, type AddressInput } from "../actions";
 import { sendAndConfirm, type SendResult, type TxSender } from "../send";
 

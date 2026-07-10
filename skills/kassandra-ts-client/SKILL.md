@@ -5,7 +5,7 @@ description: "Use when integrating with the Kassandra optimistic-oracle Solana p
 
 # Integrating Kassandra from TypeScript
 
-The `@kassandra/sdk` package is the client for the Kassandra dispute-oracle program
+The `@kassandra-market/oracles` package is the client for the Kassandra dispute-oracle program
 (`KASSANDRA_PROGRAM_ID` = `KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY`). It is ESM, built on
 `@solana/web3.js` (v3) + `@solana/kit`. Never hand-roll a Kassandra instruction — every one
 has a builder here, and the discriminants/seeds/layouts are the SDK's job.
@@ -38,7 +38,7 @@ type (e.g. `ProposeArgs`) for the exact fields.
 ## Example
 
 ```ts
-import { propose, decodeOracle, Phase } from "@kassandra/sdk";
+import { propose, decodeOracle, Phase } from "@kassandra-market/oracles";
 
 // Build the propose instruction. `authorityKass` is the proposer's KASS token account
 // (the bond source); the proposer PDA + stake vault are derived inside the builder.
@@ -60,5 +60,5 @@ async function readOraclePhase(accountData: Uint8Array) {
   `decodeOracle(...).phase` first.
 - The app wraps builders in a `data/actions/*` layer returning `TransactionInstruction[]` — a
   good pattern to copy, but the builders above are the real primitives.
-- Cross-language parity: the Rust client is `kassandra-sdk` (see the `kassandra-rust-client`
+- Cross-language parity: the Rust client is `kassandra-oracles-sdk` (see the `kassandra-rust-client`
   skill); both mirror the same program, kept in lockstep by a byte-parity test.

@@ -18,7 +18,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { pda } from "@kassandra-market/sdk";
+import { pda } from "@kassandra-market/markets";
 import { useIndexer } from "../lib/indexer";
 import type { IndexerClient } from "../lib/indexer";
 

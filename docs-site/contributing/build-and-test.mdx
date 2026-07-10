@@ -37,13 +37,13 @@ ANTHROPIC_API_KEY=sk-... cargo test -p kassandra-runner --lib \
 
 ## TypeScript: SDK
 
-Build the SDK before anything that consumes it (the app resolves its types from `sdk/dist/`, which is gitignored):
+Build the SDK before anything that consumes it (the app resolves its types from `sdks/oracles/ts/dist/`, which is gitignored):
 
 ```bash
-pnpm --filter @kassandra/sdk build   # or: pnpm -r build
+pnpm --filter @kassandra-market/oracles build   # or: pnpm -r build
 ```
 
-The SDK's wire formats mirror the Rust program and are guarded by `sdk/test/parity.test.ts`.
+The SDK's wire formats mirror the Rust program and are guarded by `sdks/oracles/ts/test/parity.test.ts`.
 
 ## TypeScript: app
 

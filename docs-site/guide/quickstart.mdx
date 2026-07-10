@@ -50,11 +50,11 @@ and the `package.json` scripts — nothing invented.
   </Step>
 
   <Step title="Build the SDK">
-    The app resolves `@kassandra/sdk` from `sdk/dist/`, which is gitignored — so build the
+    The app resolves `@kassandra-market/oracles` from `sdks/oracles/ts/dist/`, which is gitignored — so build the
     SDK first:
     ```bash
     pnpm install
-    pnpm --filter @kassandra/sdk build   # or: pnpm -r build
+    pnpm --filter @kassandra-market/oracles build   # or: pnpm -r build
     ```
   </Step>
 

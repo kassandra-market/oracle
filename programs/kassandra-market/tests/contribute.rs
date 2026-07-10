@@ -52,7 +52,7 @@ fn contribute_happy_second_contributor() {
     );
     assert_eq!(ctx.token_balance(contributor_ata), 100_000_000);
 
-    let (contribution, _) = kassandra_market_sdk::pda::contribution(&market, &contributor.pubkey());
+    let (contribution, _) = kassandra_markets_sdk::pda::contribution(&market, &contributor.pubkey());
     let c: Contribution = ctx.read_pod(contribution);
     assert_eq!(c.amount, 300_000_000);
     assert_eq!(c.contributor.to_bytes(), contributor.pubkey().to_bytes());
@@ -72,7 +72,7 @@ fn contribute_repeat_increments() {
     let res = ctx.contribute(&contributor, market, contributor_ata, 100_000_000);
     assert!(res.is_ok(), "{res:?}");
 
-    let (contribution, _) = kassandra_market_sdk::pda::contribution(&market, &contributor.pubkey());
+    let (contribution, _) = kassandra_markets_sdk::pda::contribution(&market, &contributor.pubkey());
     let c: Contribution = ctx.read_pod(contribution);
     assert_eq!(c.amount, 400_000_000);
 

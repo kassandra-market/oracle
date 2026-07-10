@@ -1,4 +1,4 @@
-import type { Config, Market } from "@kassandra-market/sdk";
+import type { Config, Market } from "@kassandra-market/markets";
 import { Card } from "../../ui";
 import { buildCollectFeeIxs } from "../../../market/data/actions";
 import { useWriteAction } from "../../../market/hooks/useWriteAction";

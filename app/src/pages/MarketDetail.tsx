@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { MarketStatus } from "@kassandra-market/sdk";
+import { MarketStatus } from "@kassandra-market/markets";
 import type { Address } from "@solana/web3.js";
 import { Button, Card, SectionHeader } from "../components/ui";
 import { StatusChip } from "../components/markets/StatusChip";

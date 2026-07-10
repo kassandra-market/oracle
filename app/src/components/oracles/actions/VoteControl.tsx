@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { Address } from '@solana/web3.js'
-import { VOTE_APPROVE, VOTE_DUPLICATE } from '@kassandra/sdk'
+import { VOTE_APPROVE, VOTE_DUPLICATE } from '@kassandra-market/oracles'
 import { buildVoteFactIxs } from '../../../data/actions'
 import { useWriteAction } from '../../../hooks/useWriteAction'
 import { ConnectGate } from './ConnectGate'

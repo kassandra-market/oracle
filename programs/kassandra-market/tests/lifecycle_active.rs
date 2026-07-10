@@ -167,7 +167,7 @@ fn full_active_market_lifecycle_with_conservation() {
         "pool cNO reserve seeded"
     );
     assert!(m.lp_total > 0, "LP minted");
-    let (lp_vault, _) = kassandra_market_sdk::pda::lp_vault(&market);
+    let (lp_vault, _) = kassandra_markets_sdk::pda::lp_vault(&market);
     assert_eq!(
         ctx.token_balance(lp_vault),
         m.lp_total,
@@ -289,7 +289,7 @@ fn full_active_market_lifecycle_with_conservation() {
         "lp_vault swept to 0 by last claim"
     );
     for who in [creator.pubkey(), c2.pubkey()] {
-        let (cpda, _) = kassandra_market_sdk::pda::contribution(&market, &who);
+        let (cpda, _) = kassandra_markets_sdk::pda::contribution(&market, &who);
         assert_eq!(ctx.lamports(cpda), 0, "Contribution closed");
     }
     assert_eq!(
@@ -346,8 +346,8 @@ fn full_active_market_lifecycle_with_conservation() {
     // Resolved with fee_collected == 1, and escrow/cyes/cno/lp_vault are all at 0.
     // close_market SPL-closes the four token accounts and the Market PDA, routing
     // every reclaimed lamport to the creator.
-    let (cyes, _) = kassandra_market_sdk::pda::market_cyes(&market);
-    let (cno, _) = kassandra_market_sdk::pda::market_cno(&market);
+    let (cyes, _) = kassandra_markets_sdk::pda::market_cyes(&market);
+    let (cno, _) = kassandra_markets_sdk::pda::market_cno(&market);
     for ta in [escrow, cyes, cno, lp_vault] {
         assert_eq!(ctx.token_balance(ta), 0, "token account empty pre-close");
     }

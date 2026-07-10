@@ -10,7 +10,7 @@
  * amount / pool / side. Fully offline (a fake in-memory `Connection`).
  */
 import { Address, Keypair, TransactionInstruction, type Connection } from "@solana/web3.js";
-import { EXTERNAL_PROGRAM_IDS, ammV04, type Market } from "@kassandra/sdk";
+import { EXTERNAL_PROGRAM_IDS, ammV04, type Market } from "@kassandra-market/oracles";
 import { describe, expect, it } from "vitest";
 
 import { ValidationError } from "../src/data/actions.ts";

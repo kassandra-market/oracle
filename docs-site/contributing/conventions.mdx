@@ -13,7 +13,7 @@ Because Kassandra drives the Anchor-based MetaDAO programs by CPI, it hand-recon
 
 ## A hand-written SDK mirroring the layouts
 
-The TypeScript SDK (`@kassandra/sdk`) is **hand-written**: no IDL, no codegen. Its instruction payloads and account decoders mirror the Rust program's byte layouts directly (`data = [disc_byte, ...payload_LE]`; decoders validate the account-type tag and exact size). This mirroring is guarded by `sdk/test/parity.test.ts`, which keeps the SDK and program in lockstep.
+The TypeScript SDK (`@kassandra-market/oracles`) is **hand-written**: no IDL, no codegen. Its instruction payloads and account decoders mirror the Rust program's byte layouts directly (`data = [disc_byte, ...payload_LE]`; decoders validate the account-type tag and exact size). This mirroring is guarded by `sdks/oracles/ts/test/parity.test.ts`, which keeps the SDK and program in lockstep.
 
 ## Commit style
 

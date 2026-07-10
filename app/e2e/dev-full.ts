@@ -32,10 +32,10 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { Keypair } from '@solana/web3.js'
-import { TOKEN_PROGRAM_ID, associatedTokenAccount } from '@kassandra/sdk'
+import { TOKEN_PROGRAM_ID, associatedTokenAccount } from '@kassandra-market/oracles'
 
-import { toHex, tokenAccountBytes } from '../../sdk/test/surfpool/harness.ts'
-import { MockAnthropic } from '../../sdk/test/surfpool/mock-anthropic.ts'
+import { toHex, tokenAccountBytes } from '../../sdks/oracles/ts/test/surfpool/harness.ts'
+import { MockAnthropic } from '../../sdks/oracles/ts/test/surfpool/mock-anthropic.ts'
 import {
   bootAndInit,
   createOracleReal,

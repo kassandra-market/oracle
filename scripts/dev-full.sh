@@ -34,10 +34,10 @@ echo "==> [2/4] build both programs (.so), both SDKs, and the indexer binary"
 # deployed a stale .so left from before a merge, so the current SDK's instruction
 # layout no longer matched the deployed program → "invalid instruction data".
 just build
-# The app dev server imports BOTH @kassandra/sdk and @kassandra-market/sdk, so
+# The app dev server imports BOTH @kassandra-market/oracles and @kassandra-market/markets, so
 # both dist/ must exist before vite starts.
-pnpm --filter ./sdk build >/dev/null
-pnpm --filter ./sdk-market build >/dev/null
+pnpm --filter @kassandra-market/oracles build >/dev/null
+pnpm --filter @kassandra-market/markets build >/dev/null
 cargo build --release --locked --manifest-path indexer/Cargo.toml
 
 echo "==> [3/4] ensure logs/ exists + clear leftovers from a crashed run"

@@ -10,7 +10,7 @@
  * oracle hooks use — so the panel is reviewable offline via `?mock`.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Market } from '@kassandra/sdk'
+import type { Market } from '@kassandra-market/oracles'
 import { useConnection } from '../lib/cluster'
 import { fetchMarketAmms, type AmmV04 } from '../data/ammV04'
 import { isMockMode, mockMarketAmms } from '../data/mockOracles'

@@ -1,4 +1,4 @@
-import type { Phase } from '@kassandra/sdk'
+import type { Phase } from '@kassandra-market/oracles'
 import { Chip } from './Chip'
 import { phaseView } from '../../lib/oracleView'
 

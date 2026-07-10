@@ -18,9 +18,9 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { Keypair } from '@solana/web3.js'
-import { TOKEN_PROGRAM_ID, associatedTokenAccount, finalizeProposals, pda } from '@kassandra/sdk'
+import { TOKEN_PROGRAM_ID, associatedTokenAccount, finalizeProposals, pda } from '@kassandra-market/oracles'
 
-import { toHex, tokenAccountBytes } from '../../sdk/test/surfpool/harness.ts'
+import { toHex, tokenAccountBytes } from '../../sdks/oracles/ts/test/surfpool/harness.ts'
 import {
   advanceToAiClaim,
   advanceToFactVoting,

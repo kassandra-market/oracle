@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import type { Oracle } from '@kassandra/sdk'
+import type { Oracle } from '@kassandra-market/oracles'
 import { Card } from '../../ui'
 import { relativeDeadline } from '../../../lib/oracleView'
 import { recallNonce } from '../../../lib/nonceStore'

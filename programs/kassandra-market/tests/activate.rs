@@ -72,13 +72,13 @@ fn activate_happy_path() {
     );
 
     // The transient split holders are emptied into the pool.
-    let (market_cyes, _) = kassandra_market_sdk::pda::market_cyes(&market);
-    let (market_cno, _) = kassandra_market_sdk::pda::market_cno(&market);
+    let (market_cyes, _) = kassandra_markets_sdk::pda::market_cyes(&market);
+    let (market_cno, _) = kassandra_markets_sdk::pda::market_cno(&market);
     assert_eq!(ctx.token_balance(market_cyes), 0, "cYES holder drained");
     assert_eq!(ctx.token_balance(market_cno), 0, "cNO holder drained");
 
     // lp_vault holds lp_total > 0.
-    let (lp_vault, _) = kassandra_market_sdk::pda::lp_vault(&market);
+    let (lp_vault, _) = kassandra_markets_sdk::pda::lp_vault(&market);
     assert_eq!(
         Pubkey::new_from_array(m.lp_vault.to_bytes()),
         lp_vault,

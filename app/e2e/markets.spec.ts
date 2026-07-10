@@ -10,7 +10,7 @@ import { expect, test } from '@playwright/test'
  * it proves the Markets pages render, the nav routes to them, the list degrades
  * gracefully with no indexer (no white-screen), and the create-market form mounts
  * for the connected wallet. The data-heavy market flows are covered by the gated
- * forked-mainnet suites (`challengeTrade.e2e`, `sdk/test/surfpool/*market*`).
+ * forked-mainnet suites (`challengeTrade.e2e`, `sdks/oracles/ts/test/surfpool/*market*`).
  */
 const wallet = JSON.parse(
   readFileSync(join(process.cwd(), 'e2e', '.wallet.json'), 'utf8'),

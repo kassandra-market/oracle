@@ -6,7 +6,7 @@
  * amm `AMMyu…`, futarchy `FUTAREL…` — are lazily fetched + EXECUTABLE), in
  * `clock` block-production mode with a fast slot-time (the v0.4 AMM crank
  * rate-limit is SLOT-based). This mirrors the PROVEN SDK recipe
- * (`sdk/test/surfpool/challenge-market-e2e.test.ts`) wholesale, but drives the
+ * (`sdks/oracles/ts/test/surfpool/challenge-market-e2e.test.ts`) wholesale, but drives the
  * THREE app builders through the app's {@link keypairSender}/{@link sendAndConfirm}
  * seam:
  *
@@ -40,7 +40,7 @@ import {
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
-import { buildDaoBlob } from "../../sdk/test/surfpool/futarchy-dao.ts";
+import { buildDaoBlob } from "../../sdks/oracles/ts/test/surfpool/futarchy-dao.ts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -64,8 +64,8 @@ import {
   setGovernance,
   submitFact,
   voteFact,
-} from "@kassandra/sdk";
-import * as pda from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
+import * as pda from "@kassandra-market/oracles";
 
 import {
   SurfpoolHarness,
@@ -74,7 +74,7 @@ import {
   toHex,
   tokenAccountAmount,
   tokenAccountBytes,
-} from "../../sdk/test/surfpool/harness.ts";
+} from "../../sdks/oracles/ts/test/surfpool/harness.ts";
 import {
   buildOpenChallengeIxs,
   buildSubmitAiClaimIxs,

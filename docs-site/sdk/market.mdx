@@ -1,9 +1,9 @@
 ---
 title: "Market SDK"
-description: "The @kassandra-market/sdk TypeScript package — IDL-free instruction builders, account decoders, PDA helpers, MetaDAO composition, and high-level buy/sell/redeem flows."
+description: "The @kassandra-market/markets TypeScript package — IDL-free instruction builders, account decoders, PDA helpers, MetaDAO composition, and high-level buy/sell/redeem flows."
 ---
 
-`@kassandra-market/sdk` is the hand-written TypeScript client for the
+`@kassandra-market/markets` is the hand-written TypeScript client for the
 [kassandra-market](/market-protocol/overview) program. It builds every instruction,
 derives every PDA, and decodes every on-chain account — with **no IDL**. The wire
 formats are mirrored verbatim from the Rust program (the source of truth) and
@@ -11,7 +11,7 @@ guarded by a parity test (`test/parity.test.ts`), so the SDK stays byte-for-byte
 lockstep with `programs/kassandra-market`.
 
 <Note>
-This is a **separate package** from `@kassandra/sdk` (the oracle SDK). The market
+This is a **separate package** from `@kassandra-market/oracles` (the oracle SDK). The market
 SDK depends on the oracle SDK only to read the `Oracle` account it resolves against.
 The one dApp consumes both.
 </Note>
@@ -62,7 +62,7 @@ For example, `createMarket` derives the market/escrow/contribution PDAs for you 
 packs `seed_amount ++ outcome_index`:
 
 ```ts title="create a binary sub-market"
-import { createMarket, MARKET_PROGRAM_ID } from "@kassandra-market/sdk";
+import { createMarket, MARKET_PROGRAM_ID } from "@kassandra-market/markets";
 
 const ix = await createMarket({
   creator,            // signer

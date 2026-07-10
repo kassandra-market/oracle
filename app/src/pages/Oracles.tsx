@@ -15,7 +15,7 @@ import {
   type PhaseFilter,
   type SortBy,
 } from '../lib/oracleStats'
-import { Phase } from '@kassandra/sdk'
+import { Phase } from '@kassandra-market/oracles'
 
 const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sepia/40 ' +

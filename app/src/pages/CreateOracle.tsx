@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Address } from '@solana/web3.js'
-import { decodeProtocol, pda } from '@kassandra/sdk'
+import { decodeProtocol, pda } from '@kassandra-market/oracles'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { Card, EyebrowTag } from '../components/ui'
 import { Field, SubmitButton, TextInput } from '../components/oracles/actions/formPrimitives'

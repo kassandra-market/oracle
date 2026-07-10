@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type { Market } from "@kassandra-market/sdk";
+import type { Market } from "@kassandra-market/markets";
 import { Card } from "../../ui";
 import { buildContributeIxs } from "../../../market/data/actions";
 import { useWriteAction } from "../../../market/hooks/useWriteAction";

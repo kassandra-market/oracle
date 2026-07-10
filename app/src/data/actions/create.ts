@@ -6,7 +6,7 @@
  * {@link hashToContentHash} seam), derives the creator's KASS Associated Token
  * Account (`ATA(creator, kassMint)` — the burn source for the dynamic creation
  * fee), PREPENDS an idempotent create-ATA instruction when that account is
- * absent, and appends the `@kassandra/sdk` `createOracle` builder.
+ * absent, and appends the `@kassandra-market/oracles` `createOracle` builder.
  *
  * Unlike the participation builders it returns a RICHER result — the resolved
  * `nonce`, the derived Oracle PDA `oracle`, and the `promptHash` — so the create
@@ -29,7 +29,7 @@ import {
   createOracle,
   pda,
   writeOracleMeta,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 import { ValidationError, hashToContentHash } from "../actions";
 
 /** Anything that names an account: a web3.js `Address` or a base58 string. */

@@ -1,5 +1,5 @@
 packages:
-  - "sdk"
-  - "sdk-market"
+  - "sdks/oracles/ts"
+  - "sdks/markets/ts"
   - "app"
   - "docs-site"

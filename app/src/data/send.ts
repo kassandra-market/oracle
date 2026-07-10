@@ -13,7 +13,7 @@
  * (carrying the signature + any program logs) the caller can render.
  */
 import { Connection, Keypair, Transaction, type TransactionInstruction } from "@solana/web3.js";
-import { confirmSignature } from "@kassandra/sdk";
+import { confirmSignature } from "@kassandra-market/oracles";
 
 /**
  * The signer-abstraction seam: given the instruction list, sign + submit a

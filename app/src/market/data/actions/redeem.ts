@@ -10,8 +10,8 @@
  * resolved (`resolveMarket`), which for a Resolved/Void market it is.
  */
 import { type TransactionInstruction } from "@solana/web3.js";
-import { flows } from "@kassandra-market/sdk";
-import type { flows as flowsNs } from "@kassandra-market/sdk";
+import { flows } from "@kassandra-market/markets";
+import type { flows as flowsNs } from "@kassandra-market/markets";
 import type { IndexerClient } from "../../lib/indexer";
 import { setComputeUnitLimitIx } from "./compute";
 import { toAddress, type AddressInput } from "./ata";

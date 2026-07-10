@@ -1,4 +1,4 @@
-import type { MarketStatus } from "@kassandra-market/sdk";
+import type { MarketStatus } from "@kassandra-market/markets";
 import { statusChipClasses, statusLabel } from "../../market/lib/marketView";
 
 /**

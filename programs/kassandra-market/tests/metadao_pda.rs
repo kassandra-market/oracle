@@ -1,10 +1,10 @@
-//! Determinism + seed-order tests for the sdk-rs MetaDAO PDA derivers.
+//! Determinism + seed-order tests for the sdks/oracles/rust MetaDAO PDA derivers.
 //!
 //! Cross-checks each derived PDA against a hand-built `find_program_address`
 //! using the EXACT seed order realized in
 //! `../kassandra/programs/kassandra/tests/challenge_e2e.rs`.
 
-use kassandra_market_sdk::metadao as md;
+use kassandra_markets_sdk::metadao as md;
 use solana_sdk::pubkey::Pubkey;
 
 const CV: Pubkey = md::CONDITIONAL_VAULT_ID;

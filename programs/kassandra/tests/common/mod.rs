@@ -133,10 +133,10 @@ pub struct SeededOracle {
 }
 
 /// The full set of `Protocol`-resident governable params for `set_config`,
-/// now owned by the Rust SDK (`kassandra_sdk::ConfigParams`). Re-exported here
+/// now owned by the Rust SDK (`kassandra_oracles_sdk::ConfigParams`). Re-exported here
 /// so existing test call sites (`ConfigParams::defaults()`, struct literals,
 /// `to_payload()`) keep working unchanged.
-pub use kassandra_sdk::ConfigParams;
+pub use kassandra_oracles_sdk::ConfigParams;
 
 /// Human-readable name for an instruction discriminant (the first payload byte),
 /// so the CU meter can label every metered transaction. Mirrors
@@ -298,49 +298,49 @@ impl TestCtx {
         ctx
     }
 
-    // ----- seed-derivation helpers (thin wrappers over `kassandra_sdk::pda`) --
+    // ----- seed-derivation helpers (thin wrappers over `kassandra_oracles_sdk::pda`) --
     // The seed conventions are the program's public contract; the SDK owns the
     // derivations so there is a single source of truth. These wrappers keep the
     // harness's `*_pda` names stable for the existing test call sites.
 
     /// Derive the Oracle PDA from a `nonce`: seeds `[b"oracle", nonce_le]`.
     pub fn oracle_pda(program_id: &Pubkey, nonce: u64) -> (Pubkey, u8) {
-        kassandra_sdk::pda::oracle(program_id, nonce)
+        kassandra_oracles_sdk::pda::oracle(program_id, nonce)
     }
 
     /// Derive the Protocol singleton PDA: seeds `[b"protocol"]`.
     pub fn protocol_pda(program_id: &Pubkey) -> (Pubkey, u8) {
-        kassandra_sdk::pda::protocol(program_id)
+        kassandra_oracles_sdk::pda::protocol(program_id)
     }
 
     /// Derive the KASS mint-authority PDA: seeds `[b"mint_authority"]`.
     pub fn mint_authority_pda(program_id: &Pubkey) -> (Pubkey, u8) {
-        kassandra_sdk::pda::mint_authority(program_id)
+        kassandra_oracles_sdk::pda::mint_authority(program_id)
     }
 
     /// Derive the stake-vault PDA for an oracle: seeds `[b"vault", oracle]`.
     pub fn stake_vault_pda(program_id: &Pubkey, oracle: &Pubkey) -> (Pubkey, u8) {
-        kassandra_sdk::pda::stake_vault(program_id, oracle)
+        kassandra_oracles_sdk::pda::stake_vault(program_id, oracle)
     }
 
     /// Derive the challenger USDC escrow vault PDA: seeds `[b"challenge_usdc", market]`.
     pub fn challenge_usdc_vault_pda(program_id: &Pubkey, market: &Pubkey) -> (Pubkey, u8) {
-        kassandra_sdk::pda::challenge_usdc_vault(program_id, market)
+        kassandra_oracles_sdk::pda::challenge_usdc_vault(program_id, market)
     }
 
     /// Derive the Proposer PDA: seeds `[b"proposer", oracle, authority]`.
     pub fn proposer_pda(program_id: &Pubkey, oracle: &Pubkey, authority: &Pubkey) -> (Pubkey, u8) {
-        kassandra_sdk::pda::proposer(program_id, oracle, authority)
+        kassandra_oracles_sdk::pda::proposer(program_id, oracle, authority)
     }
 
     /// Derive the Fact PDA: seeds `[b"fact", oracle, content_hash]`.
     pub fn fact_pda(program_id: &Pubkey, oracle: &Pubkey, content_hash: &[u8; 32]) -> (Pubkey, u8) {
-        kassandra_sdk::pda::fact(program_id, oracle, content_hash)
+        kassandra_oracles_sdk::pda::fact(program_id, oracle, content_hash)
     }
 
     /// Derive the FactVote PDA: seeds `[b"vote", fact, voter]`.
     pub fn vote_pda(program_id: &Pubkey, fact: &Pubkey, voter: &Pubkey) -> (Pubkey, u8) {
-        kassandra_sdk::pda::vote(program_id, fact, voter)
+        kassandra_oracles_sdk::pda::vote(program_id, fact, voter)
     }
 
     // ----- real instruction helpers -----------------------------------------
@@ -360,7 +360,7 @@ impl TestCtx {
     /// Build an `InitProtocol` instruction targeting `protocol` (so tests can
     /// pass a deliberately wrong PDA). Admin = payer (fee payer signs).
     pub fn init_protocol_ix(&self, protocol: Pubkey) -> Instruction {
-        kassandra_sdk::ix::init_protocol(
+        kassandra_oracles_sdk::ix::init_protocol(
             &self.program_id,
             protocol,
             self.payer.pubkey(),
@@ -414,7 +414,7 @@ impl TestCtx {
         dao_authority: Pubkey,
         kass_dao: Pubkey,
     ) -> Instruction {
-        kassandra_sdk::ix::set_governance(
+        kassandra_oracles_sdk::ix::set_governance(
             &self.program_id,
             protocol,
             authority,
@@ -504,7 +504,7 @@ impl TestCtx {
         authority: Pubkey,
         params: ConfigParams,
     ) -> Instruction {
-        kassandra_sdk::ix::set_config(&self.program_id, protocol, authority, &params)
+        kassandra_oracles_sdk::ix::set_config(&self.program_id, protocol, authority, &params)
     }
 
     /// Send a real `ResolveDeadend` instruction signed by `authority`, setting
@@ -540,7 +540,7 @@ impl TestCtx {
         authority: Pubkey,
         option: u8,
     ) -> Instruction {
-        kassandra_sdk::ix::resolve_deadend(&self.program_id, protocol, oracle, authority, option)
+        kassandra_oracles_sdk::ix::resolve_deadend(&self.program_id, protocol, oracle, authority, option)
     }
 
     /// Build a `KassPrice` instruction (Task F5): reads the futarchy `Dao`
@@ -548,7 +548,7 @@ impl TestCtx {
     /// Exposes both accounts so tests can pass a substituted protocol or a
     /// wrong/foreign-owned `kass_dao`. No payload.
     pub fn kass_price_ix(&self, protocol: Pubkey, kass_dao: Pubkey) -> Instruction {
-        kassandra_sdk::ix::kass_price(&self.program_id, protocol, kass_dao)
+        kassandra_oracles_sdk::ix::kass_price(&self.program_id, protocol, kass_dao)
     }
 
     /// Fabricate an account at `key` owned by `owner` holding `data`. Used by F5
@@ -639,7 +639,7 @@ impl TestCtx {
         uri: &str,
         uri_hash: [u8; 32],
     ) -> TransactionResult {
-        let ix = kassandra_sdk::ix::write_oracle_meta(
+        let ix = kassandra_oracles_sdk::ix::write_oracle_meta(
             &self.program_id,
             oracle,
             self.payer.pubkey(),
@@ -665,7 +665,7 @@ impl TestCtx {
         kass_mint: Pubkey,
         usdc_mint: Pubkey,
     ) -> Instruction {
-        kassandra_sdk::ix::create_oracle(
+        kassandra_oracles_sdk::ix::create_oracle(
             &self.program_id,
             nonce,
             options_count,
@@ -728,7 +728,7 @@ impl TestCtx {
         option: u8,
         bond: u64,
     ) -> Instruction {
-        kassandra_sdk::ix::propose(
+        kassandra_oracles_sdk::ix::propose(
             &self.program_id,
             oracle,
             proposer,
@@ -744,7 +744,7 @@ impl TestCtx {
     /// given proposer accounts as a READ-ONLY tail. Exposes the full proposer
     /// slice so tests can pass a subset, a duplicate, or a foreign-oracle account.
     pub fn finalize_proposals_ix(&self, oracle: Pubkey, proposers: &[Pubkey]) -> Instruction {
-        kassandra_sdk::ix::finalize_proposals(&self.program_id, oracle, proposers)
+        kassandra_oracles_sdk::ix::finalize_proposals(&self.program_id, oracle, proposers)
     }
 
     // ----- real-flow builders ------------------------------------------------
@@ -1194,7 +1194,7 @@ impl TestCtx {
     /// bookkeeping map (seeded or real-flow) so its nonce/vault are known.
     pub fn finalize_oracle_ix(&self, oracle: Pubkey, tail: &[Pubkey]) -> Instruction {
         let seeded = self.seeded(oracle);
-        kassandra_sdk::ix::finalize_oracle(
+        kassandra_oracles_sdk::ix::finalize_oracle(
             &self.program_id,
             oracle,
             self.kass_mint,
@@ -1212,7 +1212,7 @@ impl TestCtx {
     /// the bookkeeping map (seeded or real-flow) so its nonce/vault are known.
     pub fn finalize_facts_ix(&self, oracle: Pubkey, tail: &[Pubkey]) -> Instruction {
         let seeded = self.seeded(oracle);
-        kassandra_sdk::ix::finalize_facts(
+        kassandra_oracles_sdk::ix::finalize_facts(
             &self.program_id,
             oracle,
             self.kass_mint,
@@ -2053,7 +2053,7 @@ impl TestCtx {
         stake_vault: Pubkey,
         rent_recipient: Pubkey,
     ) -> Instruction {
-        kassandra_sdk::ix::claim_proposer(
+        kassandra_oracles_sdk::ix::claim_proposer(
             &self.program_id,
             oracle,
             nonce,
@@ -2075,7 +2075,7 @@ impl TestCtx {
         stake_vault: Pubkey,
         rent_recipient: Pubkey,
     ) -> Instruction {
-        kassandra_sdk::ix::claim_fact(
+        kassandra_oracles_sdk::ix::claim_fact(
             &self.program_id,
             oracle,
             nonce,
@@ -2100,7 +2100,7 @@ impl TestCtx {
         stake_vault: Pubkey,
         rent_recipient: Pubkey,
     ) -> Instruction {
-        kassandra_sdk::ix::claim_fact_vote(
+        kassandra_oracles_sdk::ix::claim_fact_vote(
             &self.program_id,
             oracle,
             nonce,
@@ -2172,7 +2172,7 @@ impl TestCtx {
         ai_claim: Pubkey,
         rent_recipient: Pubkey,
     ) -> Instruction {
-        kassandra_sdk::ix::close_ai_claim(&self.program_id, oracle, ai_claim, rent_recipient)
+        kassandra_oracles_sdk::ix::close_ai_claim(&self.program_id, oracle, ai_claim, rent_recipient)
     }
 
     /// Build a `CloseMarket` instruction (Ix 21). Account order:
@@ -2186,7 +2186,7 @@ impl TestCtx {
         challenger_usdc_vault: Pubkey,
         rent_recipient: Pubkey,
     ) -> Instruction {
-        kassandra_sdk::ix::close_market(
+        kassandra_oracles_sdk::ix::close_market(
             &self.program_id,
             oracle,
             nonce,
@@ -2283,7 +2283,7 @@ impl TestCtx {
         creator: Pubkey,
         oracle_meta: Option<Pubkey>,
     ) -> Instruction {
-        kassandra_sdk::ix::sweep_oracle(
+        kassandra_oracles_sdk::ix::sweep_oracle(
             &self.program_id,
             oracle,
             nonce,

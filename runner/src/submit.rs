@@ -50,9 +50,9 @@ use crate::rpc::{JsonRpc, RpcError};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 
 /// The `submit_ai_claim` instruction discriminant (first `data` byte), tied to
-/// the SDK's [`kassandra_sdk::Ix::SubmitAiClaim`] variant (re-exported from the
+/// the SDK's [`kassandra_oracles_sdk::Ix::SubmitAiClaim`] variant (re-exported from the
 /// program) so a renumber in the program breaks this build.
-pub const SUBMIT_AI_CLAIM_DISCRIMINANT: u8 = kassandra_sdk::Ix::SubmitAiClaim as u8;
+pub const SUBMIT_AI_CLAIM_DISCRIMINANT: u8 = kassandra_oracles_sdk::Ix::SubmitAiClaim as u8;
 
 /// Anything that can go wrong building/sending/confirming the claim tx.
 #[derive(Debug, thiserror::Error)]
@@ -111,12 +111,12 @@ pub enum SubmitError {
 
 /// The Kassandra program id as a [`Pubkey`] (from the SDK's canonical constant).
 pub fn program_id() -> Pubkey {
-    kassandra_sdk::PROGRAM_ID
+    kassandra_oracles_sdk::PROGRAM_ID
 }
 
 /// Derive the `ai_claim` PDA (seeds `[b"claim", oracle, proposer]`) via the SDK.
 pub fn derive_ai_claim_pda(oracle: &Pubkey, proposer: &Pubkey) -> Pubkey {
-    kassandra_sdk::pda::ai_claim(&program_id(), oracle, proposer).0
+    kassandra_oracles_sdk::pda::ai_claim(&program_id(), oracle, proposer).0
 }
 
 /// Derive the `proposer` PDA `find_program_address([b"proposer", oracle,
@@ -126,7 +126,7 @@ pub fn derive_ai_claim_pda(oracle: &Pubkey, proposer: &Pubkey) -> Pubkey {
 /// the oracle and the signing `authority` (the `--keypair` pubkey) — no separate
 /// `--proposer` argument is required.
 pub fn derive_proposer_pda(oracle: &Pubkey, authority: &Pubkey) -> Pubkey {
-    kassandra_sdk::pda::proposer(&program_id(), oracle, authority).0
+    kassandra_oracles_sdk::pda::proposer(&program_id(), oracle, authority).0
 }
 
 /// Build the `submit_ai_claim` [`Instruction`].
@@ -150,7 +150,7 @@ pub fn build_submit_ai_claim_ix(
     );
 
     let ai_claim = derive_ai_claim_pda(oracle, proposer);
-    kassandra_sdk::ix::submit_ai_claim_raw(
+    kassandra_oracles_sdk::ix::submit_ai_claim_raw(
         &program_id(),
         *oracle,
         *proposer,
@@ -414,7 +414,7 @@ mod tests {
     #[test]
     fn system_program_id_is_canonical() {
         assert_eq!(
-            kassandra_sdk::SYSTEM_PROGRAM_ID,
+            kassandra_oracles_sdk::SYSTEM_PROGRAM_ID,
             Pubkey::from_str("11111111111111111111111111111111").unwrap()
         );
     }
@@ -432,7 +432,7 @@ mod tests {
 
         // Program id is the kassandra id (pinocchio [u8;32] → Pubkey).
         assert_eq!(ix.program_id, program_id());
-        assert_eq!(ix.program_id, kassandra_sdk::PROGRAM_ID);
+        assert_eq!(ix.program_id, kassandra_oracles_sdk::PROGRAM_ID);
 
         // EXACT processor account order + roles.
         let ai_claim = derive_ai_claim_pda(&oracle, &proposer);
@@ -441,7 +441,7 @@ mod tests {
             (proposer, false, true),                          // proposer PDA (w)
             (ai_claim, false, true),                          // ai_claim PDA (w)
             (authority, true, true),                          // authority (signer, w)
-            (kassandra_sdk::SYSTEM_PROGRAM_ID, false, false), // system (ro)
+            (kassandra_oracles_sdk::SYSTEM_PROGRAM_ID, false, false), // system (ro)
         ];
         assert_eq!(ix.accounts.len(), expected.len());
         for (meta, (pk, signer, writable)) in ix.accounts.iter().zip(expected) {

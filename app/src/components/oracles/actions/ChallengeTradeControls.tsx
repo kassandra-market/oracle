@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import type { Market, Oracle, Proposer } from '@kassandra/sdk'
+import type { Market, Oracle, Proposer } from '@kassandra-market/oracles'
 import {
   PRICE_SCALE,
   marginProgress,

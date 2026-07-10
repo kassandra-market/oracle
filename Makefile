@@ -38,9 +38,15 @@ build: build-program build-sdk build-app build-runner build-indexer ## Build eve
 build-program: ## Build BOTH SBF program artifacts (oracle + market → target/deploy/*.so)
 	just build
 
-build-sdk: ## Build BOTH TypeScript SDKs (@kassandra/sdk + @kassandra-market/sdk → dist/)
-	pnpm --filter ./sdk build
-	pnpm --filter ./sdk-market build
+build-sdk: ## Build BOTH TypeScript SDKs (@kassandra-market/oracles + @kassandra-market/markets → dist/)
+	pnpm --filter @kassandra-market/oracles build
+	pnpm --filter @kassandra-market/markets build
+
+version-sync: ## Stamp Cargo [workspace.package].version into the TS SDK package.json files
+	node scripts/sync-version.mjs
+
+version-check: ## Verify every TS SDK version matches the workspace version (CI guard)
+	node scripts/sync-version.mjs --check
 
 build-app: build-sdk ## Build the web app (Vite → app/dist)
 	pnpm --filter ./app build
@@ -54,15 +60,15 @@ build-indexer: ## Build the indexer service (release, own lockfile)
 # ===== Test =================================================================
 test: test-rust test-sdk test-app test-indexer ## Run all UNIT tests (rust workspace + sdks + app + indexer)
 
-test-rust: build-program ## Rust workspace tests (both programs' LiteSVM + runner + sdk-rs)
+test-rust: build-program ## Rust workspace tests (both programs' LiteSVM + runner + rust SDKs)
 	cargo test --workspace
 
 test-program: ## Both programs' tests only (rebuilds the .so files first)
 	just test
 
 test-sdk: ## Both SDKs' vitest (litesvm + decoders)
-	pnpm --filter ./sdk test
-	pnpm --filter ./sdk-market test
+	pnpm --filter @kassandra-market/oracles test
+	pnpm --filter @kassandra-market/markets test
 
 test-app: ## App vitest (unit + render)
 	pnpm --filter ./app test
@@ -91,8 +97,8 @@ lint: ## Lint: app (oxlint) + rust clippy (workspace + indexer)
 	cargo clippy --manifest-path indexer/Cargo.toml --all-targets
 
 typecheck: build-sdk ## Typecheck both SDKs + app
-	pnpm --filter ./sdk typecheck
-	pnpm --filter ./sdk-market typecheck
+	pnpm --filter @kassandra-market/oracles typecheck
+	pnpm --filter @kassandra-market/markets typecheck
 	pnpm --filter ./app typecheck
 
 fmt: ## Format Rust (cargo fmt)
@@ -127,10 +133,10 @@ docs: ## Serve the Mintlify docs locally (needs Node 20 — see docs-site/README
 ci: ## Run what CI runs: build both .so, rust workspace tests, and the JS lane
 	just build
 	cargo test --workspace
-	pnpm --filter ./sdk build
-	pnpm --filter ./sdk-market build
-	pnpm --filter ./sdk test
-	pnpm --filter ./sdk-market test
+	pnpm --filter @kassandra-market/oracles build
+	pnpm --filter @kassandra-market/markets build
+	pnpm --filter @kassandra-market/oracles test
+	pnpm --filter @kassandra-market/markets test
 	pnpm --filter ./app typecheck
 	pnpm --filter ./app lint
 	pnpm --filter ./app test
@@ -138,7 +144,7 @@ ci: ## Run what CI runs: build both .so, rust workspace tests, and the JS lane
 clean: ## Remove build artifacts (cargo target, dist, indexer target)
 	cargo clean
 	cargo clean --manifest-path indexer/Cargo.toml
-	rm -rf app/dist sdk/dist sdk-market/dist
+	rm -rf app/dist sdks/oracles/ts/dist sdks/markets/ts/dist
 
 .PHONY: help setup install build build-program build-sdk build-app build-runner \
         build-indexer test test-rust test-program test-sdk test-app test-indexer \

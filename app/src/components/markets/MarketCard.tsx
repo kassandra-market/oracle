@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { MarketStatus } from "@kassandra-market/sdk";
+import { MarketStatus } from "@kassandra-market/markets";
 import { Card } from "../ui";
 import { StatusChip } from "./StatusChip";
 import { FundingBar } from "./FundingBar";

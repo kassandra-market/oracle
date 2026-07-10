@@ -9,7 +9,7 @@
  * create markets in the UI immediately. Everything here is signed by `ctx.payer`
  * (via {@link sendIx}); the market program is deployed non-upgradeable (BPFLoader2)
  * with a fabricated `ProgramData` so `init_config`'s upgrade-authority gate passes
- * — mirroring `sdk-market/test/surfpool/harness.ts`.
+ * — mirroring `sdks/markets/ts/test/surfpool/harness.ts`.
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 
 import { Address, ComputeBudgetProgram } from '@solana/web3.js'
 
-import { TOKEN_PROGRAM_ID, associatedTokenAccount } from '@kassandra/sdk'
+import { TOKEN_PROGRAM_ID, associatedTokenAccount } from '@kassandra-market/oracles'
 import {
   BPF_UPGRADEABLE_LOADER_ID,
   MARKET_PROGRAM_ID,
@@ -27,9 +27,9 @@ import {
   initConfig,
   metadao,
   pda as marketPda,
-} from '@kassandra-market/sdk'
+} from '@kassandra-market/markets'
 
-import { toHex, tokenAccountBytes } from '../../sdk/test/surfpool/harness.ts'
+import { toHex, tokenAccountBytes } from '../../sdks/oracles/ts/test/surfpool/harness.ts'
 import { sendIx, sendIxs, type SeedCtx } from './seed.ts'
 
 type MarketRefs = flows.MarketRefs

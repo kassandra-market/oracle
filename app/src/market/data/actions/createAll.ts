@@ -18,7 +18,7 @@
  * idempotent create-ATA ix is prepended ONCE — on step 0 only — when that account
  * is absent (all later steps reuse the account step 0 created).
  */
-import { flows } from "@kassandra-market/sdk";
+import { flows } from "@kassandra-market/markets";
 import type { ActivateStep } from "./activate";
 import { ensureKassAta, toAddress, type AddressInput } from "./ata";
 import { ValidationError } from "../writeAction";

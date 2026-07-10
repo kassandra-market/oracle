@@ -104,5 +104,5 @@ no live oracle occupies them — `create_oracle` initializes directly into `Prop
 
 The authoritative, cross-linked reference — every instruction, account field, error code,
 constant, and PDA — is in the docs site under **Protocol reference**
-([`docs-site/protocol/`](../../docs-site/protocol)). The SDK ([`sdk/`](../../sdk)) mirrors
+([`docs-site/protocol/`](../../docs-site/protocol)). The SDK ([`sdks/oracles/ts/`](../../sdk)) mirrors
 these layouts in TypeScript.

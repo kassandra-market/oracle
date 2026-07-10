@@ -4,7 +4,7 @@
  * KASS formatting, and the hand-rolled relative-deadline / window labels. No React,
  * no chain; `Date.now()` is faked for the relative-time assertions.
  */
-import { Phase } from '@kassandra/sdk'
+import { Phase } from '@kassandra-market/oracles'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {

@@ -4,7 +4,7 @@
  * funding progress (clamped, bigint-true `funded`), implied YES probability from
  * pool reserves, and probability/KASS formatting. No React / chain.
  */
-import { MarketStatus } from '@kassandra-market/sdk'
+import { MarketStatus } from '@kassandra-market/markets'
 import { describe, expect, it } from 'vitest'
 
 import type { AmmReserves } from '../src/market/data/markets'

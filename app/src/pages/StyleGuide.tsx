@@ -1,4 +1,4 @@
-import { KASSANDRA_PROGRAM_ID } from '@kassandra/sdk'
+import { KASSANDRA_PROGRAM_ID } from '@kassandra-market/oracles'
 import {
   AvatarBubble,
   Button,
@@ -185,7 +185,7 @@ export default function StyleGuide() {
       </Panel>
 
       <footer className="mt-16 border-t border-pebble pt-6 font-mono text-[12px] text-driftwood">
-        @kassandra/sdk workspace import resolves · KASSANDRA_PROGRAM_ID ={' '}
+        @kassandra-market/oracles workspace import resolves · KASSANDRA_PROGRAM_ID ={' '}
         {KASSANDRA_PROGRAM_ID.toString()}
       </footer>
     </main>

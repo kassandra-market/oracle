@@ -3,7 +3,7 @@ title: "Run the dApp locally"
 description: "Install dependencies, build the SDK, and run the Kassandra web app against localnet, devnet, or mainnet-beta."
 ---
 
-The Kassandra dApp is a Vite + React 19 + TypeScript + Tailwind v4 single-page app (`app/package.json`, `app/README.md`), styled in the "Delphi" visual language. It links the hand-written TypeScript SDK via the pnpm workspace (`@kassandra/sdk`, `workspace:*`) and talks to the on-chain program over a wallet-adapter `Connection`.
+The Kassandra dApp is a Vite + React 19 + TypeScript + Tailwind v4 single-page app (`app/package.json`, `app/README.md`), styled in the "Delphi" visual language. It links the hand-written TypeScript SDK via the pnpm workspace (`@kassandra-market/oracles`, `workspace:*`) and talks to the on-chain program over a wallet-adapter `Connection`.
 
 This page walks through a fresh local setup and lists every project script.
 
@@ -14,7 +14,7 @@ This page walks through a fresh local setup and lists every project script.
 - For localnet: a local validator or a seeded surfpool on `127.0.0.1:8899`. See [Clusters & RPC](/ops/clusters-and-rpc).
 
 <Note>
-The app imports `@kassandra/sdk` and resolves its types from `sdk/dist/`, which is
+The app imports `@kassandra-market/oracles` and resolves its types from `sdks/oracles/ts/dist/`, which is
 gitignored. On a fresh clone you MUST build the SDK **before** the app's
 typecheck/build, or the SDK import won't resolve (`app/README.md`).
 </Note>
@@ -30,10 +30,10 @@ typecheck/build, or the SDK import won't resolve (`app/README.md`).
     ```
   </Step>
   <Step title="Build the SDK first">
-    The app depends on the built SDK artifact in `sdk/dist/`:
+    The app depends on the built SDK artifact in `sdks/oracles/ts/dist/`:
 
     ```bash
-    pnpm --filter @kassandra/sdk build
+    pnpm --filter @kassandra-market/oracles build
     ```
 
     Or build every workspace package at once:

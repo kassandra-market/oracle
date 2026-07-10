@@ -1,4 +1,4 @@
-import type { Market, Oracle } from '@kassandra/sdk'
+import type { Market, Oracle } from '@kassandra-market/oracles'
 import { Card } from '../../ui'
 import { ChallengeComposeForm } from './ChallengeComposeForm'
 

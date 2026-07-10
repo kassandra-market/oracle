@@ -51,7 +51,7 @@ linkage and the KASS/USDC price anchor. See [Challenge markets](/challenge/overv
   </Step>
   <Step title="The SDK mirrors that format by hand">
     Because there is no Anchor IDL, the SDK hand-encodes each instruction's `[disc_byte, ...payload]`
-    and hand-decodes each account struct. A parity test (`sdk/test/parity.test.ts`) keeps the two in
+    and hand-decodes each account struct. A parity test (`sdks/oracles/ts/test/parity.test.ts`) keeps the two in
     lockstep.
   </Step>
   <Step title="The runner produces the AI claim">
@@ -72,7 +72,7 @@ linkage and the KASS/USDC price anchor. See [Challenge markets](/challenge/overv
 kassandra/
 ├── programs/kassandra/   Pinocchio on-chain program (crate: kassandra-program)
 ├── runner/               Rust binary + library (kassandra-runner) — AI resolver
-├── sdk/                  TypeScript SDK (@kassandra/sdk) — hand-written, no IDL
+├── sdk/                  TypeScript SDK (@kassandra-market/oracles) — hand-written, no IDL
 ├── app/                  Vite + React 19 dApp
 ├── scripts/              MetaDAO/Meteora fixture fetchers for hermetic CPI tests
 └── justfile              build / test (cargo build-sbf)
@@ -80,7 +80,7 @@ kassandra/
 
 The Cargo workspace (`Cargo.toml`, `resolver = "2"`) contains two members: `programs/kassandra` and
 `runner`. The pnpm workspace (`pnpm-workspace.yaml`) contains two packages: `sdk` and `app`. The app
-consumes `@kassandra/sdk` via `workspace:*`, so the SDK must be built first. See
+consumes `@kassandra-market/oracles` via `workspace:*`, so the SDK must be built first. See
 [Repo layout](/contributing/repo-layout).
 
 ## On-chain vs off-chain split

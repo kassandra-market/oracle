@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { expect, test, type Page } from '@playwright/test'
 import { Address } from '@solana/web3.js'
-import { ammV04, associatedTokenAccount, futarchy, pda } from '@kassandra/sdk'
+import { ammV04, associatedTokenAccount, futarchy, pda } from '@kassandra-market/oracles'
 
 import {
   ammTwap,

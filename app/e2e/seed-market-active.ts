@@ -6,7 +6,7 @@
  */
 import { ComputeBudgetProgram } from '@solana/web3.js'
 
-import { metadao } from '@kassandra-market/sdk'
+import { metadao } from '@kassandra-market/markets'
 
 import { sendIxs, type SeedCtx } from './seed.ts'
 import {

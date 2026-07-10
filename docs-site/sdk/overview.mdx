@@ -1,12 +1,12 @@
 ---
 title: "SDK overview"
-description: "The @kassandra/sdk TypeScript package — build every instruction, derive every PDA, and decode every on-chain account with no IDL."
+description: "The @kassandra-market/oracles TypeScript package — build every instruction, derive every PDA, and decode every on-chain account with no IDL."
 ---
 
-`@kassandra/sdk` is the hand-written TypeScript client for the Kassandra dispute-core
+`@kassandra-market/oracles` is the hand-written TypeScript client for the Kassandra dispute-core
 program. It builds every instruction, derives every PDA, and decodes every on-chain
 account — with **no IDL**. The wire formats are mirrored directly from the Rust program
-(the source of truth) and guarded by a parity test (`sdk/test/parity.test.ts`), so the
+(the source of truth) and guarded by a parity test (`sdks/oracles/ts/test/parity.test.ts`), so the
 SDK stays byte-for-byte in lockstep with `programs/kassandra`.
 
 For the on-chain surface these builders and decoders map onto, see
@@ -16,7 +16,7 @@ For the on-chain surface these builders and decoders map onto, see
 
 ## Package
 
-- **Name:** `@kassandra/sdk` (`sdk/package.json`). It is `"private": true` — **not published
+- **Name:** `@kassandra-market/oracles` (`sdk/package.json`). It is `"private": true` — **not published
   to npm** — and consumed in-repo from its built `dist/`.
 - **Module system:** `"type": "module"` — ESM only, `"sideEffects": false`.
 - **Single entry point:** the `"."` export maps to `./dist/index.js` (plus `.d.ts`). Import
@@ -36,8 +36,8 @@ The package lives inside the monorepo. Build it once with pnpm, then import from
 in-repo workspace:
 
 ```bash
-# from the repo root — compiles sdk/src → sdk/dist
-pnpm --filter sdk build
+# from the repo root — compiles sdk/src → sdks/oracles/ts/dist
+pnpm --filter @kassandra-market/oracles build
 ```
 
 ```ts title="using the SDK"
@@ -49,7 +49,7 @@ import {
   decodeOracle,
   pda,
   Phase,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 ```
 
 <Tip>

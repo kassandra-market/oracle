@@ -33,7 +33,7 @@ import {
 } from "@solana/web3.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { TOKEN_PROGRAM_ID, EXTERNAL_PROGRAM_IDS, ammV04 } from "@kassandra/sdk";
+import { TOKEN_PROGRAM_ID, EXTERNAL_PROGRAM_IDS, ammV04 } from "@kassandra-market/oracles";
 
 import {
   SurfpoolHarness,
@@ -41,7 +41,7 @@ import {
   surfpoolReady,
   toHex,
   tokenAccountBytes,
-} from "../../sdk/test/surfpool/harness.ts";
+} from "../../sdks/oracles/ts/test/surfpool/harness.ts";
 import { buildCrankTwapIxs, buildSwapIxs, poolMints } from "../src/data/actions/challengeTrade.ts";
 import { decodeAmmV04, instantaneousPrice, twapPrice } from "../src/data/ammV04.ts";
 import { keypairSender, sendAndConfirm } from "../src/data/send.ts";

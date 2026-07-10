@@ -1,4 +1,4 @@
-import { Phase, type Market, type Oracle } from '@kassandra/sdk'
+import { Phase, type Market, type Oracle } from '@kassandra-market/oracles'
 import { Card } from '../../ui'
 import { phaseView } from '../../../lib/oracleView'
 import { recallNonce } from '../../../lib/nonceStore'

@@ -1,0 +1,14 @@
+[package]
+name = "kassandra-markets-sdk"
+version.workspace = true
+edition = "2021"
+description = "Rust client SDK for the Kassandra prediction-market Solana program: PDA derivations, instruction builders, and account decoders."
+license.workspace = true
+repository.workspace = true
+
+# The market Rust SDK is part of the solana-sdk v2 island (see the market
+# program's Cargo.toml). Versions are pinned directly, NOT via the workspace
+# (which is on the granular v3 client stack), so both majors coexist.
+[dependencies]
+solana-sdk = "2"
+spl-token = { version = "6", features = ["no-entrypoint"] }

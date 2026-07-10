@@ -4,7 +4,7 @@ description: "The Kassandra Market web app — browsing /markets, creating a mar
 ---
 
 The market dApp is a React 19 + Vite web app (`app/`) built entirely on the
-[`@kassandra-market/sdk`](/sdk/market). It mirrors the sibling Kassandra oracle
+[`@kassandra-market/markets`](/sdk/market). It mirrors the sibling Kassandra oracle
 app's "Delphi" design system — the same primitives, providers, cluster switcher,
 and wallet-signed `useWriteAction` transaction idiom. Every write is a
 phase-gated, wallet-signed action; the read side talks to the indexer, never the
@@ -91,7 +91,7 @@ returns all staked KASS. See [Crowdfunding](/market/crowdfunding).
 
 <Note>
 The market app and the oracle app are two front-ends over two programs, each with
-its own SDK (`@kassandra-market/sdk` and `@kassandra/sdk`). See the
+its own SDK (`@kassandra-market/markets` and `@kassandra-market/oracles`). See the
 [SDK page](/sdk/market) for how the flows wrap these raw builders into whole user
 actions.
 </Note>

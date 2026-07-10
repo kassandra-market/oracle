@@ -12,7 +12,7 @@ import {
   openChallenge,
   settleChallenge,
   submitAiClaim,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 import { describe, expect, it } from "vitest";
 
 import { ValidationError } from "../src/data/actions.ts";

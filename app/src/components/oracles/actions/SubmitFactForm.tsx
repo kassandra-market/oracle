@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import type { Oracle } from '@kassandra/sdk'
+import type { Oracle } from '@kassandra-market/oracles'
 import { Card } from '../../ui'
 import { buildSubmitFactIxs, hashToContentHash } from '../../../data/actions'
 import { useWriteAction } from '../../../hooks/useWriteAction'

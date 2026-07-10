@@ -3,12 +3,12 @@
 //! `activate` invokes exactly TWO MetaDAO CPIs, both Market-PDA-signed:
 //! `split_tokens` (conditional_vault) and `add_liquidity` (amm). Everything else
 //! (`initialize_question` / `initialize_conditional_vault` / `create_amm`) is
-//! composed CLIENT-side (see `kassandra-market-sdk::metadao`); the program only
+//! composed CLIENT-side (see `kassandra-markets-sdk::metadao`); the program only
 //! VERIFIES those accounts via the offset readers below.
 //!
 //! Discriminators, offsets, and program IDs are ported + re-verified against
 //! `../kassandra/programs/kassandra/src/cpi/metadao.rs`. `tests/parity.rs`
-//! asserts they equal the sdk-rs copies byte-for-byte.
+//! asserts they equal the sdks/oracles/rust copies byte-for-byte.
 
 #![allow(dead_code)]
 
@@ -45,7 +45,7 @@ pub const SPLIT_TOKENS_DISC: [u8; 8] = [0x4f, 0xc3, 0x74, 0x00, 0x8c, 0xb0, 0x49
 /// `conditional_vault::resolve_question`
 pub const RESOLVE_QUESTION_DISC: [u8; 8] = [0x34, 0x20, 0xe0, 0xb3, 0xb4, 0x08, 0x00, 0xf6];
 /// `conditional_vault::redeem_tokens` (`sha256("global:redeem_tokens")[..8]`) —
-/// mirrors `sdk-rs::metadao::REDEEM_TOKENS_DISC` / the TS SDK `DISC.redeemTokens`.
+/// mirrors `sdks/oracles/rust::metadao::REDEEM_TOKENS_DISC` / the TS SDK `DISC.redeemTokens`.
 pub const REDEEM_TOKENS_DISC: [u8; 8] = [0xf6, 0x62, 0x86, 0x29, 0x98, 0x21, 0x78, 0x45];
 /// `amm::add_liquidity`
 pub const ADD_LIQUIDITY_DISC: [u8; 8] = [0xb5, 0x9d, 0x59, 0x43, 0x8f, 0xb6, 0x34, 0x48];

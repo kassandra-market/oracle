@@ -4,7 +4,7 @@
 //! The runner can build its config from an oracle pubkey instead of an explicit
 //! full config: it reads the `Oracle` account (and its agreed `Fact` accounts)
 //! straight off chain and decodes them through the SHARED
-//! `kassandra_sdk::accounts` `Pod` structs — zero new decode code. The
+//! `kassandra_oracles_sdk::accounts` `Pod` structs — zero new decode code. The
 //! interpretation TEXT is NOT on chain; it lives in the `oracle_meta` uri JSON,
 //! bound by `uri_hash`. [`fetch_oracle_meta`] reads the (program-owned) meta
 //! account; the caller (`build_config_from_chain`) fetches the uri and verifies
@@ -21,7 +21,7 @@
 //! # Account validation before decode
 //!
 //! Every fetched account is validated before it is `bytemuck`-decoded:
-//! - the account MUST be owned by the Kassandra program (`kassandra_sdk::PROGRAM_ID`);
+//! - the account MUST be owned by the Kassandra program (`kassandra_oracles_sdk::PROGRAM_ID`);
 //! - its first byte (the [`AccountType`] tag) MUST match the expected type;
 //! - its length MUST be at least the struct's `LEN`.
 //!
@@ -42,7 +42,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde_json::{json, Value};
 use std::str::FromStr;
 
-use kassandra_sdk::accounts::{AccountType, Fact, Oracle};
+use kassandra_oracles_sdk::accounts::{AccountType, Fact, Oracle};
 
 /// Byte offset of the `oracle` field inside a `Fact` account — the
 /// `getProgramAccounts` `memcmp` anchor used to enumerate an oracle's facts.
@@ -282,11 +282,11 @@ fn validate<'a>(
     type_name: &'static str,
     needed: usize,
 ) -> Result<&'a [u8], RpcError> {
-    if raw.owner != kassandra_sdk::PROGRAM_ID.to_bytes() {
+    if raw.owner != kassandra_oracles_sdk::PROGRAM_ID.to_bytes() {
         return Err(RpcError::WrongOwner {
             pubkey: pubkey.to_string(),
             owner: bs58::encode(raw.owner).into_string(),
-            expected: kassandra_sdk::PROGRAM_ID.to_string(),
+            expected: kassandra_oracles_sdk::PROGRAM_ID.to_string(),
         });
     }
     if raw.data.len() < needed {
@@ -313,7 +313,7 @@ fn validate<'a>(
 ///
 /// Verifies the account is owned by the Kassandra program and carries the
 /// [`AccountType::Oracle`] tag before decoding through the shared
-/// `kassandra_sdk::accounts::Oracle` struct.
+/// `kassandra_oracles_sdk::accounts::Oracle` struct.
 pub async fn fetch_oracle(rpc: &dyn JsonRpc, oracle_pubkey: &str) -> Result<Oracle, RpcError> {
     let params = json!([
         oracle_pubkey,
@@ -338,7 +338,7 @@ pub async fn fetch_oracle(rpc: &dyn JsonRpc, oracle_pubkey: &str) -> Result<Orac
         Oracle::LEN,
     )?;
     // The SDK's `read` copies (unaligned-safe), so the RPC `Vec<u8>` is fine.
-    kassandra_sdk::accounts::read::<Oracle>(bytes).map_err(|e| RpcError::Malformed {
+    kassandra_oracles_sdk::accounts::read::<Oracle>(bytes).map_err(|e| RpcError::Malformed {
         method: "getAccountInfo".to_string(),
         detail: format!("Oracle decode failed: {e}"),
     })
@@ -354,13 +354,13 @@ pub async fn fetch_oracle(rpc: &dyn JsonRpc, oracle_pubkey: &str) -> Result<Orac
 pub async fn fetch_oracle_meta(
     rpc: &dyn JsonRpc,
     oracle_pubkey: &str,
-) -> Result<kassandra_sdk::accounts::OracleMeta, RpcError> {
+) -> Result<kassandra_oracles_sdk::accounts::OracleMeta, RpcError> {
     let oracle =
         solana_pubkey::Pubkey::from_str(oracle_pubkey).map_err(|e| RpcError::Malformed {
             method: "oracle_meta".to_string(),
             detail: format!("invalid oracle pubkey `{oracle_pubkey}`: {e}"),
         })?;
-    let (meta_pda, _) = kassandra_sdk::pda::oracle_meta(&kassandra_sdk::PROGRAM_ID, &oracle);
+    let (meta_pda, _) = kassandra_oracles_sdk::pda::oracle_meta(&kassandra_oracles_sdk::PROGRAM_ID, &oracle);
     let meta_pk = meta_pda.to_string();
 
     let params = json!([
@@ -378,7 +378,7 @@ pub async fn fetch_oracle_meta(
     let raw = parse_account("getAccountInfo", value)?;
     // Owner + tag + min-header-length checks (variable-length account).
     validate(&meta_pk, &raw, AccountType::OracleMeta, "OracleMeta", 34)?;
-    kassandra_sdk::accounts::decode_oracle_meta(&raw.data).ok_or_else(|| RpcError::Malformed {
+    kassandra_oracles_sdk::accounts::decode_oracle_meta(&raw.data).ok_or_else(|| RpcError::Malformed {
         method: "getAccountInfo".to_string(),
         detail: "OracleMeta decode failed".to_string(),
     })
@@ -400,7 +400,7 @@ pub struct FetchedFact {
 /// Filters to accounts of `dataSize == Fact::LEN` whose `Fact.oracle` field (at
 /// [`FACT_ORACLE_OFFSET`]) equals `oracle_pubkey` (the `memcmp` `bytes` are
 /// base58, the RPC default), decodes each through the shared
-/// `kassandra_sdk::accounts::Fact` struct, and keeps the ones with the
+/// `kassandra_oracles_sdk::accounts::Fact` struct, and keeps the ones with the
 /// `agreed` flag set. Facts are returned sorted by `content_hash` so the result
 /// is deterministic regardless of RPC ordering (prompt assembly re-sorts too,
 /// but a stable order keeps logs/tests predictable).
@@ -408,7 +408,7 @@ pub async fn fetch_agreed_facts(
     rpc: &dyn JsonRpc,
     oracle_pubkey: &str,
 ) -> Result<Vec<FetchedFact>, RpcError> {
-    let program_id = kassandra_sdk::PROGRAM_ID.to_string();
+    let program_id = kassandra_oracles_sdk::PROGRAM_ID.to_string();
     let params = json!([
         program_id,
         {
@@ -440,7 +440,7 @@ pub async fn fetch_agreed_facts(
         let raw = parse_account("getProgramAccounts", account)?;
         let bytes = validate(&pubkey, &raw, AccountType::Fact, "Fact", Fact::LEN)?;
         let fact =
-            kassandra_sdk::accounts::read::<Fact>(bytes).map_err(|e| RpcError::Malformed {
+            kassandra_oracles_sdk::accounts::read::<Fact>(bytes).map_err(|e| RpcError::Malformed {
                 method: "getProgramAccounts".to_string(),
                 detail: format!("Fact decode failed: {e}"),
             })?;
@@ -506,7 +506,7 @@ impl MockRpc {
 
     /// The Kassandra program id as base58 (the canned account `owner`).
     pub fn program_owner() -> String {
-        kassandra_sdk::PROGRAM_ID.to_string()
+        kassandra_oracles_sdk::PROGRAM_ID.to_string()
     }
 }
 

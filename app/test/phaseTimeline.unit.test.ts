@@ -3,7 +3,7 @@
  * `phaseTimelineModel` (ordered done/current/future split + the terminal end
  * state) and `verdictFor` (resolved / dead-end / in-flight). No React, no chain.
  */
-import { Phase } from '@kassandra/sdk'
+import { Phase } from '@kassandra-market/oracles'
 import { describe, expect, it } from 'vitest'
 
 import { phaseTimelineModel, verdictFor } from '../src/lib/phaseTimeline'

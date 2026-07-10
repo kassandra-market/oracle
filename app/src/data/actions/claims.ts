@@ -45,7 +45,7 @@ import {
   decodeProtocol,
   pda,
   sweepOracle,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 import { ValidationError, type AddressInput } from "../actions";
 
 /** Coerce an {@link AddressInput} into an `Address`, re-typing a parse failure as a field error. */

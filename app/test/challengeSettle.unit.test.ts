@@ -28,7 +28,7 @@ import {
   futarchy,
   type Market,
   type Oracle,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 import { describe, expect, it } from "vitest";
 
 import { ValidationError } from "../src/data/actions.ts";

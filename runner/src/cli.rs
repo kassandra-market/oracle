@@ -945,7 +945,7 @@ mod tests {
         uri: &str,
         uri_hash: [u8; 32],
     ) -> Vec<u8> {
-        use kassandra_sdk::accounts::AccountType;
+        use kassandra_oracles_sdk::accounts::AccountType;
         let mut d = vec![AccountType::OracleMeta.as_u8(), 255];
         d.extend_from_slice(&oracle);
         d.extend_from_slice(&(subject.len() as u16).to_le_bytes());
@@ -966,7 +966,7 @@ mod tests {
         use crate::fetch::MockFactFetcher;
         use crate::rpc::MockRpc;
         use bytemuck::Zeroable;
-        use kassandra_sdk::accounts::{AccountType, Fact};
+        use kassandra_oracles_sdk::accounts::{AccountType, Fact};
         use serde_json::json;
 
         let oracle_pk = "So11111111111111111111111111111111111111112";

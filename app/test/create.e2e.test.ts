@@ -16,8 +16,8 @@ import {
   associatedTokenAccount,
   decodeOracle,
   initProtocol,
-} from "@kassandra/sdk";
-import * as pda from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
+import * as pda from "@kassandra-market/oracles";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -26,7 +26,7 @@ import {
   surfpoolReady,
   toHex,
   tokenAccountBytes,
-} from "../../sdk/test/surfpool/harness.ts";
+} from "../../sdks/oracles/ts/test/surfpool/harness.ts";
 import { buildCreateOracleIxs } from "../src/data/actions/create.ts";
 import { keypairSender, sendAndConfirm } from "../src/data/send.ts";
 

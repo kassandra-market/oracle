@@ -1,7 +1,7 @@
 /**
  * Oracle READ data layer — pure, side-effect-free functions over a web3.js
  * {@link Connection} that enumerate + decode Kassandra on-chain accounts via
- * `@kassandra/sdk`. NO React, NO hooks — a UI layer (FA3) wraps these in query
+ * `@kassandra-market/oracles`. NO React, NO hooks — a UI layer (FA3) wraps these in query
  * hooks for loading/error/empty states.
  *
  * Enumeration strategy (there is no `getProgramAccounts` helper in the SDK — the
@@ -39,7 +39,7 @@ import {
   type Market,
   type Oracle,
   type Proposer,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 import { fetchOracleAccounts, fetchOracleDetailAccounts } from "./indexer";
 import type { IndexedChildAccount } from "./indexer";
 

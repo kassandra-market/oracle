@@ -1,4 +1,4 @@
-import type { Oracle } from '@kassandra/sdk'
+import type { Oracle } from '@kassandra-market/oracles'
 import { phaseTimelineModel, type StepStatus, type TimelineStep } from '../../lib/phaseTimeline'
 import { relativeDeadline } from '../../lib/oracleView'
 

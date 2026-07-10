@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Address } from "@solana/web3.js";
-import { decodeMarketOracle, pda } from "@kassandra-market/sdk";
+import { decodeMarketOracle, pda } from "@kassandra-market/markets";
 import { Card } from "../../ui";
 import { buildCreateMarketIxs, buildCreateAllSteps, type ActivateStep } from "../../../market/data/actions";
 import { useWriteAction } from "../../../market/hooks/useWriteAction";

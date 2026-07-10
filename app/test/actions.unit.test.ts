@@ -18,7 +18,7 @@ import {
   propose,
   submitFact,
   voteFact,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 import { describe, expect, it } from "vitest";
 
 import {

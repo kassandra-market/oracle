@@ -22,8 +22,8 @@ ensure_built() {
   echo "==> building both programs (.so)…"
   just build
   echo "==> building both SDKs…"
-  pnpm --filter ./sdk build >/dev/null
-  pnpm --filter ./sdk-market build >/dev/null
+  pnpm --filter @kassandra-market/oracles build >/dev/null
+  pnpm --filter @kassandra-market/markets build >/dev/null
 }
 
 run_chain() {

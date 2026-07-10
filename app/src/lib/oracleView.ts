@@ -4,7 +4,7 @@
  * from bigint unix seconds, NO date lib), and base-unit digit grouping. No
  * React here; the pages + chip components consume these.
  */
-import { Phase } from '@kassandra/sdk'
+import { Phase } from '@kassandra-market/oracles'
 import type { ChipTone } from '../components/oracles/Chip'
 
 /** `resolvedOption` sentinel: no valid option (dead-end). Mirrors `state.rs` 0xFF. */

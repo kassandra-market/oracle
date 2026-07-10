@@ -299,9 +299,9 @@ behaviors — assert them explicitly.
 - **Rust (LiteSVM):** `just test` — `programs/kassandra-market/tests/` covers every
   instruction, the full lifecycle (`lifecycle*.rs`), and the must-fail cases
   (per-instruction `*_rejects_*` tests).
-- **TS (LiteSVM + parity):** `pnpm --filter @kassandra-market/sdk test`.
+- **TS (LiteSVM + parity):** `pnpm --filter @kassandra-market/markets test`.
 - **End-to-end (real local validator + MetaDAO fixtures):**
-  `KASSANDRA_MARKET_E2E=1 SURFPOOL_OFFLINE=1 pnpm --filter @kassandra-market/sdk exec vitest run test/surfpool/`
+  `KASSANDRA_MARKET_E2E=1 SURFPOOL_OFFLINE=1 pnpm --filter @kassandra-market/markets exec vitest run test/surfpool/`
   drives compose → activate → trade → resolve → collect_fee → claim_lp against a real
   surfpool node.
 

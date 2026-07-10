@@ -4,13 +4,13 @@
  * in `app/test/*.e2e.test.ts`), so each Playwright spec can perform ONE app UI
  * action against an oracle already in the right phase.
  *
- * IMPORTANT: every pubkey handed to an `@kassandra/sdk` builder is passed as a
+ * IMPORTANT: every pubkey handed to an `@kassandra-market/oracles` builder is passed as a
  * base58 STRING (`.toString()`), never a web3.js `Address` object — under
  * Playwright's loader the app and the SDK resolve separate copies of
  * `@solana/web3.js`, so a foreign `Address` fails the SDK's `instanceof` check.
  */
 import { Address, Keypair, Transaction, type TransactionInstruction } from '@solana/web3.js'
-import { buildDaoBlob } from '../../sdk/test/surfpool/futarchy-dao.ts'
+import { buildDaoBlob } from '../../sdks/oracles/ts/test/surfpool/futarchy-dao.ts'
 import {
   TOKEN_PROGRAM_ID,
   VOTE_APPROVE,
@@ -26,17 +26,17 @@ import {
   submitFact,
   voteFact,
   writeOracleMeta,
-} from '@kassandra/sdk'
+} from '@kassandra-market/oracles'
 
 import { buildOracleMetadataJson } from '../src/data/actions/create.ts'
-import { SurfpoolHarness, mintBytes, toHex, tokenAccountBytes } from '../../sdk/test/surfpool/harness.ts'
-import { MockAnthropic } from '../../sdk/test/surfpool/mock-anthropic.ts'
+import { SurfpoolHarness, mintBytes, toHex, tokenAccountBytes } from '../../sdks/oracles/ts/test/surfpool/harness.ts'
+import { MockAnthropic } from '../../sdks/oracles/ts/test/surfpool/mock-anthropic.ts'
 import {
   runRunner,
   runnerAvailable,
   writeRunnerConfig,
   type RunOutput,
-} from '../../sdk/test/surfpool/run-runner.ts'
+} from '../../sdks/oracles/ts/test/surfpool/run-runner.ts'
 
 export interface SeedCtx {
   harness: SurfpoolHarness
@@ -122,7 +122,7 @@ export async function bootAndInit(
   const payer = await Keypair.generate()
   await harness.airdrop(payer.publicKey.toString(), 1_000_000_000_000)
 
-  const { mintAuthority, initProtocol } = await import('@kassandra/sdk')
+  const { mintAuthority, initProtocol } = await import('@kassandra-market/oracles')
   const mintAuth = await mintAuthority()
   const kassMint = await Keypair.generate()
   const usdcMint = await Keypair.generate()
@@ -274,7 +274,7 @@ const KEEP_OPEN_AHEAD_SECS = 7n * 24n * 3600n
  * phase-gated action (submit fact / vote / submit AI claim) is still legal.
  */
 export async function keepWindowOpen(ctx: SeedCtx, oracle: Address): Promise<void> {
-  const { KASSANDRA_PROGRAM_ID } = await import('@kassandra/sdk')
+  const { KASSANDRA_PROGRAM_ID } = await import('@kassandra-market/oracles')
   const info = await ctx.harness.connection.getAccountInfo(oracle)
   if (!info) throw new Error(`oracle ${oracle} not found for window patch`)
   const data = Uint8Array.from(info.data as Uint8Array)
@@ -297,7 +297,7 @@ export async function keepWindowOpen(ctx: SeedCtx, oracle: Address): Promise<voi
  * gated `claims.e2e` surfpool test documents.
  */
 export async function fabricateGovernance(ctx: SeedCtx, daoAuthority: string): Promise<void> {
-  const { KASSANDRA_PROGRAM_ID, associatedTokenAccount } = await import('@kassandra/sdk')
+  const { KASSANDRA_PROGRAM_ID, associatedTokenAccount } = await import('@kassandra-market/oracles')
   const p = (await pda.protocol()).address
   const info = await ctx.harness.connection.getAccountInfo(p)
   if (!info) throw new Error('protocol not found')
@@ -330,7 +330,7 @@ export async function fabricateGovernance(ctx: SeedCtx, daoAuthority: string): P
  * program gate (the surfpool clock is well past a real-time-past timestamp).
  */
 export async function backdateForSweep(ctx: SeedCtx, oracle: Address): Promise<void> {
-  const { KASSANDRA_PROGRAM_ID } = await import('@kassandra/sdk')
+  const { KASSANDRA_PROGRAM_ID } = await import('@kassandra-market/oracles')
   const info = await ctx.harness.connection.getAccountInfo(oracle)
   if (!info) throw new Error('oracle not found for backdate')
   const data = Uint8Array.from(info.data as Uint8Array)
@@ -345,7 +345,7 @@ export async function backdateForSweep(ctx: SeedCtx, oracle: Address): Promise<v
 }
 /** Patch the Protocol singleton bytes in place (for governance fabrication). */
 async function patchProtocolBytes(ctx: SeedCtx, mutate: (d: Uint8Array) => void): Promise<void> {
-  const { KASSANDRA_PROGRAM_ID } = await import('@kassandra/sdk')
+  const { KASSANDRA_PROGRAM_ID } = await import('@kassandra-market/oracles')
   const p = (await pda.protocol()).address
   const info = await ctx.harness.connection.getAccountInfo(p)
   if (!info) throw new Error('protocol not found')
@@ -365,7 +365,7 @@ async function patchProtocolBytes(ctx: SeedCtx, mutate: (d: Uint8Array) => void)
  * linkage `set_governance` needs. Returns the DAO address.
  */
 export async function fabricateKassDao(ctx: SeedCtx): Promise<string> {
-  const { EXTERNAL_PROGRAM_IDS } = await import('@kassandra/sdk')
+  const { EXTERNAL_PROGRAM_IDS } = await import('@kassandra-market/oracles')
   const dao = await Keypair.generate()
   await ctx.harness.setAccount(dao.publicKey.toString(), {
     lamports: 5_000_000,
@@ -379,7 +379,7 @@ export async function fabricateKassDao(ctx: SeedCtx): Promise<string> {
 
 /** Seed an oracle stuck in InvalidDeadend (phaseRaw byte 161 = 8) for resolve_deadend. */
 export async function seedDeadendOracle(ctx: SeedCtx, nonce: bigint): Promise<Address> {
-  const { KASSANDRA_PROGRAM_ID } = await import('@kassandra/sdk')
+  const { KASSANDRA_PROGRAM_ID } = await import('@kassandra-market/oracles')
   const o = await createOracleReal(ctx, nonce, 2, 'E2E dead-end')
   await driveToResolvedUncontested(ctx, o, 0)
   const info = await ctx.harness.connection.getAccountInfo(o)
@@ -557,7 +557,7 @@ export async function finalizeToTerminal(
   nonce: bigint,
   proposers: Address[],
 ): Promise<void> {
-  const { finalizeOracle } = await import('@kassandra/sdk')
+  const { finalizeOracle } = await import('@kassandra-market/oracles')
   await advancePastPhaseEnd(ctx, oracle)
   await sendIx(
     ctx,

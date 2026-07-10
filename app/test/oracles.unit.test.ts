@@ -15,7 +15,7 @@
  */
 import type { Connection } from "@solana/web3.js";
 import { Address } from "@solana/web3.js";
-import { ACCOUNT_SIZES, AccountType, Phase } from "@kassandra/sdk";
+import { ACCOUNT_SIZES, AccountType, Phase } from "@kassandra-market/oracles";
 import { describe, expect, it } from "vitest";
 
 import {

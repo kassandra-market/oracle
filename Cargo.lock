@@ -3079,7 +3079,7 @@ dependencies = [
 
 [[package]]
 name = "kassandra-indexer"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -3094,7 +3094,7 @@ dependencies = [
  "env_logger 0.11.11",
  "futures-util",
  "kassandra-market-program",
- "kassandra-sdk",
+ "kassandra-oracles-sdk",
  "log",
  "reqwest 0.12.28",
  "serde",
@@ -3123,7 +3123,7 @@ name = "kassandra-market-program"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
- "kassandra-market-sdk",
+ "kassandra-markets-sdk",
  "litesvm 0.6.1",
  "pinocchio",
  "pinocchio-system",
@@ -3134,7 +3134,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kassandra-market-sdk"
+name = "kassandra-markets-sdk"
 version = "0.1.0"
 dependencies = [
  "solana-sdk",
@@ -3142,11 +3142,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "kassandra-oracles-sdk"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "kassandra-program",
+ "solana-instruction 3.2.0",
+ "solana-pubkey 3.0.0",
+]
+
+[[package]]
 name = "kassandra-program"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
- "kassandra-sdk",
+ "kassandra-oracles-sdk",
  "litesvm 0.13.1",
  "pinocchio",
  "pinocchio-system",
@@ -3180,7 +3190,7 @@ dependencies = [
  "bs58",
  "bytemuck",
  "clap",
- "kassandra-sdk",
+ "kassandra-oracles-sdk",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -3194,16 +3204,6 @@ dependencies = [
  "solana-transaction 3.1.0",
  "thiserror 2.0.18",
  "tokio",
-]
-
-[[package]]
-name = "kassandra-sdk"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "kassandra-program",
- "solana-instruction 3.2.0",
- "solana-pubkey 3.0.0",
 ]
 
 [[package]]

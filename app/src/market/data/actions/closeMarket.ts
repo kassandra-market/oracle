@@ -14,7 +14,7 @@
  * for the several chained `CloseAccount` CPIs.
  */
 import { type TransactionInstruction } from "@solana/web3.js";
-import { flows } from "@kassandra-market/sdk";
+import { flows } from "@kassandra-market/markets";
 import { setComputeUnitLimitIx } from "./compute";
 import { toAddress, type AddressInput } from "./ata";
 

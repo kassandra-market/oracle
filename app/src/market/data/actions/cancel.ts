@@ -6,7 +6,7 @@
  * ATA to derive — just the single SDK `cancel` ix.
  */
 import { TransactionInstruction } from "@solana/web3.js";
-import { cancel } from "@kassandra-market/sdk";
+import { cancel } from "@kassandra-market/markets";
 import { toAddress, type AddressInput } from "./ata";
 
 export interface BuildCancelArgs {

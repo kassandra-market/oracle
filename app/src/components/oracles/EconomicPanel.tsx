@@ -1,4 +1,4 @@
-import type { Oracle, Proposer } from '@kassandra/sdk'
+import type { Oracle, Proposer } from '@kassandra-market/oracles'
 import { formatKass } from '../../lib/oracleView'
 
 /** A percent 0..100 of `value` against `max` (bigint-safe), floored to a visible sliver when nonzero. */

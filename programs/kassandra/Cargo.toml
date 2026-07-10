@@ -1,7 +1,13 @@
 [package]
 name = "kassandra-program"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
+description = "On-chain Kassandra oracle (dispute-core) Solana program: instruction discriminants, account layouts, and processing logic. The canonical wire contract the client SDKs build on."
+license.workspace = true
+repository.workspace = true
+# The integration tests carry ~6.5 MiB of external program .so fixtures (meteora,
+# squads, metadao) for LiteSVM CPI — dev-only, kept out of the published crate.
+exclude = ["tests/"]
 
 [lib]
 crate-type = ["cdylib", "lib"]
@@ -44,8 +50,12 @@ solana-transaction-error = { workspace = true }
 solana-sdk-ids = { workspace = true }
 solana-compute-budget-interface = { workspace = true }
 # The Rust client SDK — the test harness builds instructions + derives PDAs
-# through it instead of hand-rolling account metas and payload bytes.
-kassandra-sdk = { workspace = true }
+# through it instead of hand-rolling account metas and payload bytes. A direct
+# path dep (NOT the workspace dep, which carries a `version` for crates.io): a
+# versionless path dev-dependency is stripped from the published manifest, which
+# both keeps dev-only deps out of the release AND breaks the publish cycle
+# (kassandra-oracles-sdk itself depends on this crate).
+kassandra-oracles-sdk = { path = "../../sdks/oracles/rust" }
 
 [features]
 no-entrypoint = []

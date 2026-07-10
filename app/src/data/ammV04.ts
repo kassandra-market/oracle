@@ -27,7 +27,7 @@
  */
 import type { Connection } from "@solana/web3.js";
 import { Address } from "@solana/web3.js";
-import type { Market } from "@kassandra/sdk";
+import type { Market } from "@kassandra-market/oracles";
 
 /** Anchor account discriminator for `Amm` (`sha256("account:Amm")[..8]`). */
 export const AMM_ACCOUNT_DISCRIMINATOR = Uint8Array.of(

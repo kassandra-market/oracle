@@ -4,7 +4,7 @@
  * outcome text, and pubkey truncation. NO React here; the pages + chip
  * components consume these, and `app/test/marketView.test.ts` unit-tests them.
  */
-import { MarketStatus, Phase, type Market, type MarketOracle } from "@kassandra-market/sdk";
+import { MarketStatus, Phase, type Market, type MarketOracle } from "@kassandra-market/markets";
 import type { AmmReserves, MarketSummary } from "../data/markets";
 
 /** The winning categorical option indices for a binary market. */

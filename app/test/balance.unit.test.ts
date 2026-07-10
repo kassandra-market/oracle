@@ -7,7 +7,7 @@
  *   - an absent ATA (the RPC throws "could not find account") → `0n`, NOT thrown.
  */
 import { Keypair, type Connection } from '@solana/web3.js'
-import { associatedTokenAccount } from '@kassandra/sdk'
+import { associatedTokenAccount } from '@kassandra-market/oracles'
 import { describe, expect, it } from 'vitest'
 
 import { fetchKassBalance } from '../src/data/balance.ts'

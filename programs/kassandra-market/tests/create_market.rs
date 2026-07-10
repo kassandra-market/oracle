@@ -49,7 +49,7 @@ fn create_market_happy_path() {
     assert_eq!(ctx.token_balance(creator_ata), 300_000_000);
 
     // The creator's Contribution PDA records the seed.
-    let (contribution, _) = kassandra_market_sdk::pda::contribution(&market, &creator.pubkey());
+    let (contribution, _) = kassandra_markets_sdk::pda::contribution(&market, &creator.pubkey());
     let c: kassandra_market_program::state::Contribution = ctx.read_pod(contribution);
     assert_eq!(c.amount, 200_000_000);
     assert_eq!(c.contributor.to_bytes(), creator.pubkey().to_bytes());

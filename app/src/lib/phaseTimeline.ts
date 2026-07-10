@@ -9,8 +9,8 @@
  *   - {@link verdictFor} — the at-a-glance verdict (resolved / dead-end /
  *     in-flight) with a headline + one-line "what's next", reusing `phaseView`.
  */
-import { Phase } from '@kassandra/sdk'
-import type { Oracle } from '@kassandra/sdk'
+import { Phase } from '@kassandra-market/oracles'
+import type { Oracle } from '@kassandra-market/oracles'
 import type { ChipTone } from '../components/oracles/Chip'
 import { RESOLVED_OPTION_NONE, phaseView } from './oracleView'
 

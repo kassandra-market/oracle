@@ -3,7 +3,7 @@
  *
  * Boots a real surfpool simnet, deploys the Kassandra program, `init_protocol`,
  * then SEEDS three oracles in varied phases with REAL instructions over RPC
- * (reusing `sdk/test/surfpool/harness.ts` + the SDK builders — the same recipe
+ * (reusing `sdks/oracles/ts/test/surfpool/harness.ts` + the SDK builders — the same recipe
  * the SDK's own lifecycle E2E uses):
  *
  *   1. nonce 1 — created, left in `Proposal` (no proposers);
@@ -38,8 +38,8 @@ import {
   submitAiClaim,
   submitFact,
   voteFact,
-} from "@kassandra/sdk";
-import * as pda from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
+import * as pda from "@kassandra-market/oracles";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -48,7 +48,7 @@ import {
   surfpoolReady,
   toHex,
   tokenAccountBytes,
-} from "../../sdk/test/surfpool/harness.ts";
+} from "../../sdks/oracles/ts/test/surfpool/harness.ts";
 import { fetchOracleDetail, fetchOracles } from "../src/data/oracles.ts";
 
 const ENABLED = process.env.KASSANDRA_E2E === "1" && surfpoolReady();
@@ -223,7 +223,7 @@ describe.skipIf(!ENABLED)("oracle read data layer over a seeded surfpool cluster
 });
 
 // ---------------------------------------------------------------------------
-// Real-instruction drivers over RPC (mirrors sdk/test/surfpool/lifecycle-e2e.ts).
+// Real-instruction drivers over RPC (mirrors sdks/oracles/ts/test/surfpool/lifecycle-e2e.ts).
 // ---------------------------------------------------------------------------
 
 async function sendIx(f: Fixture, ix: TransactionInstruction, signers: Keypair[] = []): Promise<void> {

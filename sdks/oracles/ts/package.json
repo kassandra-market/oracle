@@ -1,0 +1,41 @@
+{
+  "name": "@kassandra-market/oracles",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Hand-written TypeScript SDK for the Kassandra oracle Solana program.",
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:e2e": "KASSANDRA_E2E=1 vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@solana/kit": "^6.10.0",
+    "@solana/web3.js": "3.0.0-rc.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "litesvm": "1.2.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

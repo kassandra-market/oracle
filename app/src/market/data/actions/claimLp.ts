@@ -9,7 +9,7 @@
  * `claimLp` builder.
  */
 import { TransactionInstruction } from "@solana/web3.js";
-import { claimLp } from "@kassandra-market/sdk";
+import { claimLp } from "@kassandra-market/markets";
 import type { IndexerClient } from "../../lib/indexer";
 import { ensureAta, toAddress, type AddressInput } from "./ata";
 

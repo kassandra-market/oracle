@@ -90,7 +90,7 @@ The decoders are built on a small set of exported byte readers, handy for custom
 ## Example
 
 ```ts
-import { decodeProtocol, decodeOracle, pda, Phase } from "@kassandra/sdk";
+import { decodeProtocol, decodeOracle, pda, Phase } from "@kassandra-market/oracles";
 
 const protocolPda = await pda.protocol();
 const protocol = decodeProtocol(fetchData(protocolPda.address));

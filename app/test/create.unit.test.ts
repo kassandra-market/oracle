@@ -18,7 +18,7 @@ import {
   associatedTokenAccount,
   createOracle,
   pda,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 import { describe, expect, it } from "vitest";
 
 import { ValidationError } from "../src/data/actions.ts";

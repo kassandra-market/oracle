@@ -72,7 +72,7 @@ fn setup_two_contributors() -> Setup {
 #[test]
 fn refund_happy_two_contributors_made_whole() {
     let mut s = setup_two_contributors();
-    let (escrow, _) = kassandra_market_sdk::pda::escrow(&s.market);
+    let (escrow, _) = kassandra_markets_sdk::pda::escrow(&s.market);
     assert_eq!(s.ctx.token_balance(escrow), 500_000_000);
 
     s.ctx.set_oracle_phase(s.oracle, RESOLVED);
@@ -81,7 +81,7 @@ fn refund_happy_two_contributors_made_whole() {
 
     // Refund the creator — its Contribution rent goes back to the creator's wallet.
     let (creator_contrib, _) =
-        kassandra_market_sdk::pda::contribution(&s.market, &s.creator.pubkey());
+        kassandra_markets_sdk::pda::contribution(&s.market, &s.creator.pubkey());
     let creator_contrib_rent = s.ctx.lamports(creator_contrib);
     let creator_wallet_before = s.ctx.lamports(s.creator.pubkey());
     let res = s.ctx.refund(s.market, s.creator.pubkey(), s.creator_ata);
@@ -114,7 +114,7 @@ fn refund_happy_two_contributors_made_whole() {
     assert_eq!(s.ctx.token_balance(escrow), 0);
 
     // Both contributions CLOSED (reaped); counter drained to 0.
-    let (c2_contrib, _) = kassandra_market_sdk::pda::contribution(&s.market, &s.c2.pubkey());
+    let (c2_contrib, _) = kassandra_markets_sdk::pda::contribution(&s.market, &s.c2.pubkey());
     assert_eq!(
         s.ctx.lamports(creator_contrib),
         0,
@@ -143,7 +143,7 @@ fn refund_rejects_second_refund_contribution_closed() {
     // The refund CLOSED the Contribution, so a second refund can't load it — the
     // account's absence is the idempotency (fails the load guard → InvalidAccount).
     let (creator_contrib, _) =
-        kassandra_market_sdk::pda::contribution(&s.market, &s.creator.pubkey());
+        kassandra_markets_sdk::pda::contribution(&s.market, &s.creator.pubkey());
     assert_eq!(
         s.ctx.lamports(creator_contrib),
         0,
@@ -186,7 +186,7 @@ fn refund_rejects_cross_market_contribution() {
 
     // market A account paired with market B's contribution PDA → InvalidAccount.
     let (contribution_b, _) =
-        kassandra_market_sdk::pda::contribution(&market_b, &creator_b.pubkey());
+        kassandra_markets_sdk::pda::contribution(&market_b, &creator_b.pubkey());
     let res = s
         .ctx
         .refund_with_contribution(s.market, contribution_b, creator_b_ata);
@@ -209,7 +209,7 @@ fn refund_rejects_wrong_destination_owner() {
 
     // And the creator's stake is untouched.
     let (creator_contrib, _) =
-        kassandra_market_sdk::pda::contribution(&s.market, &s.creator.pubkey());
+        kassandra_markets_sdk::pda::contribution(&s.market, &s.creator.pubkey());
     let cc: Contribution = s.ctx.read_pod(creator_contrib);
     assert_eq!(cc.claimed, 0);
 }

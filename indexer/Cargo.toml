@@ -1,6 +1,6 @@
 [package]
 name = "kassandra-indexer"
-version = "0.0.0"
+version.workspace = true
 edition = "2021"
 publish = false
 
@@ -11,7 +11,7 @@ base64 = { workspace = true }
 carbon-core = { workspace = true }
 carbon-rpc-transaction-crawler-datasource = { workspace = true }
 env_logger = { workspace = true }
-kassandra-sdk = { workspace = true }
+kassandra-oracles-sdk = { workspace = true }
 log = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

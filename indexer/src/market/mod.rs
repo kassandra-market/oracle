@@ -9,7 +9,7 @@
 //! Ported from the standalone `kassandra-market-indexer`: the in-memory `Store`
 //! became `db` (Postgres), and the program id + AMM discriminator are sourced
 //! locally (`kassandra_market_program::ID` + the const below) so this crate never
-//! pulls the solana-sdk-v2 `kassandra-market-sdk`.
+//! pulls the solana-sdk-v2 `kassandra-markets-sdk`.
 
 pub mod api;
 pub mod db;
@@ -34,7 +34,7 @@ pub fn default_program_id() -> Pubkey {
 
 /// MetaDAO `Amm` account discriminator (first 8 bytes) — used to sanity-check an
 /// AMM account before reading its reserves. Inlined here (was
-/// `kassandra_market_sdk::metadao::AMM_ACCOUNT_DISCRIMINATOR`) to avoid the
+/// `kassandra_markets_sdk::metadao::AMM_ACCOUNT_DISCRIMINATOR`) to avoid the
 /// solana-sdk-v2 SDK dependency.
 pub const AMM_ACCOUNT_DISCRIMINATOR: [u8; 8] = [0x8f, 0xf5, 0xc8, 0x11, 0x4a, 0xd6, 0xc4, 0x87];
 

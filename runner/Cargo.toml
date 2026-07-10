@@ -1,8 +1,10 @@
 [package]
 name = "kassandra-runner"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "Off-chain, reproducible AI runner for Kassandra oracles: assembles the pinned prompt + agreed facts, calls a model behind a generic provider trait, and emits the on-chain claim metadata (model_id/params_hash/io_hash + option)."
+# An off-chain binary, not a library — not released to crates.io.
+publish = false
 
 [lib]
 name = "kassandra_runner"
@@ -13,11 +15,11 @@ path = "src/main.rs"
 
 [dependencies]
 # The Rust client SDK is the runner's ONLY interface to the on-chain program:
-# it re-exports the account layouts + constants (via `kassandra_sdk::accounts`),
+# it re-exports the account layouts + constants (via `kassandra_oracles_sdk::accounts`),
 # the `Ix` discriminants, `PROGRAM_ID`, the PDA derivations, and the instruction
 # builders. The program crate is pulled in transitively (with `no-entrypoint`) by
 # the SDK, so there is no cross-crate drift and the runner never names it directly.
-kassandra-sdk = { workspace = true }
+kassandra-oracles-sdk = { workspace = true }
 
 tokio = { workspace = true }
 reqwest = { workspace = true }

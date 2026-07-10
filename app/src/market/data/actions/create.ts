@@ -10,7 +10,7 @@
  * `seedAmount > 0`) throws a typed `ValidationError` the form surfaces inline.
  */
 import { TransactionInstruction } from "@solana/web3.js";
-import { createMarket } from "@kassandra-market/sdk";
+import { createMarket } from "@kassandra-market/markets";
 import type { IndexerClient } from "../../lib/indexer";
 import { ValidationError } from "../writeAction";
 import { ensureKassAta, toAddress, type AddressInput } from "./ata";

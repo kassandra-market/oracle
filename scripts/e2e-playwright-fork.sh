@@ -32,7 +32,7 @@ just build
 if [ ! -x "target/debug/kassandra-runner" ]; then
   cargo build -p kassandra-runner
 fi
-pnpm --filter sdk build >/dev/null
+pnpm --filter @kassandra-market/oracles build >/dev/null
 
 echo "==> [3/4] ensure Playwright + Chromium are installed"
 if [ ! -d "node_modules/@playwright/test" ] && [ ! -d "app/node_modules/@playwright/test" ]; then

@@ -11,7 +11,7 @@
  * (Resolved, InvalidDeadend) are "settled" and excluded from the active
  * bonds-at-risk figure.
  */
-import { Phase } from '@kassandra/sdk'
+import { Phase } from '@kassandra-market/oracles'
 import type { OracleSummary } from '../data/oracles'
 
 /**

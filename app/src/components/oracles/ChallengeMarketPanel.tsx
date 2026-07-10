@@ -1,4 +1,4 @@
-import type { Market, Oracle } from '@kassandra/sdk'
+import type { Market, Oracle } from '@kassandra-market/oracles'
 import {
   PRICE_SCALE,
   instantaneousPrice,

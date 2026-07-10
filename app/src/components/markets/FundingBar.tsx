@@ -1,4 +1,4 @@
-import type { Market } from "@kassandra-market/sdk";
+import type { Market } from "@kassandra-market/markets";
 import { formatKass, fundingProgress } from "../../market/lib/marketView";
 
 /**

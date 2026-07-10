@@ -6,7 +6,7 @@
 #                (`target/deploy/kassandra_program.so`): the Rust program tests
 #                `include_bytes!` it at compile time; the SDK litesvm + surfpool
 #                harnesses load it at runtime.
-#   rust       — `cargo test --workspace` (program LiteSVM tests + runner + sdk-rs).
+#   rust       — `cargo test --workspace` (program LiteSVM tests + runner + rust SDKs).
 #   js         — build the SDK (the app consumes its dist/), then typecheck + lint
 #                + every vitest suite for sdk & app. The sdk litesvm suites need the
 #                shared .so; surfpool-gated suites self-skip (`describe.skipIf`).
@@ -22,7 +22,7 @@
 # The mainnet-FORKED Playwright project (playwright.fork.config.ts) and the
 # network-dependent SDK surfpool suites are intentionally NOT run here — they need
 # live mainnet RPC and are flaky on hosted runners; run them locally via
-# scripts/e2e-playwright-fork.sh / `pnpm --filter ./sdk test:e2e`.
+# scripts/e2e-playwright-fork.sh / `pnpm --filter @kassandra-market/oracles test:e2e`.
 
 name: CI
 
@@ -85,7 +85,7 @@ jobs:
           retention-days: 1
 
   rust:
-    name: Rust · program + runner + sdk-rs
+    name: Rust · program + runner + rust SDKs
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -135,24 +135,30 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Single-source versioning: every TS SDK package.json must match the Rust
+      # workspace [workspace.package].version. A Cargo bump without re-running
+      # `make version-sync` fails here.
+      - name: Version parity (workspace ↔ TS SDKs)
+        run: node scripts/sync-version.mjs --check
+
       # Both SDKs are consumed by the app via their built dist/ (package `exports`),
       # so they must be built before the app typechecks / tests.
       - name: Build SDKs (oracle + market)
         run: |
-          pnpm --filter ./sdk build
-          pnpm --filter ./sdk-market build
+          pnpm --filter @kassandra-market/oracles build
+          pnpm --filter @kassandra-market/markets build
 
       - name: SDK tests (litesvm + decoders)
         # The market SDK's litesvm suite crashes (napi bad_alloc) on hosted linux,
         # so it self-skips under SKIP_LITESVM (mirrors the kassandra-market CI).
         run: |
-          pnpm --filter ./sdk test
-          SKIP_LITESVM=1 pnpm --filter ./sdk-market test
+          pnpm --filter @kassandra-market/oracles test
+          SKIP_LITESVM=1 pnpm --filter @kassandra-market/markets test
 
       - name: SDK typecheck
         run: |
-          pnpm --filter ./sdk typecheck
-          pnpm --filter ./sdk-market typecheck
+          pnpm --filter @kassandra-market/oracles typecheck
+          pnpm --filter @kassandra-market/markets typecheck
 
       - name: App typecheck
         run: pnpm --filter ./app typecheck
@@ -197,7 +203,7 @@ jobs:
       # server — no ANTHROPIC_API_KEY, no network. Asserts the mock's option flows
       # through to a genuine 97-byte claim payload, plus the refusal arm.
       - name: Run real-runner e2e (mock provider)
-        run: pnpm --filter ./sdk exec vitest run test/surfpool/runner-mock-anthropic.test.ts
+        run: pnpm --filter @kassandra-market/oracles exec vitest run test/surfpool/runner-mock-anthropic.test.ts
         env:
           KASSANDRA_E2E: "1"
 
@@ -256,12 +262,12 @@ jobs:
         run: cargo build -p kassandra-runner
 
       - name: Build SDKs (oracle + market)
-        # The app dev server resolves BOTH `@kassandra/sdk` and the market
-        # `@kassandra-market/sdk` (its `exports` point at `dist/`), so the Markets
+        # The app dev server resolves BOTH `@kassandra-market/oracles` and the market
+        # `@kassandra-market/markets` (its `exports` point at `dist/`), so the Markets
         # pages need the market SDK built too — else Vite fails to resolve it.
         run: |
-          pnpm --filter ./sdk build
-          pnpm --filter ./sdk-market build
+          pnpm --filter @kassandra-market/oracles build
+          pnpm --filter @kassandra-market/markets build
 
       - name: Install Playwright Chromium
         run: pnpm --filter ./app exec playwright install --with-deps chromium
@@ -333,8 +339,8 @@ jobs:
 
       - name: Build SDKs (oracle + market)
         run: |
-          pnpm --filter ./sdk build
-          pnpm --filter ./sdk-market build
+          pnpm --filter @kassandra-market/oracles build
+          pnpm --filter @kassandra-market/markets build
 
       - name: Install Playwright Chromium
         run: pnpm --filter ./app exec playwright install --with-deps chromium

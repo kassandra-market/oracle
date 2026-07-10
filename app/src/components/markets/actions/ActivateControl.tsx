@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Market } from "@kassandra-market/sdk";
+import type { Market } from "@kassandra-market/markets";
 import { Card } from "../../ui";
 import { buildActivateSequence, type ActivateStep } from "../../../market/data/actions";
 import { useActionSequence, type StepStatus } from "../../../market/hooks/useActionSequence";

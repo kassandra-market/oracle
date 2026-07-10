@@ -4,7 +4,7 @@
  * Each builder takes a {@link Connection} (for an ATA-existence check), derives
  * the authority's KASS Associated Token Account (`ATA(authority, kassMint)`),
  * PREPENDS an idempotent create-ATA instruction when that account is absent, and
- * appends the corresponding `@kassandra/sdk` write builder
+ * appends the corresponding `@kassandra-market/oracles` write builder
  * (`propose` / `submitFact` / `voteFact`). The returned list is handed straight
  * to {@link sendAndConfirm} with a wallet- or keypair-backed {@link TxSender} —
  * the SAME action works in the UI (WF2) and in the gated surfpool E2E.
@@ -24,7 +24,7 @@ import {
   propose,
   submitFact,
   voteFact,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 
 /** Anything that names an account: a web3.js `Address` or a base58 string. */
 export type AddressInput = Address | string;

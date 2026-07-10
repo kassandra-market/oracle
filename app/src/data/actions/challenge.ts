@@ -31,7 +31,7 @@
  * caller already composed, and submit_ai_claim only writes the claim PDA.
  */
 import { Address, type TransactionInstruction } from "@solana/web3.js";
-import { openChallenge, pda, settleChallenge, submitAiClaim } from "@kassandra/sdk";
+import { openChallenge, pda, settleChallenge, submitAiClaim } from "@kassandra-market/oracles";
 import { ValidationError, type AddressInput } from "../actions";
 
 /** Coerce an {@link AddressInput} into an `Address`, re-typing a parse failure as a field error. */

@@ -11,7 +11,7 @@
  * `CreateIdempotent`, discriminant byte `1`).
  */
 import { Address, TransactionInstruction } from "@solana/web3.js";
-import { flows, pda } from "@kassandra-market/sdk";
+import { flows, pda } from "@kassandra-market/markets";
 import type { IndexerClient } from "../../lib/indexer";
 import { ValidationError } from "../writeAction";
 

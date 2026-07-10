@@ -12,7 +12,7 @@ import {
   resolveDeadend,
   setConfig,
   setGovernance,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 
 import { ValidationError, type AddressInput } from "../actions";
 

@@ -6,8 +6,8 @@
  * counts, the bonds-at-risk bigint sum (active oracles only), the resolved
  * count + recent resolutions, and the filter/sort predicates.
  */
-import { Phase } from '@kassandra/sdk'
-import type { Oracle } from '@kassandra/sdk'
+import { Phase } from '@kassandra-market/oracles'
+import type { Oracle } from '@kassandra-market/oracles'
 import { describe, expect, it } from 'vitest'
 import type { OracleSummary } from '../src/data/oracles'
 import {

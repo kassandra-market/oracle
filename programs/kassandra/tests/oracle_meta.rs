@@ -70,7 +70,7 @@ fn writes_and_reads_back() {
     let res = ctx.write_oracle_meta(oracle, subject, &options, uri, uri_hash);
     assert!(res.is_ok(), "write_oracle_meta should succeed: {res:?}");
 
-    let (meta_pda, _) = kassandra_sdk::pda::oracle_meta(&ctx.program_id, &oracle);
+    let (meta_pda, _) = kassandra_oracles_sdk::pda::oracle_meta(&ctx.program_id, &oracle);
     let data = ctx
         .svm
         .get_account(&meta_pda)
@@ -121,7 +121,7 @@ fn empty_uri_is_allowed() {
     let oracle = seed_oracle(&mut ctx, 3, 2);
     let res = ctx.write_oracle_meta(oracle, "No-uri question", &["Yes", "No"], "", [0u8; 32]);
     assert!(res.is_ok(), "empty uri should be allowed: {res:?}");
-    let (meta_pda, _) = kassandra_sdk::pda::oracle_meta(&ctx.program_id, &oracle);
+    let (meta_pda, _) = kassandra_oracles_sdk::pda::oracle_meta(&ctx.program_id, &oracle);
     let data = ctx.svm.get_account(&meta_pda).unwrap().data;
     let (_, _, _, uri, _) = parse_meta(&data);
     assert_eq!(uri, "");

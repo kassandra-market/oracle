@@ -12,7 +12,7 @@ mod common;
 use common::*;
 use kassandra_market_program::error::MarketError;
 use kassandra_market_program::state::{Market, MarketStatus};
-use kassandra_market_sdk::metadao::SwapType;
+use kassandra_markets_sdk::metadao::SwapType;
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -208,7 +208,7 @@ fn collect_fee_happy_cuts_accrued_and_then_claim_pays_reduced() {
 
     // claim_lp now pays pro-rata off the REDUCED lp_total. Single contributor
     // (creator staked all MIN_LIQ) → gets the whole post-fee lp_vault (minus dust).
-    let (lp_vault, _) = kassandra_market_sdk::pda::lp_vault(&a.market);
+    let (lp_vault, _) = kassandra_markets_sdk::pda::lp_vault(&a.market);
     let claim_ata = a
         .ctx
         .create_token_account(a.refs.lp_mint, a.creator.pubkey(), 0);

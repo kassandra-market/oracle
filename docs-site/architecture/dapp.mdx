@@ -11,15 +11,15 @@ accounts. It is a single-page app styled in the "Delphi" visual language.
 
 - **Vite + React 19 + TypeScript + Tailwind v4 SPA** (`app/package.json`, `app/README.md`).
 - Key dependencies: `react`/`react-dom` `^19.2.7`, `react-router-dom` `^7.18.1`,
-  `@solana/web3.js 3.0.0-rc.2`, the `@solana/wallet-adapter-*` packages, and `@kassandra/sdk`
+  `@solana/web3.js 3.0.0-rc.2`, the `@solana/wallet-adapter-*` packages, and `@kassandra-market/oracles`
   (`workspace:*`). Fonts (Cormorant Garamond, Inter, Roboto Mono) are bundled locally via
   `@fontsource`, so the build is fully offline.
 - Entry: `app/src/main.tsx` → `app/src/App.tsx`. Routing is `BrowserRouter` with route-level
   code-splitting (`React.lazy` + `<Suspense>`).
 
 <Warning>
-The app resolves `@kassandra/sdk` types from `sdk/dist/`, which is gitignored — **build the SDK
-first**: `pnpm --filter @kassandra/sdk build` (or `pnpm -r build`). See
+The app resolves `@kassandra-market/oracles` types from `sdks/oracles/ts/dist/`, which is gitignored — **build the SDK
+first**: `pnpm --filter @kassandra-market/oracles build` (or `pnpm -r build`). See
 [Run locally](/app/run-locally).
 </Warning>
 
@@ -48,7 +48,7 @@ amounts are raw base units; staking requires **KASS**, and a missing KASS ATA is
 Forms gate on both a connected wallet and the oracle's current phase.
 
 ```text
-page/component  →  build*Ixs (pure)  →  @kassandra/sdk  →  wallet-adapter sendTransaction
+page/component  →  build*Ixs (pure)  →  @kassandra-market/oracles  →  wallet-adapter sendTransaction
 ```
 
 The write surface, by phase:

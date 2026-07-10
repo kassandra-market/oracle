@@ -8,7 +8,7 @@
  * vault `#[event_cpi]` event authority (derived under the vault program).
  */
 import { TransactionInstruction } from "@solana/web3.js";
-import { metadao, resolveMarket } from "@kassandra-market/sdk";
+import { metadao, resolveMarket } from "@kassandra-market/markets";
 import { toAddress, type AddressInput } from "./ata";
 
 export interface BuildResolveArgs {

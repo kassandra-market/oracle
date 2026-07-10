@@ -8,7 +8,7 @@
  * with a typed `ValidationError`.
  */
 import { TransactionInstruction } from "@solana/web3.js";
-import { contribute } from "@kassandra-market/sdk";
+import { contribute } from "@kassandra-market/markets";
 import type { IndexerClient } from "../../lib/indexer";
 import { ValidationError } from "../writeAction";
 import { ensureKassAta, toAddress, type AddressInput } from "./ata";

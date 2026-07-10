@@ -2,12 +2,12 @@
 //! `Ix` discriminant, and carry the accounts + raw data.
 //!
 //! The program id and the instruction discriminants are REUSED from the Rust SDK
-//! (`kassandra_sdk`, whose single source of truth is the on-chain
+//! (`kassandra_oracles_sdk`, whose single source of truth is the on-chain
 //! `kassandra_program`), not re-declared here — so a change to the wire contract
 //! (a renamed or renumbered instruction) propagates automatically.
 
 use carbon_core::instruction::InstructionDecoder;
-use kassandra_sdk::Ix;
+use kassandra_oracles_sdk::Ix;
 use solana_instruction::Instruction;
 use solana_pubkey::Pubkey;
 
@@ -44,7 +44,7 @@ const IX_VARIANTS: [Ix; 24] = [
 /// The Kassandra program id (from the SDK), as the `solana_pubkey::Pubkey` type
 /// Carbon's `Instruction` uses.
 pub fn program_id() -> Pubkey {
-    Pubkey::new_from_array(kassandra_sdk::PROGRAM_ID.to_bytes())
+    Pubkey::new_from_array(kassandra_oracles_sdk::PROGRAM_ID.to_bytes())
 }
 
 /// The program id as a base58 string (for the API's `/status`).
@@ -126,7 +126,7 @@ mod tests {
     fn program_id_matches_the_sdk() {
         assert_eq!(
             program_id().to_bytes(),
-            kassandra_sdk::PROGRAM_ID.to_bytes()
+            kassandra_oracles_sdk::PROGRAM_ID.to_bytes()
         );
     }
 

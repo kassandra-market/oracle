@@ -15,7 +15,7 @@
  * compute budget for the three chained CPIs.
  */
 import { type TransactionInstruction } from "@solana/web3.js";
-import { flows, type Config, type Market } from "@kassandra-market/sdk";
+import { flows, type Config, type Market } from "@kassandra-market/markets";
 import { marketRefs } from "./marketRefs";
 import { setComputeUnitLimitIx } from "./compute";
 import { type AddressInput } from "./ata";

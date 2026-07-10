@@ -6,7 +6,7 @@
 //! (`model_id` / `params_hash` / `io_hash` + the chosen `option`) that
 //! `submit_ai_claim` records and a challenger can independently reproduce.
 //!
-//! The on-chain program (via `kassandra_sdk`, which re-exports it) is the source of truth for the
+//! The on-chain program (via `kassandra_oracles_sdk`, which re-exports it) is the source of truth for the
 //! claim encoding; see [`constants`] for what the runner reuses from it.
 //!
 //! Task R0 scaffolds the crate, the provider trait + a deterministic mock, and

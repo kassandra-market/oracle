@@ -1,7 +1,11 @@
 [package]
 name = "kassandra-market-program"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
+# The published surface is the SDKs; the market program is consumed on-chain and
+# by the standalone `kassandra-markets-sdk` (which vendors what it needs), so the
+# program crate itself is not released to crates.io.
+publish = false
 
 [lib]
 crate-type = ["cdylib", "lib"]
@@ -28,7 +32,7 @@ litesvm = "0.6"
 solana-sdk = "2"
 spl-token = { version = "6", features = ["no-entrypoint"] }
 bytemuck = { workspace = true }
-kassandra-market-sdk = { workspace = true }
+kassandra-markets-sdk = { workspace = true }
 
 [features]
 no-entrypoint = []

@@ -1,4 +1,4 @@
-import type { Market, Contribution } from "@kassandra-market/sdk";
+import type { Market, Contribution } from "@kassandra-market/markets";
 import { Card } from "../../ui";
 import { buildClaimLpIxs } from "../../../market/data/actions";
 import { useWriteAction } from "../../../market/hooks/useWriteAction";

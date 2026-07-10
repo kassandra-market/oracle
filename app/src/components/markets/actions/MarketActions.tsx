@@ -1,4 +1,4 @@
-import { MarketStatus, isTerminal } from "@kassandra-market/sdk";
+import { MarketStatus, isTerminal } from "@kassandra-market/markets";
 import type { MarketDetail } from "../../../market/data/markets";
 import { fundingActions, fundingProgress } from "../../../market/lib/marketView";
 import { useConfig } from "../../../market/hooks/useMarketDetail";

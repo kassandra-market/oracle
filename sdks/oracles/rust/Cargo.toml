@@ -1,0 +1,24 @@
+[package]
+name = "kassandra-oracles-sdk"
+version.workspace = true
+edition = "2021"
+description = "Rust client SDK for the Kassandra oracle (dispute-core) program: PDA derivations, instruction builders, and account decoders. Single source of truth is the on-chain program (kassandra-program), so there is no cross-crate drift."
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "kassandra_oracles_sdk"
+
+[dependencies]
+# The on-chain program, as a plain host library (no SBF entrypoint). Provides the
+# canonical Ix discriminants, config seeds/constants, and the account layout
+# structs the decoders return — so the SDK never re-declares the wire contract.
+kassandra-program = { workspace = true, features = ["no-entrypoint"] }
+
+# Granular solana client crates (NOT solana-sdk / solana-client): just the pieces
+# needed to derive PDAs and emit a client `Instruction`. `curve25519` (set on the
+# workspace dep) enables host-side `find_program_address`.
+solana-pubkey = { workspace = true }
+solana-instruction = { workspace = true }
+
+bytemuck = { workspace = true }

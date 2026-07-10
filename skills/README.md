@@ -32,8 +32,8 @@ protocol):
 
 | Skill | What it's for |
 | --- | --- |
-| [`kassandra-ts-client`](./kassandra-ts-client/SKILL.md) | Build a Kassandra instruction, decode an account, or derive a PDA from **TypeScript / a dApp** via `@kassandra/sdk`. |
-| [`kassandra-rust-client`](./kassandra-rust-client/SKILL.md) | Same from **Rust** (a test harness, keeper/bot, or service) via the `kassandra-sdk` crate. |
+| [`kassandra-ts-client`](./kassandra-ts-client/SKILL.md) | Build a Kassandra instruction, decode an account, or derive a PDA from **TypeScript / a dApp** via `@kassandra-market/oracles`. |
+| [`kassandra-rust-client`](./kassandra-rust-client/SKILL.md) | Same from **Rust** (a test harness, keeper/bot, or service) via the `kassandra-oracles-sdk` crate. |
 | [`kassandra-ai-runner`](./kassandra-ai-runner/SKILL.md) | Produce, submit, or verify a Kassandra **AI claim** with the `kassandra-runner` (`run` / `verify` / keeper `--submit`). |
 
 **General technique:**

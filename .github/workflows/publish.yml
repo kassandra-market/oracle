@@ -1,0 +1,115 @@
+name: Publish
+
+# Release the SDKs on merge to master. Both jobs are idempotent: each artifact is
+# published only if its version is not already on the registry, so re-running (or a
+# master push that didn't bump the version) is a harmless no-op. Bump the version in
+# ONE place — `[workspace.package].version` in Cargo.toml — run `make version-sync`,
+# and merge; whatever is new gets released.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: {}
+
+# Never let two publish runs race the registries.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  # ---- Rust crates → crates.io ----------------------------------------------
+  # Order matters: kassandra-program must exist on the index before
+  # kassandra-oracles-sdk (which depends on it) can publish. `cargo publish` waits
+  # for each crate to be available in the index before returning, so the sequential
+  # calls below are safe. kassandra-markets-sdk is standalone (solana-sdk v2 island).
+  crates:
+    name: crates.io
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Publish crates (skip versions already on crates.io)
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION=$(node -e "const fs=require('fs');const m=fs.readFileSync('Cargo.toml','utf8').match(/\[workspace\.package\][\s\S]*?version\s*=\s*\"([^\"]+)\"/);if(!m){console.error('no workspace version');process.exit(1)}process.stdout.write(m[1])")
+          echo "Workspace version: $VERSION"
+
+          publish_crate() {
+            local name="$1"
+            local code
+            code=$(curl -s -o /dev/null -w '%{http_code}' \
+              -H 'User-Agent: kassandra-publish-ci (https://github.com/kassandra-market/oracle)' \
+              "https://crates.io/api/v1/crates/$name/$VERSION")
+            if [ "$code" = "200" ]; then
+              echo "✓ $name@$VERSION already on crates.io — skipping"
+              return 0
+            fi
+            echo "→ publishing $name@$VERSION"
+            cargo publish -p "$name" --locked
+          }
+
+          # Dependency order: the program crate first, then the SDK that depends on it.
+          publish_crate kassandra-program
+          publish_crate kassandra-oracles-sdk
+          publish_crate kassandra-markets-sdk
+
+  # ---- TypeScript packages → npm --------------------------------------------
+  # @kassandra-market/markets depends on @kassandra-market/oracles (workspace:*),
+  # which pnpm rewrites to the real version at publish time — so oracles publishes
+  # first. Both are scoped packages published with public access (publishConfig).
+  npm:
+    name: npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify TS package versions match the workspace
+        run: node scripts/sync-version.mjs --check
+
+      - name: Build SDKs
+        run: |
+          pnpm --filter @kassandra-market/oracles build
+          pnpm --filter @kassandra-market/markets build
+
+      - name: Publish packages (skip versions already on npm)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION=$(node -e "const fs=require('fs');const m=fs.readFileSync('Cargo.toml','utf8').match(/\[workspace\.package\][\s\S]*?version\s*=\s*\"([^\"]+)\"/);process.stdout.write(m[1])")
+          echo "Workspace version: $VERSION"
+
+          publish_pkg() {
+            local name="$1"
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "✓ $name@$VERSION already on npm — skipping"
+              return 0
+            fi
+            echo "→ publishing $name@$VERSION"
+            pnpm --filter "$name" publish --no-git-checks --access public
+          }
+
+          publish_pkg @kassandra-market/oracles
+          publish_pkg @kassandra-market/markets

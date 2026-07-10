@@ -51,7 +51,7 @@ import {
   ammV04,
   futarchy,
   pda,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 
 import { ValidationError, type AddressInput } from "../actions";
 import { conditionalTokenMint } from "./challengeTrade";

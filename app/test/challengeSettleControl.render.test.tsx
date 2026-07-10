@@ -25,7 +25,7 @@ import React, { StrictMode, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ConnectionContext, WalletContext } from "@solana/wallet-adapter-react";
 import type { WalletContextState } from "@solana/wallet-adapter-react";
-import type { Market, Oracle, Proposer } from "@kassandra/sdk";
+import type { Market, Oracle, Proposer } from "@kassandra-market/oracles";
 import { describe, expect, it } from "vitest";
 
 import { ChallengeControl } from "../src/components/oracles/actions/ChallengeControl.tsx";

@@ -1,23 +1,23 @@
 ---
 title: "TypeScript SDK"
-description: "The hand-written @kassandra/sdk — no IDL, async PDA derivers and instruction builders, account decoders, and external-protocol submodules."
+description: "The hand-written @kassandra-market/oracles — no IDL, async PDA derivers and instruction builders, account decoders, and external-protocol submodules."
 ---
 
-The SDK is the canonical TypeScript client for Kassandra, published in-repo as **`@kassandra/sdk`**
+The SDK is the canonical TypeScript client for Kassandra, published in-repo as **`@kassandra-market/oracles`**
 (`sdk/package.json`). Because the program is Pinocchio and has **no Anchor IDL**, the SDK is written
 by hand: every instruction's wire bytes and every account layout are mirrored from the Rust program
-and kept in lockstep by a parity test (`sdk/test/parity.test.ts`).
+and kept in lockstep by a parity test (`sdks/oracles/ts/test/parity.test.ts`).
 
 ## Package
 
-- **Name:** `@kassandra/sdk` — `"private": true`, `"type": "module"` (ESM only). Not published to
-  npm; consumed in-repo from `sdk/dist/`.
+- **Name:** `@kassandra-market/oracles` — `"private": true`, `"type": "module"` (ESM only). Not published to
+  npm; consumed in-repo from `sdks/oracles/ts/dist/`.
 - **Exports:** a single entry `"."` → `./dist/index.js` (+ `.d.ts`), `"sideEffects": false`.
 - **Dependencies:** `@solana/kit ^6.10.0`, `@solana/web3.js 3.0.0-rc.2`. Dev: `litesvm 1.2.0`,
   `vitest`, `typescript`.
 
 ```ts
-import { createOracle, decodeOracle, pda, Phase } from "@kassandra/sdk";
+import { createOracle, decodeOracle, pda, Phase } from "@kassandra-market/oracles";
 ```
 
 The public barrel (`sdk/src/index.ts`) re-exports constants, the flat + namespaced `pda` helpers,

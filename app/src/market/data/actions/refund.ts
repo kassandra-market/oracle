@@ -7,7 +7,7 @@
  * whose ATA was since closed still gets paid), then append the SDK `refund` ix.
  */
 import { TransactionInstruction } from "@solana/web3.js";
-import { refund } from "@kassandra-market/sdk";
+import { refund } from "@kassandra-market/markets";
 import type { IndexerClient } from "../../lib/indexer";
 import { ensureKassAta, toAddress, type AddressInput } from "./ata";
 

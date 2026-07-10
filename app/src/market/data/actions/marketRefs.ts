@@ -7,7 +7,7 @@
  * funding-form call sites' signature (and the typed {@link ValidationError} on a
  * bad market pubkey) unchanged.
  */
-import { flows, type Market } from "@kassandra-market/sdk";
+import { flows, type Market } from "@kassandra-market/markets";
 import { toAddress, type AddressInput } from "./ata";
 
 /**

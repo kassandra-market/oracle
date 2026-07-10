@@ -8,7 +8,7 @@
  * the Kassandra account decoders + clock helpers.
  */
 import { Address } from '@solana/web3.js'
-import { decodeFact, decodeOracle, decodeProposer, decodeProtocol } from '@kassandra/sdk'
+import { decodeFact, decodeOracle, decodeProposer, decodeProtocol } from '@kassandra-market/oracles'
 
 import { KASSANDRA_PROGRAM, poll, surfpoolRpc } from './rpc'
 

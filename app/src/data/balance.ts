@@ -11,7 +11,7 @@
  * (the hook) can treat it softly and NOT hard-block the form on a flaky fetch.
  */
 import type { Connection } from '@solana/web3.js'
-import { associatedTokenAccount } from '@kassandra/sdk'
+import { associatedTokenAccount } from '@kassandra-market/oracles'
 import type { AddressInput } from '../data/actions'
 
 /**

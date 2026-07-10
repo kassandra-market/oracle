@@ -1,7 +1,7 @@
 use kassandra_market_program::cpi::metadao as prog_md;
 use kassandra_market_program::instruction::Ix;
-use kassandra_market_sdk as sdk;
-use kassandra_market_sdk::metadao as sdk_md;
+use kassandra_markets_sdk as sdk;
+use kassandra_markets_sdk::metadao as sdk_md;
 
 #[test]
 fn ix_discriminants_match_sdk() {
@@ -22,7 +22,7 @@ fn ix_discriminants_match_sdk() {
 fn program_id_matches_sdk() {
     assert_eq!(
         kassandra_market_program::ID.to_bytes(),
-        kassandra_market_sdk::PROGRAM_ID.to_bytes()
+        kassandra_markets_sdk::PROGRAM_ID.to_bytes()
     );
 }
 

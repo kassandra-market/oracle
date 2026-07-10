@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { pda, type Market } from "@kassandra-market/sdk";
+import { pda, type Market } from "@kassandra-market/markets";
 import { Card } from "../../ui";
 import {
   buildBuyIxs,

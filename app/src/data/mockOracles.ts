@@ -8,8 +8,8 @@
  * over the live {@link Connection}.
  */
 import type { Address } from '@solana/web3.js'
-import { Phase } from '@kassandra/sdk'
-import type { AiClaim, Fact, Market, Oracle, Proposer } from '@kassandra/sdk'
+import { Phase } from '@kassandra-market/oracles'
+import type { AiClaim, Fact, Market, Oracle, Proposer } from '@kassandra-market/oracles'
 import { OracleNotFoundError, type OracleDetail, type OracleSummary } from './oracles'
 import {
   AMM_ACCOUNT_DISCRIMINATOR,

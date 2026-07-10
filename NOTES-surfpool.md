@@ -33,8 +33,8 @@
 5. Teardown: `SIGKILL` the child process. Nothing else to clean up (in-memory
    simnet; no on-disk ledger to wipe).
 
-All of this is implemented in `sdk/test/surfpool/harness.ts` (the
-`SurfpoolHarness`), proven by `sdk/test/surfpool/surfpool-smoke.test.ts`.
+All of this is implemented in `sdks/oracles/ts/test/surfpool/harness.ts` (the
+`SurfpoolHarness`), proven by `sdks/oracles/ts/test/surfpool/surfpool-smoke.test.ts`.
 
 ## Deploying the LOCAL program at the FIXED id — the key finding
 

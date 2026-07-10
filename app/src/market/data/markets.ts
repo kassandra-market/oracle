@@ -19,7 +19,7 @@ import {
   type MarketOracle,
   type Phase,
   type metadao,
-} from "@kassandra-market/sdk";
+} from "@kassandra-market/markets";
 import type {
   ConfigDto,
   ContributionDto,

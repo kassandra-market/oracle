@@ -7,7 +7,7 @@
  * seam, and each write is asserted to land on-chain by decoding the created
  * account.
  *
- * Recipe (mirrors the SDK/read E2Es — reusing `sdk/test/surfpool/harness.ts`):
+ * Recipe (mirrors the SDK/read E2Es — reusing `sdks/oracles/ts/test/surfpool/harness.ts`):
  *   boot + deploy + init_protocol + create an oracle (nonce 1, 2 options);
  *   fund the user KEYPAIR's KASS at its canonical ATA so the action layer uses it.
  *
@@ -37,8 +37,8 @@ import {
   finalizeProposals,
   initProtocol,
   propose,
-} from "@kassandra/sdk";
-import * as pda from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
+import * as pda from "@kassandra-market/oracles";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -47,7 +47,7 @@ import {
   surfpoolReady,
   toHex,
   tokenAccountBytes,
-} from "../../sdk/test/surfpool/harness.ts";
+} from "../../sdks/oracles/ts/test/surfpool/harness.ts";
 import { buildProposeIxs, buildSubmitFactIxs, buildVoteFactIxs } from "../src/data/actions.ts";
 import { keypairSender, sendAndConfirm } from "../src/data/send.ts";
 

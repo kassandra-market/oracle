@@ -56,8 +56,8 @@ There is a **single app** (both `/oracles` and `/markets`) and a **single indexe
 | [`programs/kassandra/`](./programs/kassandra) | The oracle Solana program, written in **Pinocchio** (not Anchor). Owns oracle state, phases, facts, AI claims, plurality, staking, emissions, and the dynamic fee. Program ID `KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY`. |
 | [`programs/kassandra-market/`](./programs/kassandra-market) | The **prediction-market** program — a Pinocchio wrapper over MetaDAO v0.4 vault + amm, resolved by the oracle. |
 | [`runner/`](./runner) | The open-source AI runner (`kassandra-runner`). Applies the fixed interpretation to the agreed facts and produces a categorical answer plus verifiable metadata. |
-| [`sdk/`](./sdk) · [`sdk-market/`](./sdk-market) | Hand-written TypeScript clients (`@kassandra/sdk`, `@kassandra-market/sdk`) — instruction builders, account decoders, PDA helpers. No IDL; layouts mirror the programs. |
-| [`sdk-rs/`](./sdk-rs) · [`sdk-rs-market/`](./sdk-rs-market) | The Rust SDKs (`kassandra-sdk`, `kassandra-market-sdk`). |
+| [`sdks/oracles/ts/`](./sdks/oracles/ts) · [`sdks/markets/ts/`](./sdks/markets/ts) | Hand-written TypeScript clients (`@kassandra-market/oracles`, `@kassandra-market/markets`) — instruction builders, account decoders, PDA helpers. No IDL; layouts mirror the programs. |
+| [`sdks/oracles/rust/`](./sdks/oracles/rust) · [`sdks/markets/rust/`](./sdks/markets/rust) | The Rust SDKs (`kassandra-oracles-sdk`, `kassandra-markets-sdk`). |
 | [`indexer/`](./indexer) | The single Carbon indexer — two pipelines (oracle transactions → `events`; market accounts → `market_accounts`) into one Postgres, serving both read + gateway APIs. |
 | [`app/`](./app) | The single frontend (Vite + React) — both the oracle (`/oracles`) and market (`/markets`) sections. |
 | [`docs-site/`](./docs-site) | The Mintlify documentation site (published via GitHub Actions → GitHub Pages) — covers both products. |
@@ -74,7 +74,7 @@ AMM; neither reimplements the vault or AMM.
 
 - **Rust** (stable — see [`rust-toolchain.toml`](./rust-toolchain.toml)) with the
   Solana toolchain (`cargo build-sbf`, from the Solana CLI / Agave).
-- **Node.js** and **pnpm** (the `sdk`, `sdk-market`, `app`, and `docs-site` form a pnpm workspace).
+- **Node.js** and **pnpm** (the `sdk`, `sdks/markets/ts`, `app`, and `docs-site` form a pnpm workspace).
 - [`just`](https://github.com/casey/just) for the program build/test recipes.
 - For the e2e / dev-stack targets: [`surfpool`](https://surfpool.run) and Postgres
   (`initdb`/`pg_ctl`).
@@ -117,8 +117,8 @@ The tests are **LiteSVM** unit + invariant + CPI-integration tests. `just test` 
 
 ```bash
 pnpm install
-pnpm --filter ./sdk build         # the app imports the built oracle SDK
-pnpm --filter ./sdk-market build  # …and the market SDK (note: `--filter sdk` won't match `@kassandra/sdk`)
+pnpm --filter @kassandra-market/oracles build         # the app imports the built oracle SDK
+pnpm --filter ./sdks/markets/ts build  # …and the market SDK (note: `--filter sdk` won't match `@kassandra-market/oracles`)
 pnpm --filter ./app dev           # serve the frontend locally
 ```
 

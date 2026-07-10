@@ -27,7 +27,7 @@
  * before the compute cost, so batching cannot work.)
  */
 import { Address, type TransactionInstruction } from "@solana/web3.js";
-import { flows } from "@kassandra-market/sdk";
+import { flows } from "@kassandra-market/markets";
 import type { IndexerClient } from "../../lib/indexer";
 import { setComputeUnitLimitIx } from "./compute";
 import { toAddress, type AddressInput } from "./ata";

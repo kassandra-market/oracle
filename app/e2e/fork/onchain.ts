@@ -5,9 +5,9 @@
  * compose→settle flow needs (extra conditional tokens to swap; a past
  * `Market.twap_end` so the settle gate opens without waiting the TWAP window).
  */
-import { decodeMarket } from '@kassandra/sdk'
+import { decodeMarket } from '@kassandra-market/oracles'
 
-import { tokenAccountAmount, tokenAccountBytes } from '../../../sdk/test/surfpool/harness.ts'
+import { tokenAccountAmount, tokenAccountBytes } from '../../../sdks/oracles/ts/test/surfpool/harness.ts'
 import { KASSANDRA_PROGRAM as PROGRAM, TOKEN_PROGRAM, poll, surfpoolRpc } from '../rpc'
 
 const { getAccountData, setAccountRaw } = surfpoolRpc('http://127.0.0.1:8940')

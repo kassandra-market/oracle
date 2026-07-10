@@ -38,8 +38,8 @@ fi
 echo "==> [3/5] build the program (.so), the SDKs, and the indexer binary"
 # Always rebuild (incremental) so a stale .so after a program change isn't deployed.
 just build
-pnpm --filter sdk build >/dev/null
-pnpm --filter sdk-market build >/dev/null
+pnpm --filter @kassandra-market/oracles build >/dev/null
+pnpm --filter @kassandra-market/markets build >/dev/null
 cargo build --release --locked --manifest-path indexer/Cargo.toml
 
 echo "==> [4/5] ensure Playwright + Chromium are installed"

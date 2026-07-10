@@ -36,7 +36,7 @@ import {
   TOKEN_PROGRAM_ID,
   ammV04,
   type Market,
-} from "@kassandra/sdk";
+} from "@kassandra-market/oracles";
 
 import { ValidationError, type AddressInput } from "../actions";
 import type { AmmV04 } from "../ammV04";

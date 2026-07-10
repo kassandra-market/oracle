@@ -154,7 +154,7 @@ fn setup_active_two_contributors() -> Setup {
 #[test]
 fn claim_lp_happy_two_contributors_pro_rata() {
     let mut s = setup_active_two_contributors();
-    let (lp_vault, _) = kassandra_market_sdk::pda::lp_vault(&s.market);
+    let (lp_vault, _) = kassandra_markets_sdk::pda::lp_vault(&s.market);
     assert_eq!(s.ctx.token_balance(lp_vault), s.lp_total, "lp_vault seeded");
 
     let a_share = expected_share(s.lp_total, SEED_A, s.total_contributed);
@@ -165,7 +165,7 @@ fn claim_lp_happy_two_contributors_pro_rata() {
     // rent returned to the creator.
     let a_contrib_rent = s
         .ctx
-        .lamports(kassandra_market_sdk::pda::contribution(&s.market, &s.creator.pubkey()).0);
+        .lamports(kassandra_markets_sdk::pda::contribution(&s.market, &s.creator.pubkey()).0);
     assert!(a_contrib_rent > 0, "A Contribution funded pre-claim");
     let a_wallet_before = s.ctx.lamports(s.creator.pubkey());
     let a_lp_ata = s.ctx.create_token_account(s.lp_mint, s.creator.pubkey(), 0);
@@ -174,7 +174,7 @@ fn claim_lp_happy_two_contributors_pro_rata() {
     assert_eq!(s.ctx.token_balance(a_lp_ata), a_share, "A pro-rata LP");
 
     // A's Contribution is CLOSED (reaped) and its rent went back to A's wallet.
-    let (a_contrib, _) = kassandra_market_sdk::pda::contribution(&s.market, &s.creator.pubkey());
+    let (a_contrib, _) = kassandra_markets_sdk::pda::contribution(&s.market, &s.creator.pubkey());
     assert_eq!(s.ctx.lamports(a_contrib), 0, "A Contribution closed");
     assert_eq!(
         s.ctx.lamports(s.creator.pubkey()),
@@ -211,7 +211,7 @@ fn claim_lp_happy_two_contributors_pro_rata() {
     );
 
     // Both contributions closed; counter at 0.
-    let (b_contrib, _) = kassandra_market_sdk::pda::contribution(&s.market, &s.c2.pubkey());
+    let (b_contrib, _) = kassandra_markets_sdk::pda::contribution(&s.market, &s.c2.pubkey());
     assert_eq!(s.ctx.lamports(a_contrib), 0, "A Contribution closed");
     assert_eq!(s.ctx.lamports(b_contrib), 0, "B Contribution closed");
     let m: Market = s.ctx.read_pod(s.market);
@@ -227,7 +227,7 @@ fn claim_lp_rejects_second_claim_contribution_closed() {
 
     // The claim CLOSED the Contribution, so a second claim can't even load it —
     // the absence of the account is the idempotency (fails the load guard).
-    let (a_contrib, _) = kassandra_market_sdk::pda::contribution(&s.market, &s.creator.pubkey());
+    let (a_contrib, _) = kassandra_markets_sdk::pda::contribution(&s.market, &s.creator.pubkey());
     assert_eq!(
         s.ctx.lamports(a_contrib),
         0,
@@ -270,7 +270,7 @@ fn claim_lp_rejects_wrong_dest_owner() {
     assert_eq!(custom_code(&res), Some(MarketError::InvalidAccount as u32));
 
     // Stake untouched.
-    let (a_contrib, _) = kassandra_market_sdk::pda::contribution(&s.market, &s.creator.pubkey());
+    let (a_contrib, _) = kassandra_markets_sdk::pda::contribution(&s.market, &s.creator.pubkey());
     assert_eq!(s.ctx.read_pod::<Contribution>(a_contrib).claimed, 0);
 }
 
@@ -311,7 +311,7 @@ fn claim_lp_succeeds_after_resolution() {
         "still gets pro-rata LP"
     );
     // A claimed first (not the last claimer) → its Contribution is closed (reaped).
-    let (a_contrib, _) = kassandra_market_sdk::pda::contribution(&s.market, &s.creator.pubkey());
+    let (a_contrib, _) = kassandra_markets_sdk::pda::contribution(&s.market, &s.creator.pubkey());
     assert_eq!(
         s.ctx.lamports(a_contrib),
         0,
@@ -357,14 +357,14 @@ fn claim_lp_dust_share_zero_still_closes_contribution() {
     let kass = ctx.create_mint(9);
     let lp_mint = ctx.create_mint(9);
     let oracle = Pubkey::new_unique();
-    let (market, mbump) = kassandra_market_sdk::pda::market(&oracle, 0);
+    let (market, mbump) = kassandra_markets_sdk::pda::market(&oracle, 0);
     let contributor = Keypair::new();
     let (contribution, cbump) =
-        kassandra_market_sdk::pda::contribution(&market, &contributor.pubkey());
+        kassandra_markets_sdk::pda::contribution(&market, &contributor.pubkey());
 
     // A market-PDA-owned LP token account holding a tiny LP total, placed at the
     // canonical `lp_vault` PDA (the harness `claim_lp` derives that address).
-    let (lp_vault, _) = kassandra_market_sdk::pda::lp_vault(&market);
+    let (lp_vault, _) = kassandra_markets_sdk::pda::lp_vault(&market);
     set_token_at(&mut ctx, lp_vault, lp_mint, market, 1);
 
     let mut m = Market::zeroed();

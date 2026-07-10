@@ -32,8 +32,8 @@ fn seed_market(
     lp_vault: Pubkey,
 ) -> Pubkey {
     use bytemuck::Zeroable;
-    let (market, bump) = kassandra_market_sdk::pda::market(&oracle, 0);
-    let (escrow, _) = kassandra_market_sdk::pda::escrow(&market);
+    let (market, bump) = kassandra_markets_sdk::pda::market(&oracle, 0);
+    let (escrow, _) = kassandra_markets_sdk::pda::escrow(&market);
     let mut m = Market::zeroed();
     m.account_type = AccountType::Market.as_u8();
     m.oracle = oracle.to_bytes().into();
@@ -134,10 +134,10 @@ fn close_market_tolerates_dust_donation_into_escrow() {
     // other 0-balance accounts) still close; only the dusted escrow is left behind.
     let mut a = setup_settled_activated_all_claimed();
     let market = a.market;
-    let (escrow, _) = kassandra_market_sdk::pda::escrow(&market);
-    let (cyes, _) = kassandra_market_sdk::pda::market_cyes(&market);
-    let (cno, _) = kassandra_market_sdk::pda::market_cno(&market);
-    let (lp_vault, _) = kassandra_market_sdk::pda::lp_vault(&market);
+    let (escrow, _) = kassandra_markets_sdk::pda::escrow(&market);
+    let (cyes, _) = kassandra_markets_sdk::pda::market_cyes(&market);
+    let (cno, _) = kassandra_markets_sdk::pda::market_cno(&market);
+    let (lp_vault, _) = kassandra_markets_sdk::pda::lp_vault(&market);
 
     // The griefer's dust donation into escrow.
     a.ctx.set_token_amount(escrow, 1);
@@ -166,10 +166,10 @@ fn close_market_tolerates_dust_donation_into_escrow() {
 fn close_market_activated_happy_reclaims_all_rent() {
     let mut a = setup_settled_activated_all_claimed();
     let market = a.market;
-    let (escrow, _) = kassandra_market_sdk::pda::escrow(&market);
-    let (cyes, _) = kassandra_market_sdk::pda::market_cyes(&market);
-    let (cno, _) = kassandra_market_sdk::pda::market_cno(&market);
-    let (lp_vault, _) = kassandra_market_sdk::pda::lp_vault(&market);
+    let (escrow, _) = kassandra_markets_sdk::pda::escrow(&market);
+    let (cyes, _) = kassandra_markets_sdk::pda::market_cyes(&market);
+    let (cno, _) = kassandra_markets_sdk::pda::market_cno(&market);
+    let (lp_vault, _) = kassandra_markets_sdk::pda::lp_vault(&market);
 
     // All four token accounts are 0-balance (activate/collect drained cyes/cno &
     // escrow; the last claimer swept lp_vault).
@@ -308,7 +308,7 @@ fn close_market_cancelled_closes_escrow_and_market_only() {
     let creator_ata = ctx.create_token_account(kass, creator.pubkey(), 500_000_000);
     let (market, res) = ctx.create_market(&creator, oracle, kass, creator_ata, 200_000_000);
     assert!(res.is_ok(), "{res:?}");
-    let (escrow, _) = kassandra_market_sdk::pda::escrow(&market);
+    let (escrow, _) = kassandra_markets_sdk::pda::escrow(&market);
 
     // Cancel (oracle terminal), then refund the sole contributor → escrow drained,
     // Contribution closed, open_contributions == 0.
