@@ -49,6 +49,14 @@ const METADAO_FIXTURES = [
 
 export const MIN_LIQUIDITY = 1_000_000_000n // 1 KASS (9 decimals) funding floor
 const BELOW_FLOOR = 100_000_000n // a partially-funded (Funding) seed
+
+/**
+ * A step logger. `make dev` passes one to narrate each seeding action; the
+ * Playwright global-setups omit it (defaulting to a no-op) so test output stays
+ * quiet.
+ */
+export type StepLog = (msg: string) => void
+const noopLog: StepLog = () => {}
 const FEE_BPS = 100 // 1%
 
 /** Write a local ELF at `id` as a BPFLoader2 executable (surfpool JIT-loads it). */
@@ -69,12 +77,13 @@ async function deployElf(ctx: SeedCtx, id: string, soPath: string): Promise<void
  * run once per surfpool node; shared by {@link seedMarkets} and the active-market
  * seed used by the candle e2e.
  */
-export async function deployAndInitMarket(ctx: SeedCtx): Promise<string> {
+export async function deployAndInitMarket(ctx: SeedCtx, log: StepLog = noopLog): Promise<string> {
   const h = ctx.harness
   const payer = ctx.payer.publicKey.toString()
   const kassMint = ctx.kassMint.publicKey.toString()
 
   // 1) Deploy the market program + the MetaDAO v0.4 fixtures it CPIs.
+  log(`deploying the market program + ${METADAO_FIXTURES.length} MetaDAO v0.4 fixtures`)
   await deployElf(ctx, MARKET_PROGRAM_ID.toString(), MARKET_SO)
   for (const { id, file } of METADAO_FIXTURES) {
     await deployElf(ctx, id, join(FIXTURES_DIR, file))
@@ -98,6 +107,7 @@ export async function deployAndInitMarket(ctx: SeedCtx): Promise<string> {
 
   // 3) Fund the payer's KASS ATA (creators seed markets from it) + use it as the
   //    protocol fee destination. Same mint as the browser wallet already holds.
+  log('funding the payer KASS ATA + fabricating upgrade-authority ProgramData')
   const payerKass = (await associatedTokenAccount(payer, kassMint)).address.toString()
   await h.setAccount(payerKass, {
     lamports: 5_000_000,
@@ -107,6 +117,7 @@ export async function deployAndInitMarket(ctx: SeedCtx): Promise<string> {
   })
 
   // 4) Init the governed Config singleton.
+  log('initializing the governed Config singleton')
   await sendIx(
     ctx,
     await initConfig({
@@ -167,6 +178,7 @@ export async function createAndActivateMarket(
   oracle: string,
   payerKass: string,
   opts: CreateActiveMarketOpts = {},
+  log: StepLog = noopLog,
 ): Promise<ActiveMarketSeed> {
   const outcomeIndex = opts.outcomeIndex ?? 0
   const seedAmount = opts.seedAmount ?? MIN_LIQUIDITY
@@ -177,12 +189,14 @@ export async function createAndActivateMarket(
   // createMarket with seed == floor funds the market fully in one shot (Funding →
   // activatable). Outcome i = YES pays if the oracle resolves to option i.
   const market = (await marketPda.market(oracle, outcomeIndex)).address.toString()
+  log(`creating market ${market} (outcome ${outcomeIndex}) funded to the floor`)
   await sendIx(
     ctx,
     await createMarket({ creator: payer, oracle, kassMint, creatorKassAta: payerKass, seedAmount, outcomeIndex }),
   )
 
   // Compose the MetaDAO market (3 ixs), then activate (drains escrow → seeds pool).
+  log('composing the MetaDAO question / conditional vault / AMM')
   const { instructions: composeIxs, refs } = await flows.composeMarketInstructions({
     market,
     oracle,
@@ -192,11 +206,13 @@ export async function createAndActivateMarket(
   await sendIxs(ctx, withCu(COMPOSE_CU, composeIxs[0]))
   await sendIxs(ctx, withCu(COMPOSE_CU, composeIxs[1]))
   await sendIxs(ctx, withCu(COMPOSE_CU, composeIxs[2]))
+  log('activating the market → live cYES/cNO pool')
   await sendIxs(ctx, withCu(ACTIVATE_CU, await flows.activateInstruction({ refs, payer })))
 
   const cyesAta = (await associatedTokenAccount(payer, refs.yesMint.toString())).address
   const cnoAta = (await associatedTokenAccount(payer, refs.noMint.toString())).address
   if (opts.split) {
+    log('splitting KASS into a cYES + cNO trading inventory')
     // Fabricate the payer's cYES / cNO ATAs (empty), then split KASS into a cYES+cNO
     // inventory so a swap can push the price either way.
     for (const [ata, mint] of [
@@ -247,27 +263,31 @@ export async function createAndActivateMarket(
 export async function seedMarkets(
   ctx: SeedCtx,
   oracles: Record<string, Record<string, string>>,
+  log: StepLog = noopLog,
 ): Promise<{ seeded: Record<string, unknown>; active: ActiveMarketSeed | null }> {
   const payer = ctx.payer.publicKey.toString()
   const kassMint = ctx.kassMint.publicKey.toString()
 
   // 1-4) Deploy the program + fixtures, fabricate ProgramData, fund the payer KASS
   //       ATA, and init the Config singleton.
-  const payerKass = await deployAndInitMarket(ctx)
+  const payerKass = await deployAndInitMarket(ctx, log)
 
   // 5) Pre-create demo markets on the already-seeded oracles.
   const createOne = async (oracle: string, outcomeIndex: number, seedAmount: bigint) => {
+    const market = (await marketPda.market(oracle, outcomeIndex)).address.toString()
+    log(`creating market ${market} (outcome ${outcomeIndex}, Funding stage)`)
     await sendIx(
       ctx,
       await createMarket({ creator: payer, oracle, kassMint, creatorKassAta: payerKass, seedAmount, outcomeIndex }),
     )
-    return (await marketPda.market(oracle, outcomeIndex)).address.toString()
+    return market
   }
 
   const seeded: Record<string, unknown> = { kassMint, config: (await marketPda.config()).address.toString() }
 
   // The 3-option "proposal" oracle → a categorical spread of 3 Funding sub-markets.
   if (oracles.proposal?.address) {
+    log('creating a categorical spread of 3 Funding sub-markets on the proposal oracle')
     const categorical: string[] = []
     for (let i = 0; i < 3; i++) categorical.push(await createOne(oracles.proposal.address, i, BELOW_FLOOR))
     seeded.categoricalOracle = oracles.proposal.address
@@ -284,11 +304,15 @@ export async function seedMarkets(
   // to leaving outcome 0 funded-but-inactive so the rest of the seed still stands.
   let active: ActiveMarketSeed | null = null
   if (oracles.factProposal?.address) {
+    log('creating + activating a tradable market (outcome 0) on the disputed oracle')
     try {
-      active = await createAndActivateMarket(ctx, oracles.factProposal.address, payerKass, {
-        outcomeIndex: 0,
-        split: true,
-      })
+      active = await createAndActivateMarket(
+        ctx,
+        oracles.factProposal.address,
+        payerKass,
+        { outcomeIndex: 0, split: true },
+        log,
+      )
       seeded.activeMarket = active.market
     } catch (e) {
       // Loud, not silent: a missing active market is exactly the "no tradable market"
