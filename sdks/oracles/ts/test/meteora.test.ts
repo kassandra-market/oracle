@@ -1,80 +1,48 @@
 /**
- * M1 — Meteora DAMM v2 (cp-amm) builder byte/meta tests + decoder round-trips.
+ * M1 — Meteora DAMM v2 (cp-amm) builder byte/meta tests.
  *
  * For each builder we assert `data == [disc, ...borsh args LE]` (rebuilt
  * INDEPENDENTLY here from the pinned disc + arg layout) and the account-meta
  * order/roles (against the `#[derive(Accounts)]` structs at commit
  * bdd8a1e355f484b3cff131578a662c560b97b72f), plus that the PDA derivers
- * reproduce the documented seeds. The decoders round-trip a hand-built Pool/
- * Position byte blob, asserting sqrt_price/liquidity/reserves land at the
- * computed offsets and the account size == 8 + INIT_SPACE. Offline (default suite).
+ * reproduce the documented seeds. The decoder round-trips live in
+ * meteora-decoders.test.ts; shared fixtures/helpers in ./helpers/meteora.ts.
+ * Offline (default suite).
  */
 import { Address } from "@solana/web3.js";
 import { describe, expect, it } from "vitest";
 
 import { meteora } from "../src/index.js";
 import { TOKEN_PROGRAM_ID, SYSTEM_PROGRAM_ID, EXTERNAL_PROGRAM_IDS } from "../src/constants.js";
-
-const {
+import {
+  CONFIG,
+  CREATOR,
   DISC,
   METEORA_DAMM_V2_ID,
-  TOKEN_2022_PROGRAM_ID,
-  SEED,
+  MINT_A,
+  MINT_B,
+  NFT_MINT,
+  PAYER,
+  PAYER_TOKEN_A,
+  PAYER_TOKEN_B,
   POOL_ACCOUNT_DISCRIMINATOR,
-  POSITION_ACCOUNT_DISCRIMINATOR,
   POOL_ACCOUNT_SIZE,
-  POSITION_ACCOUNT_SIZE,
   POOL_INIT_SPACE,
+  POSITION_ACCOUNT_DISCRIMINATOR,
+  POSITION_ACCOUNT_SIZE,
   POSITION_INIT_SPACE,
+  SEED,
+  TOKEN_2022_PROGRAM_ID,
+  cat,
+  hex,
+  metasEq,
   pda,
-} = meteora;
-
-// Deterministic valid base58 stand-ins.
-const CREATOR = "rqRMW2HFJsi1FE1jb8Rvaz4Qz3xHzNkZDb8am1pqEHE";
-const PAYER = "rqRMW2HFJsi1FE1jb8Rvaz4Qz3xHzNkZDb8am1pqEHE";
-const CONFIG = "6iQKfEyhr3bZMotVkW6beNZz5CPAkiwvgV2CTje9pVSS";
-const MINT_A = "So11111111111111111111111111111111111111112";
-const MINT_B = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-const NFT_MINT = "8HoQnePLqPj4M7PUDzfw8e3Ymdwgc7NLGnaTUapubyvu";
-const PAYER_TOKEN_A = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
-const PAYER_TOKEN_B = "3n5xdpW6Mx3wgxxBjTA1eXWZ7ByWWKvqSjzHRfM1Y8dY";
-
-const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
-const u64 = (v: bigint) => {
-  const o = new Uint8Array(8);
-  new DataView(o.buffer).setBigUint64(0, v, true);
-  return o;
-};
-const u128 = (v: bigint) => {
-  const o = new Uint8Array(16);
-  const dv = new DataView(o.buffer);
-  dv.setBigUint64(0, v & 0xffffffffffffffffn, true);
-  dv.setBigUint64(8, v >> 64n, true);
-  return o;
-};
-const cat = (...ps: Uint8Array[]) => {
-  const out = new Uint8Array(ps.reduce((n, p) => n + p.length, 0));
-  let o = 0;
-  for (const p of ps) {
-    out.set(p, o);
-    o += p.length;
-  }
-  return out;
-};
-
-type Meta = { pubkey: Address; isSigner: boolean; isWritable: boolean };
-const w = (p: Address | string, s = false): Meta => ({ pubkey: new Address(p as string), isSigner: s, isWritable: true });
-const ro = (p: Address | string, s = false): Meta => ({ pubkey: new Address(p as string), isSigner: s, isWritable: false });
-const metasEq = (got: readonly Meta[], want: Meta[]) => {
-  expect(got.length).toBe(want.length);
-  got.forEach((m, i) => {
-    expect(m.pubkey.toString()).toBe(want[i].pubkey.toString());
-    expect(m.isSigner).toBe(want[i].isSigner);
-    expect(m.isWritable).toBe(want[i].isWritable);
-  });
-};
-
-const poolAddr = async () => (await pda.pool(CONFIG, MINT_A, MINT_B)).address;
+  poolAddr,
+  ro,
+  u128,
+  u64,
+  w,
+} from "./helpers/meteora.js";
 
 describe("meteora wire constants", () => {
   it("pins the program id (lib.rs:41 declare_id!)", () => {
@@ -417,83 +385,5 @@ describe("claimPositionFee (ClaimPositionFeeCtx)", () => {
       ro(eventAuth),
       ro(METEORA_DAMM_V2_ID),
     ]);
-  });
-});
-
-// ── decoder round-trips ──────────────────────────────────────────────────────
-
-const setU64 = (buf: Uint8Array, off: number, v: bigint) => new DataView(buf.buffer).setBigUint64(off, v, true);
-const setU128 = (buf: Uint8Array, off: number, v: bigint) => {
-  const dv = new DataView(buf.buffer);
-  dv.setBigUint64(off, v & 0xffffffffffffffffn, true);
-  dv.setBigUint64(off + 8, v >> 64n, true);
-};
-const setPubkey = (buf: Uint8Array, off: number, a: string) => buf.set(new Address(a).toBytes(), off);
-
-describe("decodePool", () => {
-  it("reads mints/vaults/liquidity/sqrt_price(@456)/reserves at the computed offsets", () => {
-    const buf = new Uint8Array(POOL_ACCOUNT_SIZE);
-    buf.set(POOL_ACCOUNT_DISCRIMINATOR, 0);
-    setPubkey(buf, 168, MINT_A);
-    setPubkey(buf, 200, MINT_B);
-    setPubkey(buf, 232, PAYER_TOKEN_A); // stand-in vault A
-    setPubkey(buf, 264, PAYER_TOKEN_B); // stand-in vault B
-    setU128(buf, 360, 42_000_000_000_000n); // liquidity
-    setU64(buf, 392, 111n); // protocol_a_fee
-    setU64(buf, 400, 222n); // protocol_b_fee
-    setU128(buf, 424, 1000n); // sqrt_min_price
-    setU128(buf, 440, 9_000_000n); // sqrt_max_price
-    setU128(buf, 456, 18446744073709551616n); // sqrt_price = 1.0 Q64.64
-    setPubkey(buf, 648, CREATOR);
-    setU64(buf, 680, 5_000_000n); // token_a_amount
-    setU64(buf, 688, 7_000_000n); // token_b_amount
-
-    const pool = meteora.decodePool(buf);
-    expect(pool.tokenAMint.toString()).toBe(MINT_A);
-    expect(pool.tokenBMint.toString()).toBe(MINT_B);
-    expect(pool.tokenAVault.toString()).toBe(PAYER_TOKEN_A);
-    expect(pool.tokenBVault.toString()).toBe(PAYER_TOKEN_B);
-    expect(pool.liquidity).toBe(42_000_000_000_000n);
-    expect(pool.protocolAFee).toBe(111n);
-    expect(pool.protocolBFee).toBe(222n);
-    expect(pool.sqrtMinPrice).toBe(1000n);
-    expect(pool.sqrtMaxPrice).toBe(9_000_000n);
-    expect(pool.sqrtPrice).toBe(18446744073709551616n);
-    expect(pool.creator.toString()).toBe(CREATOR);
-    expect(pool.tokenAAmount).toBe(5_000_000n);
-    expect(pool.tokenBAmount).toBe(7_000_000n);
-  });
-
-  it("rejects a wrong size or discriminator", () => {
-    expect(() => meteora.decodePool(new Uint8Array(POOL_ACCOUNT_SIZE - 1))).toThrow(/wrong account size/);
-    const bad = new Uint8Array(POOL_ACCOUNT_SIZE); // all-zero disc
-    expect(() => meteora.decodePool(bad)).toThrow(/discriminator/);
-  });
-});
-
-describe("decodePosition", () => {
-  it("reads pool/nft_mint/fees/liquidity at the computed offsets", () => {
-    const buf = new Uint8Array(POSITION_ACCOUNT_SIZE);
-    buf.set(POSITION_ACCOUNT_DISCRIMINATOR, 0);
-    setPubkey(buf, 8, CONFIG); // stand-in pool
-    setPubkey(buf, 40, NFT_MINT);
-    setU64(buf, 136, 314n); // fee_a_pending
-    setU64(buf, 144, 271n); // fee_b_pending
-    setU128(buf, 152, 12_345n); // unlocked_liquidity
-    setU128(buf, 168, 6_789n); // vested_liquidity
-    setU128(buf, 184, 42n); // permanent_locked_liquidity
-
-    const pos = meteora.decodePosition(buf);
-    expect(pos.pool.toString()).toBe(CONFIG);
-    expect(pos.nftMint.toString()).toBe(NFT_MINT);
-    expect(pos.feeAPending).toBe(314n);
-    expect(pos.feeBPending).toBe(271n);
-    expect(pos.unlockedLiquidity).toBe(12_345n);
-    expect(pos.vestedLiquidity).toBe(6_789n);
-    expect(pos.permanentLockedLiquidity).toBe(42n);
-  });
-
-  it("rejects a wrong size", () => {
-    expect(() => meteora.decodePosition(new Uint8Array(10))).toThrow(/wrong account size/);
   });
 });

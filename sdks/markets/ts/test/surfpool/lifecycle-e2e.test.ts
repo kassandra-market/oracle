@@ -46,7 +46,7 @@ import {
 import * as metadao from "../../src/metadao/index.js";
 import * as pda from "../../src/pda.js";
 
-import { MarketSurfpoolHarness, splTransfer, surfpoolReady } from "./harness.js";
+import { MarketSurfpoolHarness, splTransfer, surfpoolReady } from "./harness/index.js";
 
 const ENABLED = process.env.KASSANDRA_MARKET_E2E === "1" && surfpoolReady();
 const PORT = 18903;

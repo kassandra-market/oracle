@@ -21,7 +21,7 @@ import { AccountType } from "../../src/constants.js";
 import { initConfig } from "../../src/instructions/index.js";
 import * as pda from "../../src/pda.js";
 
-import { MarketSurfpoolHarness, surfpoolReady } from "./harness.js";
+import { MarketSurfpoolHarness, surfpoolReady } from "./harness/index.js";
 
 const ENABLED = process.env.KASSANDRA_MARKET_E2E === "1" && surfpoolReady();
 const PORT = 18899;

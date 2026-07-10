@@ -26,7 +26,7 @@ import { contribute, createMarket, initConfig } from "../../src/instructions/ind
 import * as pda from "../../src/pda.js";
 import { MARKET_PROGRAM_ID } from "../../src/constants.js";
 
-import { Keypair, MarketSurfpoolHarness, surfpoolReady } from "./harness.js";
+import { Keypair, MarketSurfpoolHarness, surfpoolReady } from "./harness/index.js";
 
 const ENABLED = process.env.KASSANDRA_MARKET_E2E === "1" && surfpoolReady();
 

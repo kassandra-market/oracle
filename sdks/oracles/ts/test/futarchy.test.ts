@@ -7,83 +7,41 @@
  * The discriminators + seeds are the binary-validated values from the Rust CPI
  * modules; the account orders + arg layouts are from the authoritative
  * metaDAOproject/futarchy@v0.6.0 + Squads-Protocol/v4 source.
+ *
+ * Shared fixtures/helpers live in ./helpers/futarchy.ts. The Squads-v4 builders,
+ * bootstrapGovernance composer, and collect_meteora_damm_fees tests live in
+ * futarchy-squads.test.ts.
  */
 import { Address } from "@solana/web3.js";
 import { describe, expect, it } from "vitest";
 
 import { futarchy } from "../src/index.js";
-import { setGovernance } from "../src/instructions/index.js";
-
-const {
-  DISC,
+import {
   ACCOUNT_DISC,
-  Market,
-  SwapType,
-  FUTARCHY_ID,
-  CONDITIONAL_VAULT_ID,
-  SQUADS_V4_ID,
-  SQUADS_PERMISSIONLESS_MEMBER,
-  METADAO_ADMIN,
-  METADAO_MULTISIG_VAULT,
-  METEORA_DAMM_V2_ID,
-  DAMM_V2_POOL_AUTHORITY,
+  ADMIN,
   ATA_PROGRAM_ID,
-  collectMeteoraDammFees,
+  CONDITIONAL_VAULT_ID,
+  DAO_CREATOR,
+  DISC,
+  FUTARCHY_ID,
+  KASS_MINT,
+  Market,
+  PAYER,
+  SOME,
+  SQUADS_V4_ID,
+  SwapType,
+  TREASURY,
+  USDC_MINT,
+  ata,
+  cat,
+  enc,
+  hex,
   pda,
-} = futarchy;
-
-const SYSTEM_ID = "11111111111111111111111111111111";
-const TOKEN_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
-
-// Deterministic valid base58 stand-ins.
-const PAYER = "rqRMW2HFJsi1FE1jb8Rvaz4Qz3xHzNkZDb8am1pqEHE";
-const DAO_CREATOR = "84yVtdReAJ8GiR7Erqj7jyxoJurYWzQ6n9eaBGYBDNqM";
-const KASS_MINT = "So11111111111111111111111111111111111111112";
-const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-const TREASURY = "7bQEwuq9ybNyjjFcbtHBfDPxdH3TuGAsZKVRZdihVN4d";
-const ADMIN = "7WCvk98KGRqi2o8D7EWTGrZQuFtikidP8A2D7CDVXwWJ";
-const SOME = "GuBhyNi5GFo9K5YXGKfPMDryWK8GwS5oXe9CJGrzo2sk";
-
-const enc = new TextEncoder();
-const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
-const u64 = (v: bigint) => {
-  const o = new Uint8Array(8);
-  new DataView(o.buffer).setBigUint64(0, v, true);
-  return o;
-};
-const u32 = (v: number) => {
-  const o = new Uint8Array(4);
-  new DataView(o.buffer).setUint32(0, v, true);
-  return o;
-};
-const u16 = (v: number) => {
-  const o = new Uint8Array(2);
-  new DataView(o.buffer).setUint16(0, v, true);
-  return o;
-};
-const u128 = (v: bigint) => {
-  const o = new Uint8Array(16);
-  const dv = new DataView(o.buffer);
-  dv.setBigUint64(0, v & 0xffffffffffffffffn, true);
-  dv.setBigUint64(8, v >> 64n, true);
-  return o;
-};
-const cat = (...ps: Uint8Array[]) => {
-  const out = new Uint8Array(ps.reduce((n, p) => n + p.length, 0));
-  let o = 0;
-  for (const p of ps) {
-    out.set(p, o);
-    o += p.length;
-  }
-  return out;
-};
-const ata = async (owner: string | Address, mint: string | Address) =>
-  (
-    await Address.findProgramAddress(
-      [new Address(owner as string).toBytes(), new Address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBytes(), new Address(mint as string).toBytes()],
-      ATA_PROGRAM_ID,
-    )
-  )[0];
+  u128,
+  u16,
+  u32,
+  u64,
+} from "./helpers/futarchy.js";
 
 describe("futarchy/Squads wire constants", () => {
   it("pins the binary-validated discriminators", () => {
@@ -337,199 +295,5 @@ describe("futarchy builders", () => {
     });
     expect(hex(fp.data)).toBe(hex(DISC.finalizeProposal));
     expect(fp.keys.length).toBe(25);
-  });
-});
-
-describe("Squads v4 builders", () => {
-  it("vault_transaction_create: disc ++ vault_idx ++ eph ++ Vec<u8>(msg) ++ None memo", async () => {
-    const msg = new Uint8Array([1, 2, 3, 4]);
-    const dao = (await pda.dao(DAO_CREATOR, 1n)).address;
-    const multisig = (await pda.squadsMultisig(dao)).address;
-    const ix = await futarchy.vaultTransactionCreate({
-      multisig, creator: dao, rentPayer: PAYER, transactionIndex: 1n, transactionMessage: msg,
-    });
-    expect(hex(ix.data)).toBe(
-      hex(cat(DISC.vaultTransactionCreate, Uint8Array.from([0, 0]), u32(4), msg, Uint8Array.from([0]))),
-    );
-    const tx = (await pda.squadsTransaction(multisig, 1n)).address;
-    expect(ix.keys[1].pubkey.toString()).toBe(tx.toString());
-    expect(ix.keys[1].isWritable).toBe(true);
-  });
-
-  it("proposal_create: disc ++ index:u64 ++ draft:bool", async () => {
-    const dao = (await pda.dao(DAO_CREATOR, 1n)).address;
-    const multisig = (await pda.squadsMultisig(dao)).address;
-    const ix = await futarchy.proposalCreate({ multisig, creator: dao, rentPayer: PAYER, transactionIndex: 1n });
-    expect(hex(ix.data)).toBe(hex(cat(DISC.proposalCreate, u64(1n), Uint8Array.from([0]))));
-  });
-
-  it("vault_transaction_execute: disc-only, fixed metas + member signer", async () => {
-    const dao = (await pda.dao(DAO_CREATOR, 1n)).address;
-    const multisig = (await pda.squadsMultisig(dao)).address;
-    const ix = await futarchy.vaultTransactionExecute({ multisig, transactionIndex: 1n, member: dao });
-    expect(hex(ix.data)).toBe(hex(DISC.vaultTransactionExecute));
-    const prop = (await pda.squadsProposal(multisig, 1n)).address;
-    const tx = (await pda.squadsTransaction(multisig, 1n)).address;
-    expect(ix.keys.map((k) => [k.pubkey.toString(), k.isSigner, k.isWritable])).toEqual([
-      [multisig.toString(), false, false],
-      [prop.toString(), false, true],
-      [tx.toString(), false, false],
-      [dao.toString(), true, false],
-    ]);
-  });
-});
-
-describe("bootstrapGovernance composer", () => {
-  it("composes [initialize_dao, set_governance] with vault==dao_authority, kass_dao==dao", async () => {
-    const r = await futarchy.bootstrapGovernance({
-      payer: PAYER,
-      daoCreator: DAO_CREATOR,
-      kassMint: KASS_MINT,
-      usdcMint: USDC_MINT,
-      squadsProgramConfigTreasury: TREASURY,
-      nonce: 42n,
-      twapInitialObservation: 500_000_000n,
-      twapMaxObservationChangePerUpdate: 1_000_000_000n,
-      twapStartDelaySeconds: 60,
-      minQuoteFutarchicLiquidity: 1_000_000n,
-      minBaseFutarchicLiquidity: 1_000_000n,
-      baseToStake: 1_000_000n,
-      passThresholdBps: 300,
-      secondsPerProposal: 86_400,
-      admin: ADMIN,
-    });
-
-    const dao = (await pda.dao(DAO_CREATOR, 42n)).address;
-    const multisig = (await pda.squadsMultisig(dao)).address;
-    const vault = (await pda.squadsVault(multisig, 0)).address;
-
-    expect(r.dao.toString()).toBe(dao.toString());
-    expect(r.multisig.toString()).toBe(multisig.toString());
-    expect(r.vault.toString()).toBe(vault.toString());
-    expect(r.instructions.length).toBe(2);
-
-    // ix[0] = initialize_dao on the futarchy program, dao slot 0.
-    expect(r.instructions[0].programId.toString()).toBe(FUTARCHY_ID.toString());
-    expect(r.instructions[0].keys[0].pubkey.toString()).toBe(dao.toString());
-
-    // ix[1] = set_governance whose payload dao_authority==vault, kass_dao==dao.
-    const handoff = await setGovernance({ authority: ADMIN, daoAuthority: vault, kassDao: dao });
-    expect(hex(r.instructions[1].data)).toBe(hex(handoff.data));
-    // payload = [disc, dao_authority[32], kass_dao[32]]
-    expect(hex(r.instructions[1].data.slice(1, 33))).toBe(hex(vault.toBytes()));
-    expect(hex(r.instructions[1].data.slice(33, 65))).toBe(hex(dao.toBytes()));
-    expect(r.instructions[1].keys[2].pubkey.toString()).toBe(dao.toString()); // kass_dao account
-  });
-
-  it("the permissionless multisig member id is pinned", () => {
-    expect(SQUADS_PERMISSIONLESS_MEMBER.toString()).toBe("EP3SoC2SvR3d4c2eXVBvhEMWSr2j3YtoCY3UMiQV7BPD");
-  });
-});
-
-// F2a — collect_meteora_damm_fees. Wire format PINNED from TWO agreeing sources:
-// (a) metaDAOproject/programs@c1000ed84ef6d084203ad2a9c13940fd14feb53c
-//     programs/futarchy/src/instructions/collect_meteora_damm_fees.rs + lib.rs:158
-//     (declare_id == FUTAREL…, Cargo.toml v0.6.1), and
-// (b) the on-chain Anchor IDL of FUTAREL… (v0.6.1), instruction collectMeteoraDammFees.
-// Both give the SAME 27 accounts (incl. the #[event_cpi] tail) and NO args.
-describe("collect_meteora_damm_fees (F2a — pinned v0.6.1 wire format)", () => {
-  // Meteora-side stand-ins (deterministic valid base58).
-  const POOL = "Az8Fho8xdVcxX9qoUqfW2rcau84VCBbTPjYtdaBZS9te";
-  const POSITION = "CVtSMpnbcnLiFvT4b5KqczNw4kT8iYxMDvxu5Ef6VWb1";
-  const TOKEN_A_VAULT = "A9kSdAC4B5wgsc6t4ZgekoFeoE4rci6h2q3L84SmrqYP";
-  const TOKEN_B_VAULT = "32aPQRSwF6vTRWdmxzEUqqdD32s4bLZqAiz2nJfy9eAK";
-  const POSITION_NFT_ACCOUNT = "33Bxc7zrtjhXHwXSinSFDvwLfniH22dpE9LRRoQdtoBm";
-  const OWNER = "MtLmU4aQUHGE5PPt37fJhoUth6RWAr35aUHbnwtiPC3";
-
-  it("data == disc only (no args)", async () => {
-    const ix = await collectMeteoraDammFees({
-      dao: (await pda.dao(DAO_CREATOR, 9n)).address,
-      transactionIndex: 3n,
-      pool: POOL,
-      position: POSITION,
-      tokenAVault: TOKEN_A_VAULT,
-      tokenBVault: TOKEN_B_VAULT,
-      tokenAMint: KASS_MINT,
-      tokenBMint: USDC_MINT,
-      positionNftAccount: POSITION_NFT_ACCOUNT,
-      owner: OWNER,
-    });
-    expect(ix.programId.toString()).toBe(FUTARCHY_ID.toString());
-    expect(hex(ix.data)).toBe(hex(DISC.collectMeteoraDammFees));
-    expect(ix.data.length).toBe(8);
-  });
-
-  it("account metas match the IDL order + roles + PDAs", async () => {
-    const dao = (await pda.dao(DAO_CREATOR, 9n)).address;
-    const multisig = (await pda.squadsMultisig(dao)).address;
-    const squadsVault = (await pda.squadsVault(multisig, 0)).address;
-    const txIndex = 3n;
-    const squadsTx = (await pda.squadsTransaction(multisig, txIndex)).address;
-    const squadsProp = (await pda.squadsProposal(multisig, txIndex)).address;
-    const futEventAuth = (await pda.futarchyEventAuthority()).address;
-    const [dammEventAuth] = await Address.findProgramAddress(
-      [enc.encode("__event_authority")],
-      METEORA_DAMM_V2_ID,
-    );
-    const tokenAAccount = await ata(METADAO_MULTISIG_VAULT, KASS_MINT);
-    const tokenBAccount = await ata(METADAO_MULTISIG_VAULT, USDC_MINT);
-
-    const ix = await collectMeteoraDammFees({
-      dao,
-      transactionIndex: txIndex,
-      pool: POOL,
-      position: POSITION,
-      tokenAVault: TOKEN_A_VAULT,
-      tokenBVault: TOKEN_B_VAULT,
-      tokenAMint: KASS_MINT,
-      tokenBMint: USDC_MINT,
-      positionNftAccount: POSITION_NFT_ACCOUNT,
-      owner: OWNER,
-    });
-
-    // [pubkey, isSigner, isWritable] in EXACT IDL order (27 accounts).
-    const expected: Array<[string, boolean, boolean]> = [
-      [dao.toString(), false, true],
-      [METADAO_ADMIN.toString(), true, true],
-      [multisig.toString(), false, true],
-      [squadsVault.toString(), false, true],
-      [squadsTx.toString(), false, true],
-      [squadsProp.toString(), false, true],
-      [SQUADS_PERMISSIONLESS_MEMBER.toString(), true, false],
-      [METEORA_DAMM_V2_ID.toString(), false, false],
-      [dammEventAuth.toString(), false, false],
-      [DAMM_V2_POOL_AUTHORITY.toString(), false, false],
-      [POOL, false, false],
-      [POSITION, false, true],
-      [tokenAAccount.toString(), false, true],
-      [tokenBAccount.toString(), false, true],
-      [TOKEN_A_VAULT, false, true],
-      [TOKEN_B_VAULT, false, true],
-      [KASS_MINT, false, false],
-      [USDC_MINT, false, false],
-      [POSITION_NFT_ACCOUNT, false, false],
-      [OWNER, false, false],
-      [TOKEN_ID, false, false],
-      [TOKEN_ID, false, false],
-      [SYSTEM_ID, false, false],
-      [TOKEN_ID, false, false],
-      [SQUADS_V4_ID.toString(), false, false],
-      [futEventAuth.toString(), false, false],
-      [FUTARCHY_ID.toString(), false, false],
-    ];
-
-    expect(ix.keys.length).toBe(27);
-    ix.keys.forEach((k, i) => {
-      expect([k.pubkey.toString(), k.isSigner, k.isWritable]).toEqual(expected[i]);
-    });
-  });
-
-  it("the hard-coded pool_authority equals the derived cp-amm PDA", async () => {
-    const [derived] = await Address.findProgramAddress(
-      [enc.encode("pool_authority")],
-      METEORA_DAMM_V2_ID,
-    );
-    expect(derived.toString()).toBe(DAMM_V2_POOL_AUTHORITY.toString());
-    expect(DAMM_V2_POOL_AUTHORITY.toString()).toBe("HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC");
   });
 });
