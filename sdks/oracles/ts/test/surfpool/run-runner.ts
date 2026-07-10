@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** The debug runner binary (`cargo build -p kassandra-runner`). */
-export const RUNNER_BIN = resolve(here, "../../../target/debug/kassandra-runner");
+export const RUNNER_BIN = resolve(here, "../../../../../target/debug/kassandra-runner");
 
 /** True when the built runner binary is present (for `skipIf`). */
 export function runnerAvailable(): boolean {
