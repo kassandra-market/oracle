@@ -2,7 +2,7 @@
  * Decoder for the `Market` account (`state.rs::Market`, 416 bytes) — a challenge
  * decision-market binding for one `AiClaim`. Records the MetaDAO accounts the
  * challenger composed plus the on-chain escrow/destination accounts. Field
- * offsets pinned in `programs/kassandra/tests/state_layout.rs`.
+ * offsets pinned in `programs/oracles/tests/state_layout.rs`.
  */
 import { Address } from "@solana/web3.js";
 

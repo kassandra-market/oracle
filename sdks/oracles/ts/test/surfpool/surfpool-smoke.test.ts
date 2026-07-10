@@ -3,7 +3,7 @@
  *
  * Proves the whole E2E stack works together against a REAL RPC validator:
  *   1. surfpool boots headless;
- *   2. the local `kassandra_program.so` is deployed at the FIXED program id
+ *   2. the local `kassandra_oracles_program.so` is deployed at the FIXED program id
  *      via the `surfnet_setAccount` cheatcode AND actually executes;
  *   3. an `initProtocol` instruction BUILT by the SDK is signed with web3.js v3
  *      and sent as a real RPC transaction the program ACCEPTS;

@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "programs/kassandra",
-    "programs/kassandra-market",
+    "programs/oracles",
+    "programs/markets",
     "runner",
     "sdks/oracles/rust",
     "sdks/markets/rust",
@@ -26,7 +26,7 @@ repository = "https://github.com/kassandra-market/oracle"
 # The `version` fields let `cargo publish` resolve these as real crates.io deps (a
 # path-only dep can't be published). They MUST equal [workspace.package].version
 # above — `scripts/sync-version.mjs` keeps them (and the TS packages) in lockstep.
-kassandra-program = { path = "programs/kassandra", version = "0.1.0" }
+kassandra-oracles-program = { path = "programs/oracles", version = "0.1.0" }
 kassandra-oracles-sdk = { path = "sdks/oracles/rust", version = "0.1.0" }
 # The prediction-market program + its Rust SDK (merged in from kassandra-market).
 # The indexer depends on the program crate (state structs + `ID`) only — it is
@@ -34,7 +34,7 @@ kassandra-oracles-sdk = { path = "sdks/oracles/rust", version = "0.1.0" }
 # on the granular v3 client stack. The market program's own dev-tests + sdks/markets/rust
 # are a solana-sdk v2 "island" (they pin v2/litesvm-0.6/spl-token-6 directly, not
 # via the workspace, so both majors coexist without a cross-crate type split).
-kassandra-market-program = { path = "programs/kassandra-market", version = "0.1.0", default-features = false, features = ["no-entrypoint"] }
+kassandra-markets-program = { path = "programs/markets", version = "0.1.0", default-features = false, features = ["no-entrypoint"] }
 kassandra-markets-sdk = { path = "sdks/markets/rust", version = "0.1.0" }
 
 # ---- on-chain (pinocchio) stack ----

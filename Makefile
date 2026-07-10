@@ -5,7 +5,7 @@
 # remember. Grouped: setup · build · test · lint · dev (local nodes + seed) · docs.
 #
 # This repo hosts BOTH on-chain programs — the optimistic oracle
-# (`programs/kassandra`) and the prediction market (`programs/kassandra-market`) —
+# (`programs/oracles`) and the prediction market (`programs/markets`) —
 # a single web app (`app/`, both `/oracles*` and `/markets*`), and a single
 # Postgres-backed indexer (`indexer/`) that indexes both programs.
 #

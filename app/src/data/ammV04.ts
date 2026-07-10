@@ -5,7 +5,7 @@
  *
  * The SDK ships v0.4 amm BUILDERS + PDAs but NO `Amm` DECODER, so the app adds
  * one here, mirroring the on-chain reader EXACTLY. The authoritative layout +
- * offset consts live in `programs/kassandra/src/cpi/metadao.rs:145-178`
+ * offset consts live in `programs/oracles/src/cpi/metadao.rs:145-178`
  * (verified against `metaDAOproject/programs/amm/src/state/amm.rs`, the deployed
  * delayed-twap v0.4.1/v0.4.2 binary). The account is an Anchor `#[account]`
  * (8-byte discriminator first), Borsh-encoded — sequential little-endian, no

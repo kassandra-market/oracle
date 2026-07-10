@@ -4,7 +4,7 @@
  * For each builder we assert `data == [disc, ...args LE]` (the expected buffer
  * built INDEPENDENTLY here from the `cpi/metadao.rs:82-94` disc + arg layout) and
  * the account-meta order/roles (against the real-`.so`-proven orderings in
- * `programs/kassandra/tests/challenge_e2e.rs:676-769`), plus that the PDA derivers
+ * `programs/oracles/tests/challenge_e2e.rs:676-769`), plus that the PDA derivers
  * reproduce the documented seeds. Offline (default suite).
  */
 import { Address } from "@solana/web3.js";

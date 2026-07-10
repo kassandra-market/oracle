@@ -4,7 +4,7 @@
  * These run against a MOCK {@link Connection} whose canned responses are built
  * from REAL Pod byte layouts — buffers of the pinned ABI size, with the
  * account_type tag at offset 0 and each field written at the exact little-endian
- * offset the SDK decoders read (mirroring `programs/kassandra/tests/state_layout.rs`).
+ * offset the SDK decoders read (mirroring `programs/oracles/tests/state_layout.rs`).
  * So the decoders exercise genuine byte shapes, not hand-waved objects.
  *
  * The mock models a PERMISSIVE RPC: it honours `memcmp` filters (so the

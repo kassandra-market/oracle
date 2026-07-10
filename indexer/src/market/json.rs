@@ -3,7 +3,7 @@
 //! Conventions for the browser client: pubkeys are base58 strings, and **all
 //! `u64` are emitted as strings** to avoid JS `Number` precision loss.
 
-use kassandra_market_program::state::{Config, Contribution, Market};
+use kassandra_markets_program::state::{Config, Contribution, Market};
 use serde::Serialize;
 
 type PubkeyBytes = [u8; 32];

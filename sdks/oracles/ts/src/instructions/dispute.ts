@@ -7,7 +7,7 @@
  * `{pubkey, isSigner, isWritable}` metas in the EXACT processor order, and
  * `data = [disc, ...payload_LE]`. Account orders + payload layouts are mirrored
  * from each processor's `# Accounts` / `# Instruction payload` header AND the
- * test-harness `*_ix` builders (`programs/kassandra/tests/{settlement_e2e,
+ * test-harness `*_ix` builders (`programs/oracles/tests/{settlement_e2e,
  * common/mod}.rs`). PDAs are derived internally via `../pda.js`.
  */
 import { Address, TransactionInstruction } from "@solana/web3.js";

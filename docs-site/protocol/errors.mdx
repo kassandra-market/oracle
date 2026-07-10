@@ -3,7 +3,7 @@ title: "Errors"
 description: "All 36 KassandraError codes (0–35) — code, name, and meaning."
 ---
 
-Every failure the program raises is a variant of `KassandraError` (`programs/kassandra/src/error.rs`),
+Every failure the program raises is a variant of `KassandraError` (`programs/oracles/src/error.rs`),
 declared `#[repr(u32)]` and surfaced to clients as `ProgramError::Custom(n)`. Error codes are a
 **stable public contract** — never renumbered, only appended. The SDK re-exports this enum plus a
 `decodeError(custom)` helper (see [SDK · Overview](/sdk/overview)).

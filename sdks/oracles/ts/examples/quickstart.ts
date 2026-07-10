@@ -10,7 +10,7 @@
  *
  * This file is compiled by `pnpm typecheck`. To actually RUN it you need the
  * program artifact: from the repo root run `just build` to produce
- * `target/deploy/kassandra_program.so`, then `pnpm dlx tsx examples/quickstart.ts`.
+ * `target/deploy/kassandra_oracles_program.so`, then `pnpm dlx tsx examples/quickstart.ts`.
  *
  * It is the example-shaped twin of `test/e2e.test.ts`. For brevity it fabricates
  * the SPL KASS/USDC mints + token accounts directly (exactly like the test
@@ -49,7 +49,7 @@ import {
 const PROGRAM_ID = "KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SO_PATH = resolve(here, "../../../../target/deploy/kassandra_program.so");
+const SO_PATH = resolve(here, "../../../../target/deploy/kassandra_oracles_program.so");
 
 // --- tiny SPL helpers (fabricate mint/token bytes, mirrors the test harness) ---
 

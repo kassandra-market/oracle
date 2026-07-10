@@ -2,7 +2,7 @@
  * PDA / ATA derivers for the MetaDAO v0.4 standalone AMM.
  *
  * Seed lists mirror the binary-validated Rust derivations in
- * `programs/kassandra/tests/challenge_e2e.rs:641-650` (proven against the real
+ * `programs/oracles/tests/challenge_e2e.rs:641-650` (proven against the real
  * `metadao_amm.so`). web3.js@3 exposes only async `Address.findProgramAddress`,
  * so every derivation is async and returns `{ address, bump }`.
  */

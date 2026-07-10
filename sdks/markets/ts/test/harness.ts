@@ -1,6 +1,6 @@
 /**
  * `MarketTestCtx` — a LiteSVM test harness for the kassandra-market program,
- * the TypeScript mirror of the Rust `programs/kassandra-market/tests/common/mod.rs`.
+ * the TypeScript mirror of the Rust `programs/markets/tests/common/mod.rs`.
  *
  * It deploys the compiled program `.so` (+ the two MetaDAO fixtures) into a fresh
  * `LiteSVM`, funds a payer, and exposes the same primitives the Rust harness does:
@@ -55,9 +55,9 @@ import * as pda from "../src/pda.js";
 import { mintBytes, oracleBytes, tokenAccountBytes } from "./spl-layout.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const MARKET_SO = resolve(here, "../../../../target/deploy/kassandra_market_program.so");
-const VAULT_SO = resolve(here, "../../../../programs/kassandra-market/tests/fixtures/metadao_conditional_vault.so");
-const AMM_SO = resolve(here, "../../../../programs/kassandra-market/tests/fixtures/metadao_amm.so");
+const MARKET_SO = resolve(here, "../../../../target/deploy/kassandra_markets_program.so");
+const VAULT_SO = resolve(here, "../../../../programs/markets/tests/fixtures/metadao_conditional_vault.so");
+const AMM_SO = resolve(here, "../../../../programs/markets/tests/fixtures/metadao_amm.so");
 
 /** The external Kassandra oracle program id (owns the accounts `seedOracle` writes). */
 export const KASSANDRA_PROGRAM_ID = new Address("KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY");

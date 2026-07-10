@@ -29,7 +29,7 @@ tower-http = { workspace = true }
 
 # ---- market side (account indexer over the same Postgres + one axum server) ----
 # The program crate supplies the zero-copy state layouts + `ID` (no solana-sdk).
-kassandra-market-program = { workspace = true }
+kassandra-markets-program = { workspace = true }
 carbon-rpc-gpa-datasource = { workspace = true }
 carbon-rpc-program-subscribe-datasource = { workspace = true }
 solana-rpc-client = { workspace = true }

@@ -11,7 +11,7 @@ of conditional tokens — one per outcome — that redeem back to the underlying
 after a binary **question** resolves.
 
 All the wire code Kassandra uses to drive this program by hand lives in
-`programs/kassandra/src/cpi/metadao.rs`.
+`programs/oracles/src/cpi/metadao.rs`.
 
 ## Program id
 
@@ -21,7 +21,7 @@ The challenge stack uses the **v0.4.0** conditional vault:
 conditional_vault (v0.4.0): VLTX1ishMBbcX3rdBWGssxawAo1Q2X2qxYFYqiGodVg
 ```
 
-Defined as `CONDITIONAL_VAULT_ID` in `programs/kassandra/src/cpi/metadao.rs:56-59`,
+Defined as `CONDITIONAL_VAULT_ID` in `programs/oracles/src/cpi/metadao.rs:56-59`,
 and mirrored in the SDK as `EXTERNAL_PROGRAM_IDS.conditionalVault`
 (`sdk/src/constants.ts`).
 
@@ -48,7 +48,7 @@ order). Each conditional-token mint is a PDA derived under the vault program at
 ## The key CPI instructions
 
 Discriminators are `sha256("global:<snake_case_name>")[..8]`, listed in
-`programs/kassandra/src/cpi/metadao.rs:66-94`.
+`programs/oracles/src/cpi/metadao.rs:66-94`.
 
 | Instruction | Discriminator (hex) | Role |
 | --- | --- | --- |
@@ -90,7 +90,7 @@ is used in two distinct ways in a challenge:
     KASS out of `oracle.stake_vault` (authority = the oracle PDA, seeds
     `[b"oracle", nonce_le, [bump]]`) into the KASS vault, minting pass-KASS + fail-KASS
     to two **oracle-PDA-owned** holders, `market.oracle_pass_kass` and
-    `oracle_fail_kass` (`programs/kassandra/src/processor/open_challenge.rs:283-335`).
+    `oracle_fail_kass` (`programs/oracles/src/processor/open_challenge.rs:283-335`).
     The bond's conditional tokens then sit **idle** — never traded, never LP'd — so the
     bond carries no impermanent loss. `total_oracle_stake` is intentionally **not**
     decremented (`open_challenge.rs:286-288`).

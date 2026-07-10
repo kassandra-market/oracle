@@ -1,7 +1,7 @@
 /**
  * litesvm END-TO-END round-trip, driven THROUGH THE SDK — the proof the
  * hand-written builders + decoders are wire-correct against the REAL compiled
- * `target/deploy/kassandra_market_program.so` (not just self-consistent).
+ * `target/deploy/kassandra_markets_program.so` (not just self-consistent).
  *
  * Every instruction below is built by an SDK builder (`src/instructions/*`),
  * bridged into litesvm via `toLiteSvmTransaction`, submitted to the real program,

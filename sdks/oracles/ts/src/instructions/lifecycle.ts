@@ -11,7 +11,7 @@
  * The account orders + payload layouts are mirrored from each processor's
  * `# Accounts` / `# Instruction payload` module-doc header AND cross-checked
  * against the test harness `*_ix` builders in
- * `programs/kassandra/tests/common/mod.rs` (the authoritative reference).
+ * `programs/oracles/tests/common/mod.rs` (the authoritative reference).
  *
  * PDAs are derived internally (via `../pda.js`) so callers pass only the
  * "real" pubkeys; derivation is async, so every builder is `async`.

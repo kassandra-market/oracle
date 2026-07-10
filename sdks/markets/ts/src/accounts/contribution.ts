@@ -2,7 +2,7 @@
  * Decoder for the `Contribution` account (`state.rs::Contribution`, 88 bytes) —
  * one contributor's recorded KASS stake in a market, the source of both the
  * `refund` (Cancelled) and `claim_lp` (Active) pro-rata payouts.
- * Field offsets pinned in `programs/kassandra-market/tests/state_layout.rs`.
+ * Field offsets pinned in `programs/markets/tests/state_layout.rs`.
  */
 import { Address } from "@solana/web3.js";
 

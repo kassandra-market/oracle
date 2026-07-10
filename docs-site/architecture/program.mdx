@@ -4,7 +4,7 @@ description: "The Pinocchio program — manual dispatch, module layout, and how 
 ---
 
 The Kassandra program is the source of truth for the protocol. It is a single Solana program deployed
-at `KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY` (`programs/kassandra/src/lib.rs`), written in
+at `KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY` (`programs/oracles/src/lib.rs`), written in
 **Pinocchio** rather than Anchor. Everything about how it is structured follows from that choice:
 manual instruction dispatch, manual account validation, and hand-built CPI into MetaDAO.
 
@@ -22,7 +22,7 @@ Discriminant bytes and error codes are a **stable public contract** — never re
 ## Module layout
 
 ```text
-programs/kassandra/src/
+programs/oracles/src/
 ├── lib.rs          entrypoint! + process_instruction + program ID
 ├── instruction.rs  Ix enum (0..=22) + from_u8 dispatch discriminants
 ├── processor/      one module per instruction + mod.rs dispatch table + guards.rs

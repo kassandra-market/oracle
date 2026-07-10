@@ -3,7 +3,7 @@
  *
  * For each of the 7 account types we build a synthetic buffer of the EXACT
  * pinned size, write KNOWN values at the EXACT little-endian offsets (mirroring
- * `programs/kassandra/src/state.rs` + the pins in `tests/state_layout.rs`),
+ * `programs/oracles/src/state.rs` + the pins in `tests/state_layout.rs`),
  * decode it, and assert every field round-trips (esp. pubkeys, u64 bigints, the
  * LE encoding, and the Fact uri sliced by uri_len). We also assert each decoder
  * REJECTS a wrong account_type tag and a wrong length.
@@ -409,7 +409,7 @@ describe("Pod account decoders — type-confusion + length rejection", () => {
 });
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SO_PATH = resolve(here, "../../../../target/deploy/kassandra_program.so");
+const SO_PATH = resolve(here, "../../../../target/deploy/kassandra_oracles_program.so");
 
 describe("decode a REAL program-created Protocol (litesvm + init_protocol)", () => {
   beforeAll(() => {

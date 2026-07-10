@@ -57,6 +57,6 @@ fn read_oracle(data: &[u8]) -> Result<Oracle, bytemuck::PodCastError> {
 - Instructions that sign as the oracle PDA (finalize_*, open/settle challenge, claim_*,
   close_market, sweep, and create_oracle's payload) need the oracle **nonce** — the `Oracle`
   struct does not store it, so carry it alongside the oracle pubkey.
-- `kassandra-program` is pulled in transitively (with `no-entrypoint`); you don't depend on it
+- `kassandra-oracles-program` is pulled in transitively (with `no-entrypoint`); you don't depend on it
   directly.
 - The TS client (`@kassandra-market/oracles`) mirrors this — see the `kassandra-ts-client` skill.

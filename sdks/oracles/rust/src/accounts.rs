@@ -1,13 +1,13 @@
 //! Zero-copy decoders over the shared on-chain account structs.
 //!
-//! The layout structs live in the program crate ([`kassandra_program::state`])
+//! The layout structs live in the program crate ([`kassandra_oracles_program::state`])
 //! and are `bytemuck`-castable, so decoding is a checked reference cast — no
 //! parsing, no drift. Each decoder validates the length/alignment and returns a
 //! borrow into the caller's buffer.
 
 use bytemuck::PodCastError;
 
-pub use kassandra_program::state::{
+pub use kassandra_oracles_program::state::{
     AccountType, AiClaim, Fact, FactVote, Market, Oracle, Phase, Proposer, Protocol,
     CLAIM_OPTION_NONE, VOTE_APPROVE, VOTE_DUPLICATE,
 };

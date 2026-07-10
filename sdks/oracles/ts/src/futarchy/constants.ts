@@ -2,7 +2,7 @@
  * Futarchy v0.6 + Squads v4 + conditional_vault wire constants.
  *
  * Discriminators mirror the binary-validated Rust CPI modules
- * (`programs/kassandra/src/cpi/metadao_v06.rs` for futarchy/Squads,
+ * (`programs/oracles/src/cpi/metadao_v06.rs` for futarchy/Squads,
  * `…/metadao.rs` for the conditional_vault). Account orderings + arg layouts are
  * documented in `./NOTES.md` with their authoritative source. See NOTES.md for
  * the CRITICAL `create_key == Dao PDA` finding.

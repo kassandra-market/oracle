@@ -4,7 +4,7 @@
  * This is the proof the hand-written SDK matches the deployed program: every
  * instruction below is built by an SDK builder (`src/instructions/*`), bridged
  * into litesvm via `toLiteSvmTransaction`, submitted to the REAL
- * `target/deploy/kassandra_program.so`, and the resulting accounts are decoded
+ * `target/deploy/kassandra_oracles_program.so`, and the resulting accounts are decoded
  * by the SDK decoders (`src/accounts/*`) — no synthetic buffers. It mirrors the
  * Rust reference `tests/lifecycle_e2e.rs` (`e2e_happy_uncontested_resolves` +
  * the `FactProposal` dispute slice from `dispute_via_real_flow`).
@@ -58,7 +58,7 @@ import * as pda from "../src/pda.js";
 const PROGRAM_ID = "KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SO_PATH = resolve(here, "../../../../target/deploy/kassandra_program.so");
+const SO_PATH = resolve(here, "../../../../target/deploy/kassandra_oracles_program.so");
 
 // --- SPL layout fabrication (mirrors the Rust harness `create_mint` /
 //     `create_token_account`, packing the canonical spl-token byte layouts). ---

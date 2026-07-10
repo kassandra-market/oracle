@@ -3,7 +3,7 @@
  * external Kassandra-oracle reader.
  *
  * Each `decodeX(data: Uint8Array): X` reads the EXACT pinned little-endian byte
- * offsets from `programs/kassandra-market/src/state.rs` (pinned in
+ * offsets from `programs/markets/src/state.rs` (pinned in
  * `tests/state_layout.rs`), validates the account_type tag + size, and returns a
  * fully typed object (`u64`/`i64` as `bigint`, pubkeys as web3.js `Address`).
  */

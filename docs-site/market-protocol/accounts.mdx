@@ -4,7 +4,7 @@ description: "The 3 kassandra-market account structs — Config, Market, Contrib
 ---
 
 kassandra-market stores state in **3 account types**, all defined in
-`programs/kassandra-market/src/state.rs`. Every struct is `#[repr(C)]`,
+`programs/markets/src/state.rs`. Every struct is `#[repr(C)]`,
 `Pod + Zeroable`, fully packed with explicit `_pad`, and read/written zero-copy via
 `bytemuck`. Each begins with an 8-byte header: `account_type: u8` at offset 0
 followed by `_pad_hdr: [u8;7]`. Sizes are pinned by `tests/state_layout.rs`.

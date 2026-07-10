@@ -7,7 +7,7 @@ description: "The @kassandra-market/oracles TypeScript package — build every i
 program. It builds every instruction, derives every PDA, and decodes every on-chain
 account — with **no IDL**. The wire formats are mirrored directly from the Rust program
 (the source of truth) and guarded by a parity test (`sdks/oracles/ts/test/parity.test.ts`), so the
-SDK stays byte-for-byte in lockstep with `programs/kassandra`.
+SDK stays byte-for-byte in lockstep with `programs/oracles`.
 
 For the on-chain surface these builders and decoders map onto, see
 [Program instructions](/protocol/instructions), [Accounts](/protocol/accounts), and
@@ -54,7 +54,7 @@ import {
 
 <Tip>
 To actually *run* an example against a local validator you also need the program artifact.
-From the repo root run `just build` to produce `target/deploy/kassandra_program.so`, then
+From the repo root run `just build` to produce `target/deploy/kassandra_oracles_program.so`, then
 drive it through litesvm or surfpool. See [Recipes](/sdk/recipes).
 </Tip>
 

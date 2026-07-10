@@ -3,11 +3,11 @@ title: "Deploying the program"
 description: "Build the Kassandra SBF program, the Rust toolchain it uses, and deploying with solana program deploy."
 ---
 
-Kassandra's on-chain program is a Pinocchio-based crate (`kassandra-program`) under `programs/kassandra`. This page covers building the SBF artifact and deploying it.
+Kassandra's on-chain program is a Pinocchio-based crate (`kassandra-oracles-program`) under `programs/oracles`. This page covers building the SBF artifact and deploying it.
 
 ## Toolchain
 
-The workspace pins **stable** Rust (`rust-toolchain.toml`: `channel = "stable"`). The Cargo workspace (`Cargo.toml`) uses `resolver = "2"`, members `programs/kassandra` and `runner`, and sets `[profile.release] overflow-checks = true`. Building the SBF artifact additionally requires the Solana SBF toolchain (`cargo build-sbf`).
+The workspace pins **stable** Rust (`rust-toolchain.toml`: `channel = "stable"`). The Cargo workspace (`Cargo.toml`) uses `resolver = "2"`, members `programs/oracles` and `runner`, and sets `[profile.release] overflow-checks = true`. Building the SBF artifact additionally requires the Solana SBF toolchain (`cargo build-sbf`).
 
 ## Build the SBF program
 
@@ -20,7 +20,7 @@ just build
 which runs, verbatim (`justfile`):
 
 ```bash
-cargo build-sbf --manifest-path programs/kassandra/Cargo.toml
+cargo build-sbf --manifest-path programs/oracles/Cargo.toml
 ```
 
 This produces the program's `.so` artifact. The runner reuses the same program crate with the `no-entrypoint` feature (`runner/Cargo.toml`), so a program layout change never drifts from the runner's encoding.
@@ -32,7 +32,7 @@ target enforces this — it depends on `build`:
 
 ```
 test: build
-    cargo test -p kassandra-program
+    cargo test -p kassandra-oracles-program
 ```
 
 Run `just test` (never a bare `cargo test`) when verifying a merged program change.
@@ -43,7 +43,7 @@ Run `just test` (never a bare `cargo test`) when verifying a merged program chan
 Deploy the built artifact with the standard Solana CLI:
 
 ```bash
-solana program deploy target/deploy/kassandra_program.so
+solana program deploy target/deploy/kassandra_oracles_program.so
 ```
 
 Point the CLI at the target cluster with `solana config set --url <rpc>` (or `--url` on the command) and fund the deploying keypair. The program's declared id is `KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY` (`sdk/src/constants.ts` `KASSANDRA_PROGRAM_ID`).

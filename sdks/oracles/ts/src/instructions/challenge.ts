@@ -16,7 +16,7 @@
  * and pins the fixed program ids (conditional-vault, token, system).
  *
  * Account orders mirror the harness `open_challenge_ix` / `settle_ix`
- * (`programs/kassandra/tests/challenge_e2e.rs`) slot-by-slot. Payload for both
+ * (`programs/oracles/tests/challenge_e2e.rs`) slot-by-slot. Payload for both
  * is `oracle_nonce: u64 LE`.
  */
 import { Address, TransactionInstruction } from "@solana/web3.js";

@@ -13,7 +13,7 @@ agree over a wire, not just against dumped fixtures.
 ## Files
 
 - `harness.ts` — `MarketSurfpoolHarness`: spawns surfpool, deploys the local
-  `target/deploy/kassandra_market_program.so` at the fixed `MARKET_PROGRAM_ID`
+  `target/deploy/kassandra_markets_program.so` at the fixed `MARKET_PROGRAM_ID`
   via the `surfnet_setAccount` cheatcode, and exposes market fabrication helpers
   (`createMint`, `fundTokenAccount`, `createTokenAccount`, `seedOracle` /
   `setOracleResolved`, `sendIx`, `tokenBalance`, `waitForAccount`).
@@ -39,7 +39,7 @@ forked MetaDAO programs.
 - `surfpool` on `PATH` (or set `SURFPOOL_BIN`). The suite SKIPS (does not fail)
   when it is absent.
 - The program artifact built: `just build` (produces
-  `target/deploy/kassandra_market_program.so`).
+  `target/deploy/kassandra_markets_program.so`).
 - Network access — surfpool forks mainnet and lazily fetches the MetaDAO
   programs on first touch.
 

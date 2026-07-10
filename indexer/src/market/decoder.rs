@@ -3,10 +3,10 @@
 //! Dispatch is first-byte (`account_type` tag @0): Config=1, Market=2,
 //! Contribution=3. The tag is field 0 of the Pod struct, so we decode the WHOLE
 //! buffer with `bytemuck::pod_read_unaligned` (NOT `split_first`). The layouts are
-//! REUSED from `kassandra_market_program::state` — one source of truth.
+//! REUSED from `kassandra_markets_program::state` — one source of truth.
 
 use carbon_core::account::{AccountDecoder, DecodedAccount};
-use kassandra_market_program::state::{AccountType, Config, Contribution, Market};
+use kassandra_markets_program::state::{AccountType, Config, Contribution, Market};
 use solana_pubkey::Pubkey;
 
 /// A decoded kassandra-market account. (The Pod layouts don't derive `Debug`,

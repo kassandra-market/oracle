@@ -19,7 +19,7 @@ offline, and never spawns surfpool. The E2E suite only runs under
 
 1. **surfpool** on `PATH` (or set `SURFPOOL_BIN`). Tested against surfpool
    `1.0.0` (`~/.local/bin/surfpool`).
-2. **The program artifact:** `just build` → `target/deploy/kassandra_program.so`
+2. **The program artifact:** `just build` → `target/deploy/kassandra_oracles_program.so`
    (deployed at the fixed program id via the `surfnet_setAccount` cheatcode).
 3. **The runner binary** (for the lifecycle / runner-against-mock arms):
    `cargo build -p kassandra-runner` → `target/debug/kassandra-runner`.

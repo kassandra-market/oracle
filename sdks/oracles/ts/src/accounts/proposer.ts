@@ -1,7 +1,7 @@
 /**
  * Decoder for the `Proposer` account (`state.rs::Proposer`, 96 bytes) — a
  * proposer's commitment within an oracle. Field offsets pinned in
- * `programs/kassandra/tests/state_layout.rs`.
+ * `programs/oracles/tests/state_layout.rs`.
  */
 import { Address } from "@solana/web3.js";
 

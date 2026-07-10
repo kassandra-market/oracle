@@ -3,7 +3,7 @@
  *
  * Every seed list here is the program's PUBLIC CONTRACT, verified against the
  * processors and the test harness `*_pda` helpers in
- * `programs/kassandra/tests/common/mod.rs`. Seed-byte encodings:
+ * `programs/oracles/tests/common/mod.rs`. Seed-byte encodings:
  *   - literal seeds (`"oracle"`, `"protocol"`, ...) are ASCII byte strings;
  *   - pubkey seeds are the 32 RAW bytes of the address;
  *   - the oracle `nonce` is a **u64 little-endian, 8 bytes**;

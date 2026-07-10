@@ -6,7 +6,7 @@
  * The full path proven here:
  *   runner-output.json (genuine Rust `run` output, committed in W1)
  *     → `submitAiClaimFromRunner` (the SDK bridge + its byte-parity guard)
- *       → `toLiteSvmTransaction` → the REAL `kassandra_program.so`
+ *       → `toLiteSvmTransaction` → the REAL `kassandra_oracles_program.so`
  *         → on-chain `AiClaim` decoded by `decodeAiClaim`.
  *
  * --- Seeding the precondition (vs. driving it live) ---
@@ -45,7 +45,7 @@ import { submitAiClaimFromRunner, type RunnerOutput } from "../src/runner-bridge
 const PROGRAM_ID = KASSANDRA_PROGRAM_ID.toString();
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SO_PATH = resolve(here, "../../../../target/deploy/kassandra_program.so");
+const SO_PATH = resolve(here, "../../../../target/deploy/kassandra_oracles_program.so");
 const FIXTURE_PATH = resolve(here, "fixtures/runner-output.json");
 
 /** Write a program-owned account into litesvm at `key` holding `data`. */

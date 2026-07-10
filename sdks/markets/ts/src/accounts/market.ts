@@ -3,7 +3,7 @@
  * KASS prediction market bound to a Kassandra oracle. Records the funding-phase
  * escrow/accounting fields plus the Phase-2 MetaDAO composition bindings
  * (question / vault / cYES / cNO / amm / lp) written at `activate`.
- * Field offsets pinned in `programs/kassandra-market/tests/state_layout.rs`.
+ * Field offsets pinned in `programs/markets/tests/state_layout.rs`.
  */
 import { Address } from "@solana/web3.js";
 

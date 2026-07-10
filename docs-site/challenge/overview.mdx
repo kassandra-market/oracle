@@ -15,16 +15,16 @@ truth.
 Kassandra is a **Pinocchio** program (no Anchor). It drives the Anchor MetaDAO
 programs by hand-reconstructing their wire format: an 8-byte sighash discriminator,
 ordered account metas, and Borsh args. All of the CPI wire code for the challenge
-stack lives in `programs/kassandra/src/cpi/metadao.rs` (the v0.4 standalone
+stack lives in `programs/oracles/src/cpi/metadao.rs` (the v0.4 standalone
 conditional vault + AMM). The separate v0.6 futarchy + Meteora stack in
-`programs/kassandra/src/cpi/metadao_v06.rs` is the governance / `kass_price` layer,
+`programs/oracles/src/cpi/metadao_v06.rs` is the governance / `kass_price` layer,
 **not** the challenge market.
 
 ## Why challenge markets exist
 
 The whole dispute machinery only fires when proposers disagree. An **uncontested**
 claim is honest by assumption: it has **no `Market` account and costs nothing**
-(`programs/kassandra/src/processor/open_challenge.rs:15-18`). The challenge market is
+(`programs/oracles/src/processor/open_challenge.rs:15-18`). The challenge market is
 **dormant by default** — it materializes only when someone puts real money behind the
 assertion "this AI claim is fraudulent."
 

@@ -8,7 +8,7 @@
 //!
 //! Ported from the standalone `kassandra-market-indexer`: the in-memory `Store`
 //! became `db` (Postgres), and the program id + AMM discriminator are sourced
-//! locally (`kassandra_market_program::ID` + the const below) so this crate never
+//! locally (`kassandra_markets_program::ID` + the const below) so this crate never
 //! pulls the solana-sdk-v2 `kassandra-markets-sdk`.
 
 pub mod api;
@@ -25,7 +25,7 @@ use solana_pubkey::Pubkey;
 /// crate's `ID` (a `solana-address` v2 `Address`) via its raw bytes, so the
 /// shipped indexer stays on the granular v3 client stack.
 pub fn default_program_id() -> Pubkey {
-    let bytes: [u8; 32] = kassandra_market_program::ID
+    let bytes: [u8; 32] = kassandra_markets_program::ID
         .as_ref()
         .try_into()
         .expect("program id is 32 bytes");

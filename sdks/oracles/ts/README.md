@@ -30,11 +30,11 @@ pnpm test         # vitest (unit + litesvm end-to-end)
 ### Prerequisite for litesvm-based usage/tests: the program `.so`
 
 The litesvm bridge, the `test/*.test.ts` integration tests, and `examples/quickstart.ts`
-load the compiled program from `target/deploy/kassandra_program.so`. Build it first
+load the compiled program from `target/deploy/kassandra_oracles_program.so`. Build it first
 **from the repo root**:
 
 ```sh
-just build        # produces target/deploy/kassandra_program.so
+just build        # produces target/deploy/kassandra_oracles_program.so
 ```
 
 Unit tests (codec round-trips, PDA derivation, parity) need no `.so`.

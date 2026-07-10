@@ -3,7 +3,7 @@
  *
  * Every kassandra-market account is a `#[repr(C)]` `bytemuck::Pod` struct read
  * straight out of the account's raw bytes at FIXED, little-endian offsets (pinned
- * in `programs/kassandra-market/tests/state_layout.rs`). These helpers wrap a
+ * in `programs/markets/tests/state_layout.rs`). These helpers wrap a
  * `DataView` over the account data so each decoder reads a field by its exact
  * byte offset:
  *

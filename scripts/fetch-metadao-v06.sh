@@ -87,7 +87,7 @@ SQUADS_V4_ID="SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf"
 URL="${SOLANA_MAINNET_URL:-https://api.mainnet-beta.solana.com}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FIXTURE_DIR="${SCRIPT_DIR}/../programs/kassandra/tests/fixtures"
+FIXTURE_DIR="${SCRIPT_DIR}/../programs/oracles/tests/fixtures"
 mkdir -p "${FIXTURE_DIR}"
 
 dump() {

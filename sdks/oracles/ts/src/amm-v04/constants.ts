@@ -7,9 +7,9 @@
  * different account/arg shape; do NOT cross-use the two.
  *
  * Discriminators are the binary-validated values from
- * `programs/kassandra/src/cpi/metadao.rs:82-94` (`sha256("global:<name>")[..8]`).
+ * `programs/oracles/src/cpi/metadao.rs:82-94` (`sha256("global:<name>")[..8]`).
  * Account orderings + arg layouts are proven against the real `metadao_amm.so`
- * fixture in `programs/kassandra/tests/challenge_e2e.rs:631-769`.
+ * fixture in `programs/oracles/tests/challenge_e2e.rs:631-769`.
  */
 import { Address } from "@solana/web3.js";
 

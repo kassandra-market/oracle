@@ -4,7 +4,7 @@ description: "All MarketError codes (0–22) — code, name, and meaning, includ
 ---
 
 Every failure the program raises is a variant of `MarketError`
-(`programs/kassandra-market/src/error.rs`), declared `#[repr(u32)]` and surfaced to
+(`programs/markets/src/error.rs`), declared `#[repr(u32)]` and surfaced to
 clients as `ProgramError::Custom(n)`. Error codes are a **stable public contract** —
 never renumbered, only appended. The SDK re-exports this enum plus a `decodeError`
 helper and per-code messages (`sdks/markets/ts/src/constants.ts`).

@@ -1,11 +1,11 @@
 //! Instruction builders — one per [`Ix`] variant, returning a client
 //! [`Instruction`]. Account order, signer/writable flags, and payload byte
 //! layouts are the program's wire contract (see the processors in
-//! `programs/kassandra/src/processor/`). Every oracle-PDA-signing instruction
+//! `programs/oracles/src/processor/`). Every oracle-PDA-signing instruction
 //! needs the oracle `nonce`, which the Oracle struct does not store — callers
 //! must carry it alongside the oracle pubkey.
 
-use kassandra_program::instruction::Ix;
+use kassandra_oracles_program::instruction::Ix;
 use solana_instruction::{AccountMeta, Instruction};
 use solana_pubkey::Pubkey;
 

@@ -9,7 +9,7 @@
  *      conditional-vault `VLTX…` + AMM v0.4 `AMMyu…` programs are lazily fetched
  *      from the fork on first touch — no local fixtures);
  *   2. poll the RPC `getHealth` until ready (with a timeout);
- *   3. deploy the LOCAL `target/deploy/kassandra_market_program.so` at the FIXED
+ *   3. deploy the LOCAL `target/deploy/kassandra_markets_program.so` at the FIXED
  *      {@link MARKET_PROGRAM_ID} via the `surfnet_setAccount` cheatcode (writing the
  *      ELF as a non-upgradeable BPFLoader2 program account);
  *   4. expose a web3.js {@link Connection} + market-specific fabrication helpers
@@ -52,10 +52,10 @@ export { Address, Keypair } from "@solana/web3.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** The local SBF artifact (`just build` produces it). */
-export const SO_PATH = resolve(here, "../../../../../target/deploy/kassandra_market_program.so");
+export const SO_PATH = resolve(here, "../../../../../target/deploy/kassandra_markets_program.so");
 
 /** The vendored MetaDAO `.so` fixtures (the LiteSVM harness `include_bytes!`s these). */
-const FIXTURES_DIR = resolve(here, "../../../../../programs/kassandra-market/tests/fixtures");
+const FIXTURES_DIR = resolve(here, "../../../../../programs/markets/tests/fixtures");
 /**
  * The two MetaDAO v0.4 programs (conditional_vault + amm) at their canonical
  * mainnet program ids. In OFFLINE mode these are deployed locally from the

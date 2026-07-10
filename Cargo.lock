@@ -3100,7 +3100,7 @@ dependencies = [
  "env_logger 0.11.11",
  "futures-util",
  "hex",
- "kassandra-market-program",
+ "kassandra-markets-program",
  "kassandra-oracles-sdk",
  "log",
  "reqwest 0.12.28",
@@ -3126,7 +3126,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kassandra-market-program"
+name = "kassandra-markets-program"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
@@ -3149,17 +3149,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kassandra-oracles-sdk"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "kassandra-program",
- "solana-instruction 3.2.0",
- "solana-pubkey 3.0.0",
-]
-
-[[package]]
-name = "kassandra-program"
+name = "kassandra-oracles-program"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
@@ -3184,6 +3174,16 @@ dependencies = [
  "solana-transaction 3.1.0",
  "solana-transaction-error 3.1.0",
  "spl-token 9.0.0",
+]
+
+[[package]]
+name = "kassandra-oracles-sdk"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "kassandra-oracles-program",
+ "solana-instruction 3.2.0",
+ "solana-pubkey 3.0.0",
 ]
 
 [[package]]

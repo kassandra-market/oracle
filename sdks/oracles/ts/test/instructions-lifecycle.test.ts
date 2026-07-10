@@ -7,7 +7,7 @@
  *   - `keys` == the processor's documented account order, each with the correct
  *     `isSigner`/`isWritable` role, and the PDA-derived accounts in the right
  *     slots (cross-checked against the `*_ix` helpers in
- *     `programs/kassandra/tests/common/mod.rs`).
+ *     `programs/oracles/tests/common/mod.rs`).
  *
  * One builder (init_protocol) is additionally driven through the litesvm path:
  * built via the SDK, signed with web3.js v3, bridged into litesvm, and asserted
@@ -356,7 +356,7 @@ describe("D3a instruction builders — data bytes + account metas", () => {
 // program accepts it (account order + roles correct).
 // ---------------------------------------------------------------------------
 const here = dirname(fileURLToPath(import.meta.url));
-const SO_PATH = resolve(here, "../../../../target/deploy/kassandra_program.so");
+const SO_PATH = resolve(here, "../../../../target/deploy/kassandra_oracles_program.so");
 
 describe("D3a litesvm acceptance — initProtocol via the SDK", () => {
   it("the real program accepts the SDK-built init_protocol", async () => {

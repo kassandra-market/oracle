@@ -11,7 +11,7 @@
  * Task-2 `activate` builder.
  *
  * This is the TypeScript mirror of the Rust test harness `compose_metadao_market`
- * (`programs/kassandra-market/tests/common/mod.rs`) + `activate`. The twap /
+ * (`programs/markets/tests/common/mod.rs`) + `activate`. The twap /
  * observation constants below are copied from that harness verbatim so the pool
  * is seeded as a valid, balanced, EMPTY 50/50 book (the on-chain `activate`
  * rejects a non-empty pool).

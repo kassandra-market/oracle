@@ -5,7 +5,7 @@ description: "Complete reference for all 24 Kassandra instructions (Ix 0–23): 
 
 The program exposes **24 instructions**. The first byte of `instruction_data` is the discriminant
 (the `Ix` value); the remaining bytes are the payload, parsed inside each processor
-(`programs/kassandra/src/instruction.rs`, `processor/mod.rs`). Discriminants are a stable contract —
+(`programs/oracles/src/instruction.rs`, `processor/mod.rs`). Discriminants are a stable contract —
 never renumbered, only appended.
 
 <Info>

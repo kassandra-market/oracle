@@ -3,11 +3,11 @@ title: "Accounts"
 description: "Complete reference for the Kassandra account structs — full field tables, byte sizes, AccountType tags, and the enums and sentinels."
 ---
 
-Kassandra stores state in the account types defined in `programs/kassandra/src/state.rs`. The
+Kassandra stores state in the account types defined in `programs/oracles/src/state.rs`. The
 fixed-layout structs are `#[repr(C)]`, `Pod + Zeroable`, fully packed (explicit `_pad` arrays), and
 read/written zero-copy via `bytemuck`, each beginning with an 8-byte header: `account_type: u8` at
 offset 0 followed by `_pad_hdr: [u8;7]`. The one exception is `oracle_meta`, a variable-length
-metadata account with a compact 34-byte header (see below). Byte sizes and offsets are pinned by `programs/kassandra/tests/state_layout.rs`.
+metadata account with a compact 34-byte header (see below). Byte sizes and offsets are pinned by `programs/oracles/tests/state_layout.rs`.
 Throughout, `type Pubkey = [u8;32]`.
 
 ## Enums & sentinels

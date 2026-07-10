@@ -41,14 +41,14 @@ the `declare_id!` / `Anchor.toml` source of truth). Do not edit the IDs from mem
 ```
 
 Each script uses `solana program dump` against mainnet-beta and writes the `.so` binaries
-into [`programs/kassandra/tests/fixtures/`](../programs/kassandra/tests/fixtures). Runs are
+into [`programs/oracles/tests/fixtures/`](../programs/oracles/tests/fixtures). Runs are
 idempotent — re-running overwrites the fixtures with a fresh dump. Run them once (or
 whenever the pinned MetaDAO versions change) before the CPI integration tests, so
 `just test` can load the real programs into LiteSVM.
 
 ## Related
 
-- [`programs/kassandra/src/cpi/`](../programs/kassandra/src/cpi) — the hand-built CPI into
+- [`programs/oracles/src/cpi/`](../programs/oracles/src/cpi) — the hand-built CPI into
   these programs (`metadao.rs` = v0.4, `metadao_v06.rs` = v0.6).
 - [Challenge markets](../docs-site/challenge) in the docs site — how the conditional vaults
   and AMMs are composed into a decision market.

@@ -17,7 +17,7 @@ crank_that_twap  (disc dc 64 19 f9 00 5c c3 c1)   // no args
 accounts: [ amm(w), event_authority, amm_program ]
 ```
 
-`crank_that_twap` (`programs/kassandra/src/cpi/metadao.rs:91-94`) folds the current spot
+`crank_that_twap` (`programs/oracles/src/cpi/metadao.rs:91-94`) folds the current spot
 price into the pool's slot-weighted `aggregator`. It takes **no arguments** and needs
 **no signer** — the only writable account is the `amm` itself, plus the `#[event_cpi]`
 trailer.
@@ -84,7 +84,7 @@ controls.
 
 <Info>
   **Settlement reads the *stored* aggregator — it never cranks.** Kassandra's
-  `verify_and_read_twap` (`programs/kassandra/src/processor/settle_challenge.rs:203-217,
+  `verify_and_read_twap` (`programs/oracles/src/processor/settle_challenge.rs:203-217,
   23-34`) computes `aggregator / (last_updated_slot − (created_at_slot +
   start_delay_slots))` from whatever was already accumulated. This is deliberate: if
   settle cranked, a settler could fold a last-moment price into the average at the

@@ -4,15 +4,15 @@
  * against the program and guarded by `test/parity.test.ts` (a mismatch fails CI
  * = drift guard). Sources:
  *
- *   - `programs/kassandra-market/src/instruction.rs` — {@link Ix} discriminants (0..=10)
- *   - `programs/kassandra-market/src/state.rs`       — {@link AccountType} (0..=3), {@link MarketStatus} (0..=4)
- *   - `programs/kassandra-market/src/error.rs`       — {@link MarketError} (0..=21)
- *   - `programs/kassandra-market/tests/state_layout.rs` — {@link ACCOUNT_SIZES}
+ *   - `programs/markets/src/instruction.rs` — {@link Ix} discriminants (0..=10)
+ *   - `programs/markets/src/state.rs`       — {@link AccountType} (0..=3), {@link MarketStatus} (0..=4)
+ *   - `programs/markets/src/error.rs`       — {@link MarketError} (0..=21)
+ *   - `programs/markets/tests/state_layout.rs` — {@link ACCOUNT_SIZES}
  *   - `sdks/oracles/rust/src/{metadao,lib}.rs`                  — external program IDs
  */
 import { Address } from "@solana/web3.js";
 
-/** kassandra-market program ID (`programs/kassandra-market/src/lib.rs::ID`). */
+/** kassandra-market program ID (`programs/markets/src/lib.rs::ID`). */
 export const MARKET_PROGRAM_ID = new Address("FEGNHWAB7kc7VC9CCwbvVPsv4Jykz2r2WQ758V4xCT9S");
 
 /** The Solana System program, referenced by account-creating instructions. */

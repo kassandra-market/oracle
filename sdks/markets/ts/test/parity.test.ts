@@ -26,7 +26,7 @@ import { resolveQuestion, splitTokens } from "../src/metadao/vault.js";
 import { addLiquidity } from "../src/metadao/amm.js";
 
 describe("parity guard: Ix discriminants (instruction.rs 0..=10)", () => {
-  // Pinned from programs/kassandra-market/src/instruction.rs.
+  // Pinned from programs/markets/src/instruction.rs.
   const PINNED: Record<string, number> = {
     InitConfig: 0,
     UpdateConfig: 1,
@@ -100,7 +100,7 @@ describe("parity guard: account sizes (tests/state_layout.rs)", () => {
 });
 
 describe("parity guard: MarketError (error.rs 0..=21)", () => {
-  // Pinned from programs/kassandra-market/src/error.rs.
+  // Pinned from programs/markets/src/error.rs.
   const PINNED: Record<string, number> = {
     InvalidAccount: 0,
     Unauthorized: 1,

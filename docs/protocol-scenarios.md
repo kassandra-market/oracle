@@ -5,7 +5,7 @@ scenario, for verifying the protocol behaves as expected. Every step cites the
 instruction and the guard that enforces it; the **must-fail** scenarios (§7) are
 the verification checklist — they're where a bug would let value leak.
 
-> Source of truth: `programs/kassandra-market/src/processor/*.rs`. If this doc and
+> Source of truth: `programs/markets/src/processor/*.rs`. If this doc and
 > the code disagree, the code wins — file a fix.
 
 ---
@@ -296,7 +296,7 @@ behaviors — assert them explicitly.
 
 ## 9. How to exercise these
 
-- **Rust (LiteSVM):** `just test` — `programs/kassandra-market/tests/` covers every
+- **Rust (LiteSVM):** `just test` — `programs/markets/tests/` covers every
   instruction, the full lifecycle (`lifecycle*.rs`), and the must-fail cases
   (per-instruction `*_rejects_*` tests).
 - **TS (LiteSVM + parity):** `pnpm --filter @kassandra-market/markets test`.

@@ -28,9 +28,9 @@ pnpm --filter @kassandra-market/markets test      # offline: parity + builders +
 ```
 
 The default test suite is fully offline (pure decoders + LiteSVM). It requires the
-program artifact `target/deploy/kassandra_market_program.so` (run `just build`
+program artifact `target/deploy/kassandra_markets_program.so` (run `just build`
 first) and the vendored MetaDAO fixtures under
-`programs/kassandra-market/tests/fixtures/`. The opt-in surfpool suite runs behind
+`programs/markets/tests/fixtures/`. The opt-in surfpool suite runs behind
 `pnpm test:e2e` (`KASSANDRA_MARKET_E2E=1`).
 
 ## Usage

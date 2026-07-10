@@ -3,7 +3,7 @@
  * categorical Kassandra oracle (`options_count > 2`) is modeled as N independent
  * per-outcome binary sub-markets, each keyed by `(oracle, outcome_index)`.
  *
- * Against the REAL compiled `kassandra_market_program.so`:
+ * Against the REAL compiled `kassandra_markets_program.so`:
  *   1. initConfig + a fabricated 3-option oracle (Proposal).
  *   2. createMarket at outcome_index 0, 1, 2 → three DISTINCT market PDAs, all
  *      succeed; decode each Market and assert `outcomeIndex` matches.

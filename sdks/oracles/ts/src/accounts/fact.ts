@@ -2,7 +2,7 @@
  * Decoder for the `Fact` account (`state.rs::Fact`, 336 bytes) — a fact
  * submitted in support of an option. Carries a fixed `uri: [u8;200]` whose
  * meaningful prefix is the first `uri_len` bytes (UTF-8). Field offsets pinned
- * in `programs/kassandra/tests/state_layout.rs` (`uri` @136).
+ * in `programs/oracles/tests/state_layout.rs` (`uri` @136).
  */
 import { Address } from "@solana/web3.js";
 

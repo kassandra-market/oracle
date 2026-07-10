@@ -2,7 +2,7 @@
 
 This is the authoritative layout map the `sdk/src/futarchy/*` builders are derived
 from. Every discriminator mirrors the binary-validated Rust CPI modules
-(`programs/kassandra/src/cpi/metadao_v06.rs` for futarchy/Squads, `…/metadao.rs`
+(`programs/oracles/src/cpi/metadao_v06.rs` for futarchy/Squads, `…/metadao.rs`
 for the conditional_vault); every account ordering + arg layout is sourced as
 noted per instruction. Where a wire format is NOT authoritatively determinable it
 is marked **DEFERRED / STOP-REPORTED** rather than guessed.

@@ -73,7 +73,7 @@ the *categorical* option (and confirm `model_id` / `params_hash` match), and
   97-byte payload assembly.
 - **CLI** (`src/cli.rs`, entry `src/main.rs`) — the `run` / `verify` commands.
 
-The runner reuses the on-chain program crate (`kassandra-program`) for
+The runner reuses the on-chain program crate (`kassandra-oracles-program`) for
 `CLAIM_OPTION_NONE` and the `submit_ai_claim` payload widths, pinned to the
 actual `AiClaim` field layout via compile-time assertions — so the runner can
 never drift from the on-chain encoding (see `src/constants.rs`,
@@ -152,7 +152,7 @@ What it does:
 
 - **`getAccountInfo`** (base64) for the oracle account → verifies it is owned by
   the Kassandra program and carries the `Oracle` account-type tag → `bytemuck`
-  decodes it through the **shared `kassandra_program::state::Oracle`** struct,
+  decodes it through the **shared `kassandra_oracles_program::state::Oracle`** struct,
   reading `options_count`, `deadline`, and the `prompt_hash` commitment.
 - **`getProgramAccounts`** with a `dataSize == Fact::LEN` filter and a `memcmp`
   on the `Fact.oracle` field enumerates this oracle's `Fact` accounts, decodes

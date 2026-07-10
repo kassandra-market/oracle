@@ -5,8 +5,8 @@
 //! program crate re-declares only the subset it invokes (`split_tokens`,
 //! `add_liquidity`) and `tests/parity.rs` asserts they agree byte-for-byte.
 //!
-//! Ported + re-verified against `../kassandra/programs/kassandra/src/cpi/metadao.rs`
-//! and the real account orders realized in `../kassandra/programs/kassandra/tests/
+//! Ported + re-verified against `../kassandra/programs/oracles/src/cpi/metadao.rs`
+//! and the real account orders realized in `../kassandra/programs/oracles/tests/
 //! challenge_e2e.rs` (`build_pool`, `setup_market`).
 
 use solana_sdk::{

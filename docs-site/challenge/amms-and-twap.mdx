@@ -16,7 +16,7 @@ TWAP, which is why the challenge market does not use it.)
 amm (v0.4.2, delayed-twap): AMMyu265tkBpRW21iGQxKGLaves3gKm2JcMUqfXNSpqD
 ```
 
-Defined as `AMM_ID` in `programs/kassandra/src/cpi/metadao.rs:56-59`, and as
+Defined as `AMM_ID` in `programs/oracles/src/cpi/metadao.rs:56-59`, and as
 `ammV04.AMM_V04_ID` / `EXTERNAL_PROGRAM_IDS.ammV04` in the SDK
 (`sdk/src/amm-v04/constants.ts`).
 
@@ -30,7 +30,7 @@ Defined as `AMM_ID` in `programs/kassandra/src/cpi/metadao.rs:56-59`, and as
 Each pool PDA is `[b"amm__", base_mint, quote_mint]` (note the **double** trailing
 underscore) under the AMM program. The LP mint is `[b"amm_lp_mint", amm]`, and the
 pool's token vaults are the ATAs of the `Amm` PDA
-(`programs/kassandra/src/cpi/metadao.rs:100-107, 231-292`; SDK `ammV04.pda.*`).
+(`programs/oracles/src/cpi/metadao.rs:100-107, 231-292`; SDK `ammV04.pda.*`).
 
 ## Seeding a pool
 
@@ -58,7 +58,7 @@ folds the new price with **no clamp** on how far it can move per update.
 ### create_amm / add_liquidity args
 
 ```rust
-// programs/kassandra/src/cpi/metadao.rs:78-90 (Borsh)
+// programs/oracles/src/cpi/metadao.rs:78-90 (Borsh)
 create_amm    { twap_initial_observation: u128,
                 twap_max_observation_change_per_update: u128,
                 twap_start_delay_slots: u64 }         // 40 bytes
@@ -72,7 +72,7 @@ SDK builders: `ammV04.createAmm` (`sdk/src/amm-v04/instructions.ts:90`) and
 
 The `Amm` account is an Anchor `#[account]` (8-byte discriminator first, then Borsh
 sequential little-endian fields) and embeds a `TwapOracle`
-(`programs/kassandra/src/cpi/metadao.rs:131-178`; app decoder
+(`programs/oracles/src/cpi/metadao.rs:131-178`; app decoder
 `app/src/data/ammV04.ts`):
 
 ```text
@@ -145,7 +145,7 @@ hold a price for a meaningful fraction of the window, not just the last slot.
 <Note>
   The v0.6 futarchy spot oracle used by `kass_price` is the analogous but
   **timestamp-weighted** version — `aggregator / (last_updated_ts − (created_at_ts +
-  start_delay_seconds))` (`programs/kassandra/src/cpi/metadao_v06.rs:385-415`). That
+  start_delay_seconds))` (`programs/oracles/src/cpi/metadao_v06.rs:385-415`). That
   one anchors the challenger's USDC escrow size, not the verdict.
 </Note>
 

@@ -17,7 +17,7 @@
 //!
 //! # `content_hash` derivation (mirrored from the program)
 //!
-//! The on-chain program (`programs/kassandra/src/processor/submit_fact.rs`)
+//! The on-chain program (`programs/oracles/src/processor/submit_fact.rs`)
 //! treats `content_hash` as an **opaque, caller-supplied 32-byte value**: it
 //! uses it only as a `Fact` PDA seed (`[b"fact", oracle, content_hash]`) and
 //! stores it verbatim — it never hashes the content or applies any framing

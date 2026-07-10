@@ -20,7 +20,7 @@ import {
 } from "../src/constants.js";
 
 describe("parity guard: Ix discriminants (instruction.rs 0..=23)", () => {
-  // Pinned from programs/kassandra/src/instruction.rs.
+  // Pinned from programs/oracles/src/instruction.rs.
   const PINNED: Record<string, number> = {
     SubmitFact: 0,
     VoteFact: 1,
@@ -117,7 +117,7 @@ describe("parity guard: account sizes (tests/state_layout.rs)", () => {
 });
 
 describe("parity guard: KassandraError (error.rs 0..=36)", () => {
-  // Pinned from programs/kassandra/src/error.rs.
+  // Pinned from programs/oracles/src/error.rs.
   const PINNED: Record<string, number> = {
     NotImplemented: 0,
     WrongPhase: 1,

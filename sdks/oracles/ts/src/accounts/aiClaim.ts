@@ -2,7 +2,7 @@
  * Decoder for the `AiClaim` account (`state.rs::AiClaim`, 208 bytes) — a
  * pinned-model AI claim for a proposer's option. `authority` was appended at
  * offset 176 (S4). Field offsets pinned in
- * `programs/kassandra/tests/state_layout.rs` (`io_hash` @136, `authority` @176).
+ * `programs/oracles/tests/state_layout.rs` (`io_hash` @136, `authority` @176).
  */
 import { Address } from "@solana/web3.js";
 

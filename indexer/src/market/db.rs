@@ -4,13 +4,13 @@
 //! (`market_accounts`) holds the raw Pod bytes of every Config / Market /
 //! Contribution account, keyed by pubkey and slot-gated so an out-of-order
 //! (older) datasource event can never clobber a newer one. Reads decode the
-//! bytes back into `kassandra_market_program::state` structs on demand.
+//! bytes back into `kassandra_markets_program::state` structs on demand.
 
 use std::collections::HashSet;
 use std::str::FromStr;
 
 use anyhow::{Context, Result};
-use kassandra_market_program::state::{Config, Contribution, Market};
+use kassandra_markets_program::state::{Config, Contribution, Market};
 use solana_pubkey::Pubkey;
 use tokio_postgres::Client;
 

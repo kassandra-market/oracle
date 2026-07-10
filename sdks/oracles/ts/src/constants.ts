@@ -4,16 +4,16 @@
  * program and guarded by `test/parity.test.ts` (a mismatch fails CI = drift
  * guard). Sources:
  *
- *   - `programs/kassandra/src/instruction.rs` — {@link Ix} discriminants (0..=22)
- *   - `programs/kassandra/src/state.rs`       — {@link AccountType} (0..=7)
- *   - `programs/kassandra/src/error.rs`       — {@link KassandraError} (0..=35)
- *   - `programs/kassandra/tests/state_layout.rs` — {@link ACCOUNT_SIZES}
- *   - `programs/kassandra/src/config.rs`      — protocol consts
- *   - `programs/kassandra/src/cpi/{metadao,metadao_v06}.rs` — external program IDs
+ *   - `programs/oracles/src/instruction.rs` — {@link Ix} discriminants (0..=22)
+ *   - `programs/oracles/src/state.rs`       — {@link AccountType} (0..=7)
+ *   - `programs/oracles/src/error.rs`       — {@link KassandraError} (0..=35)
+ *   - `programs/oracles/tests/state_layout.rs` — {@link ACCOUNT_SIZES}
+ *   - `programs/oracles/src/config.rs`      — protocol consts
+ *   - `programs/oracles/src/cpi/{metadao,metadao_v06}.rs` — external program IDs
  */
 import { Address } from "@solana/web3.js";
 
-/** Kassandra dispute-core program ID (`programs/kassandra/src/lib.rs`). */
+/** Kassandra dispute-core program ID (`programs/oracles/src/lib.rs`). */
 export const KASSANDRA_PROGRAM_ID = new Address("KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY");
 
 /** The Solana System program (`pinocchio_system::ID`), referenced by account-creating instructions. */

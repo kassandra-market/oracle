@@ -83,7 +83,7 @@ describe("meteora wire constants", () => {
   });
 
   it("cross-checks the 3 program-pinned discs + computes the 3 new ones", () => {
-    // pinned in programs/kassandra/src/cpi/metadao_v06.rs:127-131
+    // pinned in programs/oracles/src/cpi/metadao_v06.rs:127-131
     expect(hex(DISC.initializePool)).toBe("5fb40aac54aee828");
     expect(hex(DISC.swap)).toBe("f8c69e91e17587c8");
     expect(hex(DISC.addLiquidity)).toBe("b59d59438fb63448");

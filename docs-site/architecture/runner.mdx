@@ -63,11 +63,11 @@ runner/src/
 ├── hashing.rs     model_id / params_hash / io_hash (spec: HASHING.md)
 ├── rpc.rs         on-chain oracle + fact fetch (plain JSON-RPC)
 ├── submit.rs      keeper sign / send / confirm
-└── constants.rs   re-exports the on-chain layout (via kassandra_program)
+└── constants.rs   re-exports the on-chain layout (via kassandra_oracles_program)
 ```
 
 The runner reuses the on-chain program crate with the `no-entrypoint` feature
-(`runner/Cargo.toml`), so its layout constants come directly from `kassandra_program::state`.
+(`runner/Cargo.toml`), so its layout constants come directly from `kassandra_oracles_program::state`.
 
 ## Determinism model
 

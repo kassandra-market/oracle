@@ -12,7 +12,7 @@ the **pass** price up (or leave fail neutral).
 ## The swap instruction
 
 Trading uses the MetaDAO AMM's `swap` (discriminator `f8 c6 9e 91 e1 75 87 c8`). Its
-Borsh args (`programs/kassandra/src/cpi/metadao.rs:78-90`):
+Borsh args (`programs/oracles/src/cpi/metadao.rs:78-90`):
 
 ```rust
 swap { swap_type: u8, input_amount: u64, output_amount_min: u64 }

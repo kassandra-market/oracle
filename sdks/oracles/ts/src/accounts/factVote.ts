@@ -1,7 +1,7 @@
 /**
  * Decoder for the `FactVote` account (`state.rs::FactVote`, 88 bytes) — a
  * stake-weighted vote on a fact. Field offsets pinned in
- * `programs/kassandra/tests/state_layout.rs` (`stake` @72).
+ * `programs/oracles/tests/state_layout.rs` (`stake` @72).
  */
 import { Address } from "@solana/web3.js";
 

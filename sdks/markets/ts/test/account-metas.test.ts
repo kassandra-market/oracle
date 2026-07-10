@@ -10,7 +10,7 @@
  * golden — a hand-written frozen snapshot, NOT computed from the builder.
  *
  * The goldens are cross-checked against the program processors' `let [a, b, ..]`
- * destructures (`programs/kassandra-market/src/processor/*.rs`) and the CPI metas
+ * destructures (`programs/markets/src/processor/*.rs`) and the CPI metas
  * (`activate.rs` split_metas, `collect_fee.rs` redeem_metas). Where the two SDKs
  * disagreed the PROGRAM wins; the labels + order here are IDENTICAL to the Rust
  * golden in `sdks/oracles/rust/tests/account_metas.rs`, so both SDKs encode ONE contract.

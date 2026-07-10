@@ -10,14 +10,14 @@ Kassandra spans a Rust Cargo workspace and a pnpm workspace. This page collects 
 The `justfile` at the repo root wraps the program build and test:
 
 ```bash
-just build   # cargo build-sbf --manifest-path programs/kassandra/Cargo.toml
-just test    # depends on build, then: cargo test -p kassandra-program
+just build   # cargo build-sbf --manifest-path programs/oracles/Cargo.toml
+just test    # depends on build, then: cargo test -p kassandra-oracles-program
 ```
 
 <Warning>
 The LiteSVM program tests `include_bytes!` the compiled `.so`, so you MUST rebuild
 before testing a program change. Use `just test` (which depends on `just build`) —
-never a bare `cargo test -p kassandra-program` on a stale `.so`. This is the single
+never a bare `cargo test -p kassandra-oracles-program` on a stale `.so`. This is the single
 most common footgun when verifying a merged program change on the main checkout.
 </Warning>
 

@@ -1,12 +1,12 @@
 # Runner R0 recon notes
 
-## Decision: DEPEND on `kassandra-program` (not mirror)
+## Decision: DEPEND on `kassandra-oracles-program` (not mirror)
 
 The runner depends on the on-chain program crate as a path dependency with the
 `no-entrypoint` feature:
 
 ```toml
-kassandra-program = { path = "../programs/kassandra", features = ["no-entrypoint"] }
+kassandra-oracles-program = { path = "../programs/oracles", features = ["no-entrypoint"] }
 ```
 
 ### Why it's clean
@@ -17,7 +17,7 @@ kassandra-program = { path = "../programs/kassandra", features = ["no-entrypoint
   `-system`, `-token`), `bytemuck`, `five8`. `solana-sdk` / `litesvm` /
   `spl-token` are **dev-dependencies only**, so they do NOT enter the runner's
   build graph. No heavy or bpf-only deps leak in.
-- `cargo build -p kassandra-program --lib --features no-entrypoint` builds
+- `cargo build -p kassandra-oracles-program --lib --features no-entrypoint` builds
   cleanly on the host (aarch64-apple-darwin), in ~2.5s from cold.
 - `lib.rs` gates the pinocchio `entrypoint!` (which installs a global allocator
   + panic handler — would conflict in a host binary) behind
@@ -27,9 +27,9 @@ kassandra-program = { path = "../programs/kassandra", features = ["no-entrypoint
 ### What the runner reuses (`runner/src/constants.rs`)
 
 - `CLAIM_OPTION_NONE` (0xFF) — re-exported directly from
-  `kassandra_program::state`.
+  `kassandra_oracles_program::state`.
 - The `submit_ai_claim` payload widths, pinned to the actual
-  `kassandra_program::state::AiClaim` field layout via `offset_of!`
+  `kassandra_oracles_program::state::AiClaim` field layout via `offset_of!`
   compile-time assertions. If the program ever reorders or resizes
   `model_id` / `params_hash` / `io_hash` / `option`, **this crate fails to
   build** — drift is caught at compile time, not runtime.
@@ -40,9 +40,9 @@ left completely unmodified.
 
 ## Verified `submit_ai_claim` payload layout
 
-Verified against `programs/kassandra/src/processor/submit_ai_claim.rs`
+Verified against `programs/oracles/src/processor/submit_ai_claim.rs`
 (`Args::parse`, `PAYLOAD_LEN`) and the `AiClaim` struct in
-`programs/kassandra/src/state.rs`:
+`programs/oracles/src/state.rs`:
 
 ```
 offset  field        width

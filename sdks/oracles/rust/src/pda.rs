@@ -4,7 +4,7 @@
 //! code MUST derive with exactly these seeds. Each function returns
 //! `(address, bump)` like [`solana_pubkey::Pubkey::find_program_address`].
 
-use kassandra_program::config::MINT_AUTHORITY_SEED;
+use kassandra_oracles_program::config::MINT_AUTHORITY_SEED;
 use solana_pubkey::Pubkey;
 
 use crate::{ATA_PROGRAM_ID, TOKEN_PROGRAM_ID};

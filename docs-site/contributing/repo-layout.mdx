@@ -9,8 +9,8 @@ Kassandra is a monorepo spanning two build systems: a **Rust Cargo workspace** (
 
 | Path | What it is | Build system |
 | --- | --- | --- |
-| `programs/kassandra` | The oracle on-chain program (`kassandra-program`), a Pinocchio-based Solana program. | Cargo (`cargo build-sbf`) |
-| `programs/kassandra-market` | The **prediction-market** on-chain program (`kassandra-market-program`) — a Pinocchio wrapper over MetaDAO v0.4 vault + amm, resolved by the oracle. | Cargo (`cargo build-sbf`) |
+| `programs/oracles` | The oracle on-chain program (`kassandra-oracles-program`), a Pinocchio-based Solana program. | Cargo (`cargo build-sbf`) |
+| `programs/markets` | The **prediction-market** on-chain program (`kassandra-markets-program`) — a Pinocchio wrapper over MetaDAO v0.4 vault + amm, resolved by the oracle. | Cargo (`cargo build-sbf`) |
 | `runner` | The AI runner (`kassandra-runner`), a Rust binary/lib crate. | Cargo |
 | `sdks/oracles/ts` | The oracle TypeScript SDK (`@kassandra-market/oracles`). | pnpm |
 | `sdks/markets/ts` | The market TypeScript SDK (`@kassandra-market/markets`). | pnpm |
@@ -24,7 +24,7 @@ Kassandra is a monorepo spanning two build systems: a **Rust Cargo workspace** (
 
 ## The two workspaces
 
-The Cargo workspace (`Cargo.toml`) uses `resolver = "2"` with members `programs/kassandra`, `programs/kassandra-market`, `runner`, `sdks/oracles/rust`, `sdks/markets/rust`, and `indexer`. The oracle stack rides the granular **solana v3** client crates; the market program's tests + `sdks/markets/rust` are a **solana-sdk v2 island** (pinned directly, not via the workspace), so both majors coexist without a cross-crate type split. The shipped indexer stays v3-clean.
+The Cargo workspace (`Cargo.toml`) uses `resolver = "2"` with members `programs/oracles`, `programs/markets`, `runner`, `sdks/oracles/rust`, `sdks/markets/rust`, and `indexer`. The oracle stack rides the granular **solana v3** client crates; the market program's tests + `sdks/markets/rust` are a **solana-sdk v2 island** (pinned directly, not via the workspace), so both majors coexist without a cross-crate type split. The shipped indexer stays v3-clean.
 
 The pnpm workspace (`pnpm-workspace.yaml`) contains:
 

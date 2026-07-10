@@ -7,7 +7,7 @@
  *     INDEPENDENTLY here (so an encoder regression is caught);
  *   - `keys == ` the processor's documented account order, each with the right
  *     `isSigner`/`isWritable` role, PDAs in the correct slots — cross-checked
- *     against the `*_ix` helpers in `programs/kassandra/tests/{common/mod,
+ *     against the `*_ix` helpers in `programs/oracles/tests/{common/mod,
  *     settlement_e2e,challenge_e2e}.rs`.
  *
  * The long OpenChallenge/SettleChallenge lists are asserted slot-by-slot.

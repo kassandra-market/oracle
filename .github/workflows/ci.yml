@@ -3,7 +3,7 @@
 # Lanes (all triggered on PRs):
 #   build      — compile the SBF program (.so) ONCE and share it as an artifact.
 #                Every downstream lane's tests load this exact .so
-#                (`target/deploy/kassandra_program.so`): the Rust program tests
+#                (`target/deploy/kassandra_oracles_program.so`): the Rust program tests
 #                `include_bytes!` it at compile time; the SDK litesvm + surfpool
 #                harnesses load it at runtime.
 #   rust       — `cargo test --workspace` (program LiteSVM tests + runner + rust SDKs).
@@ -71,16 +71,16 @@ jobs:
 
       - name: Build SBF programs (.so) — oracle + market
         run: |
-          cargo build-sbf --manifest-path programs/kassandra/Cargo.toml
-          cargo build-sbf --manifest-path programs/kassandra-market/Cargo.toml
+          cargo build-sbf --manifest-path programs/oracles/Cargo.toml
+          cargo build-sbf --manifest-path programs/markets/Cargo.toml
 
       - name: Upload program artifacts
         uses: actions/upload-artifact@v4
         with:
           name: program-so
           path: |
-            target/deploy/kassandra_program.so
-            target/deploy/kassandra_market_program.so
+            target/deploy/kassandra_oracles_program.so
+            target/deploy/kassandra_markets_program.so
           if-no-files-found: error
           retention-days: 1
 

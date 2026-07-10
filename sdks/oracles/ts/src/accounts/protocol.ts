@@ -4,7 +4,7 @@
  * The program's global config record: canonical mints, the fee-EMA state, the
  * one-time governance linkage, and the governable monetary/behavioral/challenge
  * params. Field offsets are the EXACT values pinned in
- * `programs/kassandra/tests/state_layout.rs` (`field_offsets_are_pinned`).
+ * `programs/oracles/tests/state_layout.rs` (`field_offsets_are_pinned`).
  */
 import { Address } from "@solana/web3.js";
 

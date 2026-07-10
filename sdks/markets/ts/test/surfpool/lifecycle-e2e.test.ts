@@ -7,7 +7,7 @@
  * (KASS mint, ATAs, the Kassandra oracle) is `surfnet_setAccount`-fabricated; all
  * OUTCOMES flow through the real forked programs.
  *
- * Mirrors `programs/kassandra-market/tests/collect_fee.rs` +
+ * Mirrors `programs/markets/tests/collect_fee.rs` +
  * `sdks/oracles/ts/test/lifecycle-active.e2e.test.ts`:
  *   1. initConfig(min_liquidity = 1 KASS, fee_bps = 100, a fabricated KASS fee dest)
  *   2. seedOracle(Proposal) + createMarket(SEED_A) + contribute(SEED_B) → funded

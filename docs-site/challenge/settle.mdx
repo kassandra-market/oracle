@@ -9,7 +9,7 @@ the accumulated TWAP from each pool, applies an exact integer threshold to decid
 redeems the bond, and routes directional fees. It settles **one** `Market` per call and
 does **not** crank — it consumes the stored aggregator.
 
-Source: `programs/kassandra/src/processor/settle_challenge.rs:220`. SDK:
+Source: `programs/oracles/src/processor/settle_challenge.rs:220`. SDK:
 `buildSettleChallengeIxs` (`sdk/src/instructions/challenge.ts:202`). App:
 `buildSettleFromMarketIxs` (`app/src/data/actions/challengeSettle.ts:136`), which derives
 the full account set from the decoded `Market` + `Oracle` (one-click settle, no JSON
@@ -52,7 +52,7 @@ with a `pass_twap == 0` → **always-survive** guard. `NUM / DEN` is the oracle'
 snapshotted relative margin (`oracle.market_threshold_num / den`, default
 `MARKET_THRESHOLD = 1/10`) — fail must beat pass by **more than 10%** to disqualify.
 
-The exact on-chain code (`programs/kassandra/src/processor/settle_challenge.rs:346-358`):
+The exact on-chain code (`programs/oracles/src/processor/settle_challenge.rs:346-358`):
 
 ```rust
 let market_threshold_num = oracle.market_threshold_num as u128;

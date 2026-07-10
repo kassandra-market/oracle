@@ -9,7 +9,7 @@
 //! golden — a hand-written frozen snapshot, NOT computed from the builder.
 //!
 //! Cross-checked against the program processors' `let [a, b, ..]` destructures
-//! (`programs/kassandra-market/src/processor/*.rs`) and the CPI metas
+//! (`programs/markets/src/processor/*.rs`) and the CPI metas
 //! (`activate.rs` split_metas, `collect_fee.rs` redeem_metas). Where the two SDKs
 //! disagreed the PROGRAM wins; the labels + order here are IDENTICAL to the TS
 //! golden in `sdks/oracles/ts/test/account-metas.test.ts`, so both SDKs encode ONE contract.

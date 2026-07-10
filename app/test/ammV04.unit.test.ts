@@ -2,7 +2,7 @@
  * Offline unit tests for the CU1 v0.4 `Amm` decoder + price/TWAP/margin helpers
  * (`src/data/ammV04.ts`). `decodeAmmV04` runs against a HAND-BUILT `Amm` byte
  * blob — fields written at the exact little-endian offsets the on-chain reader
- * uses (`programs/kassandra/src/cpi/metadao.rs:145-178`) — so it exercises the
+ * uses (`programs/oracles/src/cpi/metadao.rs:145-178`) — so it exercises the
  * genuine byte shape, not a hand-waved object. The math helpers run on known
  * inputs incl. the pre-start-delay div-guard (→ null) and a near-margin case.
  * No network.

@@ -18,7 +18,7 @@ and the `package.json` scripts — nothing invented.
 
 | Tool | Used for |
 |---|---|
-| Rust (stable) + `cargo build-sbf` | building the on-chain program (`programs/kassandra`) and the runner |
+| Rust (stable) + `cargo build-sbf` | building the on-chain program (`programs/oracles`) and the runner |
 | Node + pnpm | building the SDK (`sdk`) and running the dApp (`app`) |
 | A Solana RPC (optional to start) | the app defaults to `localnet` at `http://127.0.0.1:8899` (also the surfpool default) |
 
@@ -30,7 +30,7 @@ and the `package.json` scripts — nothing invented.
     git clone <your-fork-or-repo-url> kassandra
     cd kassandra
     ```
-    The monorepo holds `programs/kassandra` (the Pinocchio program), `runner` (the AI
+    The monorepo holds `programs/oracles` (the Pinocchio program), `runner` (the AI
     runner), `sdk` (the TypeScript client), and `app` (the dApp).
   </Step>
 
@@ -39,11 +39,11 @@ and the `package.json` scripts — nothing invented.
     ```bash
     just build
     # equivalent to:
-    # cargo build-sbf --manifest-path programs/kassandra/Cargo.toml
+    # cargo build-sbf --manifest-path programs/oracles/Cargo.toml
     ```
     <Warning>
       If you plan to run the program tests, run `just build` **before** `cargo test -p
-      kassandra-program`. The LiteSVM tests `include_bytes!` the compiled `.so`, so a stale
+      kassandra-oracles-program`. The LiteSVM tests `include_bytes!` the compiled `.so`, so a stale
       build silently tests old code. The `just test` target already depends on `build` for
       this reason.
     </Warning>

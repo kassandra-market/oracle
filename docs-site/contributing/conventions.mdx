@@ -7,9 +7,9 @@ A few conventions run through the whole repo. They are inferred from observable 
 
 ## Pinocchio, no Anchor
 
-The on-chain program (`programs/kassandra`) is built on **Pinocchio** — there is no Anchor and no IDL. Instructions are dispatched by a single leading discriminator byte (the `Ix` enum, 0..=22), and accounts are laid out and validated by hand.
+The on-chain program (`programs/oracles`) is built on **Pinocchio** — there is no Anchor and no IDL. Instructions are dispatched by a single leading discriminator byte (the `Ix` enum, 0..=22), and accounts are laid out and validated by hand.
 
-Because Kassandra drives the Anchor-based MetaDAO programs by CPI, it hand-reconstructs their wire format — the 8-byte `sha256("global:<name>")[..8]` sighash discriminator, ordered account metas, and Borsh args — in `programs/kassandra/src/cpi/metadao.rs` (v0.4 challenge stack) and `metadao_v06.rs` (v0.6 governance stack).
+Because Kassandra drives the Anchor-based MetaDAO programs by CPI, it hand-reconstructs their wire format — the 8-byte `sha256("global:<name>")[..8]` sighash discriminator, ordered account metas, and Borsh args — in `programs/oracles/src/cpi/metadao.rs` (v0.4 challenge stack) and `metadao_v06.rs` (v0.6 governance stack).
 
 ## A hand-written SDK mirroring the layouts
 

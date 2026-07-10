@@ -9,7 +9,7 @@ program-signs the value-moving CPIs, and defers resolution to the Kassandra
 oracle. It never custodies value on the trading hot path.
 
 - **Program ID:** `FEGNHWAB7kc7VC9CCwbvVPsv4Jykz2r2WQ758V4xCT9S`
-  (`programs/kassandra-market/src/lib.rs:17`).
+  (`programs/markets/src/lib.rs:17`).
 - **Entrypoint:** `process_instruction` → `processor::process`, which reads the
   first byte of `instruction_data` as the [instruction discriminant](/market-protocol/instructions)
   and dispatches to one processor per file (`processor/mod.rs`).

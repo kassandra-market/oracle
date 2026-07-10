@@ -73,7 +73,7 @@ No zkTLS, no TEEs. Honesty is enforced **economically** (KASS staking and slashi
 ## The monorepo
 
 <CardGroup cols={2}>
-  <Card title="programs/kassandra" icon="microchip" href="/architecture/program">
+  <Card title="programs/oracles" icon="microchip" href="/architecture/program">
     The core Solana program, written in **Pinocchio** (not Anchor). Owns oracle state,
     phases, facts, AI claims, plurality, staking, emissions, and the dynamic fee.
   </Card>
@@ -89,7 +89,7 @@ No zkTLS, no TEEs. Honesty is enforced **economically** (KASS staking and slashi
     The single frontend — both the oracle (`/oracles`) and the prediction market
     (`/markets`) sections, served by one Vite + React dApp.
   </Card>
-  <Card title="programs/kassandra-market" icon="chart-line" href="/market/overview">
+  <Card title="programs/markets" icon="chart-line" href="/market/overview">
     A KASS-denominated **AMM prediction market** that wraps MetaDAO v0.4
     vault + amm and defers resolution to the Kassandra oracle. One indexer serves both.
   </Card>
@@ -103,6 +103,6 @@ No zkTLS, no TEEs. Honesty is enforced **economically** (KASS staking and slashi
 
 <Note>
   Every reference page in these docs is grounded in the actual source — instruction names,
-  account layouts, error codes, and constants are cited from `programs/kassandra/src/`,
+  account layouts, error codes, and constants are cited from `programs/oracles/src/`,
   `sdk/src/`, and the design docs under `docs/plans/`.
 </Note>

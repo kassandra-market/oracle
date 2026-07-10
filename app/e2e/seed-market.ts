@@ -35,8 +35,8 @@ import { sendIx, sendIxs, type SeedCtx } from './seed.ts'
 type MarketRefs = flows.MarketRefs
 
 const here = dirname(fileURLToPath(import.meta.url))
-const MARKET_SO = resolve(here, '../../target/deploy/kassandra_market_program.so')
-const FIXTURES_DIR = resolve(here, '../../programs/kassandra-market/tests/fixtures')
+const MARKET_SO = resolve(here, '../../target/deploy/kassandra_markets_program.so')
+const FIXTURES_DIR = resolve(here, '../../programs/markets/tests/fixtures')
 
 /** The deprecated (non-upgradeable) BPF loader: a program account IS its ELF. */
 const BPF_LOADER_2 = 'BPFLoader2111111111111111111111111111111111'

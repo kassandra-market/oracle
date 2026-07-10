@@ -6,12 +6,12 @@
 //! * [`pda`] — every program PDA derivation (the seed conventions are the
 //!   program's public contract).
 //! * [`ix`] — instruction builders returning [`solana_instruction::Instruction`],
-//!   one per [`kassandra_program::instruction::Ix`] variant.
+//!   one per [`kassandra_oracles_program::instruction::Ix`] variant.
 //! * [`accounts`] — thin, zero-copy decoders over the shared on-chain account
-//!   structs (re-exported from [`kassandra_program::state`]).
+//!   structs (re-exported from [`kassandra_oracles_program::state`]).
 //!
 //! The canonical source of the wire format (discriminants, seeds, field layouts)
-//! is [`kassandra_program`] itself, depended on with the `no-entrypoint` feature
+//! is [`kassandra_oracles_program`] itself, depended on with the `no-entrypoint` feature
 //! so it links as a plain host library. Tests, the runner, and any other Rust
 //! client build instructions through this crate instead of hand-rolling account
 //! metas and payload bytes.
@@ -28,10 +28,10 @@ pub use solana_pubkey::Pubkey;
 
 // Re-export the discriminant enum so callers can match on it without a second
 // dependency edge to the program crate.
-pub use kassandra_program::instruction::Ix;
+pub use kassandra_oracles_program::instruction::Ix;
 
-/// The Kassandra dispute-core program ID (`programs/kassandra/src/lib.rs`).
-pub const PROGRAM_ID: Pubkey = Pubkey::new_from_array(kassandra_program::ID.to_bytes());
+/// The Kassandra dispute-core program ID (`programs/oracles/src/lib.rs`).
+pub const PROGRAM_ID: Pubkey = Pubkey::new_from_array(kassandra_oracles_program::ID.to_bytes());
 
 /// SPL Token program ID.
 pub const TOKEN_PROGRAM_ID: Pubkey =

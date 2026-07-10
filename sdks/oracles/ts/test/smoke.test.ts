@@ -1,5 +1,5 @@
 /**
- * D0 smoke test — the TypeScript parallel to `programs/kassandra/tests/smoke.rs`.
+ * D0 smoke test — the TypeScript parallel to `programs/oracles/tests/smoke.rs`.
  *
  * Proves three things at once:
  *   1. The compiled `.so` loads into litesvm without panicking.
@@ -10,7 +10,7 @@
  *      (see `processor/mod.rs`: `Ix::from_u8(disc).ok_or(InvalidInstructionData)`).
  *
  * Build the artifact first: `just build` (repo root) produces
- * `target/deploy/kassandra_program.so`.
+ * `target/deploy/kassandra_oracles_program.so`.
  */
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -26,7 +26,7 @@ import { toLiteSvmTransaction } from "../src/litesvm-interop.js";
 const PROGRAM_ID = "KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SO_PATH = resolve(here, "../../../../target/deploy/kassandra_program.so");
+const SO_PATH = resolve(here, "../../../../target/deploy/kassandra_oracles_program.so");
 
 describe("kassandra program smoke (litesvm + web3.js v3)", () => {
   beforeAll(() => {

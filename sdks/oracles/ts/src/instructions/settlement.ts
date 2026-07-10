@@ -9,7 +9,7 @@
  * payouts). `close_ai_claim` has an EMPTY payload. The SDK derives the oracle +
  * stake_vault from the nonce (and the escrow vault for `close_market`); the
  * claimant/destination accounts are caller-supplied. Account orders mirror the
- * harness `*_ix` helpers in `programs/kassandra/tests/common/mod.rs`.
+ * harness `*_ix` helpers in `programs/oracles/tests/common/mod.rs`.
  */
 import { Address, TransactionInstruction } from "@solana/web3.js";
 

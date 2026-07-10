@@ -12,7 +12,7 @@ conditional-vault and AMM programs for the challenge decision markets rather tha
 
 <CardGroup cols={2}>
   <Card title="On-chain program" icon="microchip" href="/architecture/program">
-    The core Solana program (`programs/kassandra/`) written in Pinocchio. Owns oracle requests,
+    The core Solana program (`programs/oracles/`) written in Pinocchio. Owns oracle requests,
     proposal windows, the fact phase, the AI-claim registry, plurality resolution, slashing,
     KASS staking, emissions, and the dynamic fee.
   </Card>
@@ -47,7 +47,7 @@ linkage and the KASS/USDC price anchor. See [Challenge markets](/challenge/overv
   <Step title="The program defines the wire format">
     Discriminant bytes, account orderings, payload layouts, account structs, PDA seeds, phases, and
     error codes are the contract. They are declared stable and only ever appended
-    (`programs/kassandra/src/instruction.rs`, `error.rs`).
+    (`programs/oracles/src/instruction.rs`, `error.rs`).
   </Step>
   <Step title="The SDK mirrors that format by hand">
     Because there is no Anchor IDL, the SDK hand-encodes each instruction's `[disc_byte, ...payload]`
@@ -70,7 +70,7 @@ linkage and the KASS/USDC price anchor. See [Challenge markets](/challenge/overv
 
 ```text
 kassandra/
-├── programs/kassandra/   Pinocchio on-chain program (crate: kassandra-program)
+├── programs/oracles/   Pinocchio on-chain program (crate: kassandra-oracles-program)
 ├── runner/               Rust binary + library (kassandra-runner) — AI resolver
 ├── sdk/                  TypeScript SDK (@kassandra-market/oracles) — hand-written, no IDL
 ├── app/                  Vite + React 19 dApp
@@ -78,7 +78,7 @@ kassandra/
 └── justfile              build / test (cargo build-sbf)
 ```
 
-The Cargo workspace (`Cargo.toml`, `resolver = "2"`) contains two members: `programs/kassandra` and
+The Cargo workspace (`Cargo.toml`, `resolver = "2"`) contains two members: `programs/oracles` and
 `runner`. The pnpm workspace (`pnpm-workspace.yaml`) contains two packages: `sdk` and `app`. The app
 consumes `@kassandra-market/oracles` via `workspace:*`, so the SDK must be built first. See
 [Repo layout](/contributing/repo-layout).

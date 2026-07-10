@@ -12,7 +12,7 @@
  * `raw.githubusercontent.com/MeteoraAg/damm-v2/<that-commit>/programs/cp-amm/src/…`.
  *
  * Discriminators are Anchor `sha256("global:<name>")[..8]`. THREE are pinned
- * independently in the program (`programs/kassandra/src/cpi/metadao_v06.rs:126-134`)
+ * independently in the program (`programs/oracles/src/cpi/metadao_v06.rs:126-134`)
  * and cross-checked here: `initialize_pool`, `swap`, `add_liquidity` (+ the `Pool`
  * account disc). The other three (`create_position`, `remove_liquidity`,
  * `claim_position_fee`) are computed the same way — the derivation is shown below.

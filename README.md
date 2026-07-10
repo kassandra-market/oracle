@@ -41,7 +41,7 @@ No zkTLS, no TEEs. Honesty is enforced **economically** (KASS staking and slashi
 This monorepo hosts **two** on-chain programs and the shared surface around them:
 
 - **Kassandra** — the AI-assisted optimistic oracle described above.
-- **[Kassandra Market](./programs/kassandra-market)** — a KASS-denominated **AMM
+- **[Kassandra Market](./programs/markets)** — a KASS-denominated **AMM
   prediction market** that wraps MetaDAO v0.4 `conditional_vault` + `amm` and defers
   resolution to the oracle. Program ID `FEGNHWAB7kc7VC9CCwbvVPsv4Jykz2r2WQ758V4xCT9S`.
 
@@ -53,8 +53,8 @@ There is a **single app** (both `/oracles` and `/markets`) and a **single indexe
 
 | Path | What it is |
 | --- | --- |
-| [`programs/kassandra/`](./programs/kassandra) | The oracle Solana program, written in **Pinocchio** (not Anchor). Owns oracle state, phases, facts, AI claims, plurality, staking, emissions, and the dynamic fee. Program ID `KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY`. |
-| [`programs/kassandra-market/`](./programs/kassandra-market) | The **prediction-market** program — a Pinocchio wrapper over MetaDAO v0.4 vault + amm, resolved by the oracle. |
+| [`programs/oracles/`](./programs/oracles) | The oracle Solana program, written in **Pinocchio** (not Anchor). Owns oracle state, phases, facts, AI claims, plurality, staking, emissions, and the dynamic fee. Program ID `KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY`. |
+| [`programs/markets/`](./programs/markets) | The **prediction-market** program — a Pinocchio wrapper over MetaDAO v0.4 vault + amm, resolved by the oracle. |
 | [`runner/`](./runner) | The open-source AI runner (`kassandra-runner`). Applies the fixed interpretation to the agreed facts and produces a categorical answer plus verifiable metadata. |
 | [`sdks/oracles/ts/`](./sdks/oracles/ts) · [`sdks/markets/ts/`](./sdks/markets/ts) | Hand-written TypeScript clients (`@kassandra-market/oracles`, `@kassandra-market/markets`) — instruction builders, account decoders, PDA helpers. No IDL; layouts mirror the programs. |
 | [`sdks/oracles/rust/`](./sdks/oracles/rust) · [`sdks/markets/rust/`](./sdks/markets/rust) | The Rust SDKs (`kassandra-oracles-sdk`, `kassandra-markets-sdk`). |
@@ -123,7 +123,7 @@ pnpm --filter ./app dev           # serve the frontend locally
 ```
 
 See each package's README for details:
-[program](./programs/kassandra/README.md) ·
+[program](./programs/oracles/README.md) ·
 [runner](./runner/README.md) ·
 [sdk](./sdk/README.md) ·
 [app](./app/README.md) ·

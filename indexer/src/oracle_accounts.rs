@@ -24,7 +24,7 @@ use tokio_postgres::Client;
 
 use crate::market::rpc::Rpc;
 
-/// `account_type` tag bytes — from `programs/kassandra/src/state.rs` (`AccountType`).
+/// `account_type` tag bytes — from `programs/oracles/src/state.rs` (`AccountType`).
 /// Oracle=1, Proposer=2, Fact=3, FactVote=4, AiClaim=5, Market=6. (Protocol=7 and
 /// OracleMeta=8 are indexed elsewhere / not needed by the oracle browse+detail.)
 const TAG_ORACLE: u8 = 1;

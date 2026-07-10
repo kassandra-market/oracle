@@ -3,7 +3,7 @@
  * largest Pod struct. Carries the dispute lifecycle state, the running tallies,
  * the governable-param snapshot taken at `create_oracle`, the challenge-fee
  * snapshot, and the settlement resolution totals. Field offsets are the EXACT
- * values pinned in `programs/kassandra/tests/state_layout.rs`.
+ * values pinned in `programs/oracles/tests/state_layout.rs`.
  */
 import { Address } from "@solana/web3.js";
 

@@ -42,7 +42,7 @@ The DAO treasury is derived and checked by `sweep_oracle` (`sweep_oracle.rs`) as
 
 The challenge market binds several PDAs derived under **other** programs (the MetaDAO
 conditional-vault, the v0.4 AMM, and Squads v4). These are **not** derived under `crate::ID` and their
-seed internals live in `programs/kassandra/src/cpi/metadao.rs` and `cpi/metadao_v06.rs`:
+seed internals live in `programs/oracles/src/cpi/metadao.rs` and `cpi/metadao_v06.rs`:
 
 - Conditional-token mint PDAs (`metadao::conditional_token_mint_pda(vault, idx)`).
 - The conditional-vault event-authority PDA (`metadao::event_authority_pda(...)`).

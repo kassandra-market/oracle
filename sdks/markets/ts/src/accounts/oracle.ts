@@ -4,8 +4,8 @@
  * kassandra-market only needs three fields off the oracle to drive its lifecycle
  * (is it binary? has it resolved? which option won?), so rather than depend on
  * the full `@kassandra-market/oracles` this reads those bytes directly at the offsets pinned
- * in `../kassandra/programs/kassandra/src/state.rs` +
- * `../kassandra/programs/kassandra/tests/state_layout.rs`:
+ * in `../kassandra/programs/oracles/src/state.rs` +
+ * `../kassandra/programs/oracles/tests/state_layout.rs`:
  *
  *   - `options_count: u8` @160  (after the 8-byte header + 4 pubkeys + 3 i64s)
  *   - `phase: u8`         @161

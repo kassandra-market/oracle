@@ -63,7 +63,7 @@ existing contributor must not double-count (`contribute.rs:53-77`).
 ### Contribution accounts
 
 Each `(market, contributor)` pair has exactly one `Contribution` PDA
-`[b"contribution", market, contributor]` (`programs/kassandra-market/src/state.rs:120`)
+`[b"contribution", market, contributor]` (`programs/markets/src/state.rs:120`)
 recording `market`, `contributor`, `amount`, a `claimed` flag, and `bump`. It is
 the record both `refund` and [`claim_lp`](/market/resolution) pay against, and
 `open_contributions` on the `Market` counts the live ones — a rent-reclaim counter

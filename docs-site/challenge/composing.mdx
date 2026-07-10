@@ -6,7 +6,7 @@ description: "Building the MetaDAO market client-side — the 7-step CPI sequenc
 `open_challenge` does **not** create the MetaDAO accounts. The challenger **composes**
 the market off-chain, in their own transactions, and `open_challenge` then verifies and
 records those accounts, splits the bond, escrows USDC, and flips the claim to
-challenged (`programs/kassandra/src/processor/open_challenge.rs:15-18`). This page
+challenged (`programs/oracles/src/processor/open_challenge.rs:15-18`). This page
 covers the composition — the seven steps that build the market before the Kassandra
 instruction ever runs.
 

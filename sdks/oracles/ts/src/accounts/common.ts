@@ -3,7 +3,7 @@
  *
  * Every Kassandra account is a `#[repr(C)]` `bytemuck::Pod` struct read straight
  * out of the account's raw bytes at FIXED, little-endian offsets (the offsets are
- * pinned in `programs/kassandra/tests/state_layout.rs`). These helpers wrap a
+ * pinned in `programs/oracles/tests/state_layout.rs`). These helpers wrap a
  * `DataView` over the account data so each decoder reads a field by its exact
  * byte offset:
  *

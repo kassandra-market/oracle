@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   # ---- Rust crates → crates.io ----------------------------------------------
-  # Order matters: kassandra-program must exist on the index before
+  # Order matters: kassandra-oracles-program must exist on the index before
   # kassandra-oracles-sdk (which depends on it) can publish. `cargo publish` waits
   # for each crate to be available in the index before returning, so the sequential
   # calls below are safe. kassandra-markets-sdk is standalone (solana-sdk v2 island).
@@ -56,7 +56,7 @@ jobs:
           }
 
           # Dependency order: the program crate first, then the SDK that depends on it.
-          publish_crate kassandra-program
+          publish_crate kassandra-oracles-program
           publish_crate kassandra-oracles-sdk
           publish_crate kassandra-markets-sdk
 

@@ -4,9 +4,9 @@
  * Each builder returns a web3.js (classic) `TransactionInstruction` whose
  * `data == [disc, ...borsh_args]` and whose `keys` are the EXACT account-meta
  * order proven against the real `metadao_amm.so` in
- * `programs/kassandra/tests/challenge_e2e.rs:676-769`. Discriminators + arg
+ * `programs/oracles/tests/challenge_e2e.rs:676-769`. Discriminators + arg
  * layouts are the binary-validated values from
- * `programs/kassandra/src/cpi/metadao.rs:82-94`.
+ * `programs/oracles/src/cpi/metadao.rs:82-94`.
  *
  * Every AMM instruction is Anchor `#[event_cpi]`: the two trailing accounts
  * (event_authority PDA, program id) are appended by the builders.

@@ -3,7 +3,7 @@
 //!
 //! The program id and the instruction discriminants are REUSED from the Rust SDK
 //! (`kassandra_oracles_sdk`, whose single source of truth is the on-chain
-//! `kassandra_program`), not re-declared here — so a change to the wire contract
+//! `kassandra_oracles_program`), not re-declared here — so a change to the wire contract
 //! (a renamed or renumbered instruction) propagates automatically.
 
 use carbon_core::instruction::InstructionDecoder;

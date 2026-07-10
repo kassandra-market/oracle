@@ -4,7 +4,7 @@ description: "Orientation to the Kassandra on-chain program — program ID, acco
 ---
 
 This is the authoritative on-chain reference for the Kassandra program. Every claim here is drawn
-directly from `programs/kassandra/src/`. If you are looking for conceptual explanation, start with
+directly from `programs/oracles/src/`. If you are looking for conceptual explanation, start with
 [Concepts](/concepts/lifecycle); if you want the client API, see the [SDK reference](/sdk/overview).
 
 ## Program ID
@@ -13,7 +13,7 @@ directly from `programs/kassandra/src/`. If you are looking for conceptual expla
 KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY
 ```
 
-Declared in `programs/kassandra/src/lib.rs`. The program is built with **Pinocchio** (not Anchor);
+Declared in `programs/oracles/src/lib.rs`. The program is built with **Pinocchio** (not Anchor);
 see [On-chain program](/architecture/program) for the framework rationale.
 
 ## The account model
@@ -57,7 +57,7 @@ Discriminant bytes and error codes are a **stable public contract** — never re
 (`instruction.rs`, `error.rs`). **Signer** flags are enforced on-chain (`assert_signer`); the
 **writable** flag is enforced by the Solana runtime, so the account tables list the *intended* metas
 inferred from each processor. Byte offsets and sizes are pinned by
-`programs/kassandra/tests/state_layout.rs`.
+`programs/oracles/tests/state_layout.rs`.
 </Note>
 
 ## Reference pages

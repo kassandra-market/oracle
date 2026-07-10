@@ -3,7 +3,7 @@ title: "Constants"
 description: "Every Kassandra config constant and governable field — name, type, value/default, and meaning."
 ---
 
-This page lists the compile-time constants (`programs/kassandra/src/config.rs`) and the governable
+This page lists the compile-time constants (`programs/oracles/src/config.rs`) and the governable
 Protocol fields they seed. The behavioral/monetary constants are the **recommended defaults**;
 `init_protocol` snapshots most of them into the `Protocol` singleton, and `create_oracle` snapshots
 the behavioral subset onto each `Oracle` (frozen per-oracle so mid-dispute governance changes cannot

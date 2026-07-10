@@ -104,15 +104,15 @@ services:
     name: kassandra-indexer
     runtime: rust
     # Workspace member (single lockfile) — `-p` compiles only this package + its
-    # deps (kassandra-oracles-sdk, kassandra-program, kassandra-market-program), not
+    # deps (kassandra-oracles-sdk, kassandra-oracles-program, kassandra-markets-program), not
     # the test/runner crates. Private services can't use the free plan.
     plan: starter
     buildFilter:
       paths:
         - indexer/**
         - sdks/oracles/rust/**
-        - programs/kassandra/**
-        - programs/kassandra-market/**
+        - programs/oracles/**
+        - programs/markets/**
         - Cargo.toml
         - Cargo.lock
         - render.yaml

@@ -1,6 +1,6 @@
 # `kassandra-markets-sdk`
 
-The **Rust SDK** for the [Kassandra Market program](../programs/kassandra-market):
+The **Rust SDK** for the [Kassandra Market program](../programs/markets):
 PDA derivation and instruction builders, decoupled from the on-chain crate's
 Pinocchio/SBF toolchain so native Rust (the indexer, tests, off-chain tooling) can
 build market transactions.
@@ -37,7 +37,7 @@ let ix = ix::init_config(&payer, &kass_mint, &authority, min_liquidity, fee_bps,
 ## Consumers
 
 - **[`indexer`](../indexer)** — derives PDAs and relays/builds transactions.
-- **Program tests** (`programs/kassandra-market/tests`) — build every instruction
+- **Program tests** (`programs/markets/tests`) — build every instruction
   against LiteSVM.
 
 ## Test

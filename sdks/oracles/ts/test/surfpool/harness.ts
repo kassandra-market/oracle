@@ -6,7 +6,7 @@
  *   1. spawn `surfpool start --no-tui --block-production-mode transaction`
  *      (a standalone simnet; no `--network`/`--rpc-url` fork);
  *   2. poll the RPC `getHealth` until ready (with a timeout);
- *   3. deploy the LOCAL `target/deploy/kassandra_program.so` at the FIXED
+ *   3. deploy the LOCAL `target/deploy/kassandra_oracles_program.so` at the FIXED
  *      program id {@link KASSANDRA_PROGRAM_ID} via the `surfnet_setAccount`
  *      cheatcode (writing the ELF as a non-upgradeable BPFLoader2 program
  *      account — surfpool then JIT-loads + executes it, exactly like
@@ -33,7 +33,7 @@ import { KASSANDRA_PROGRAM_ID } from "../../src/constants.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** The local SBF artifact (`just build` produces it). */
-export const SO_PATH = resolve(here, "../../../../../target/deploy/kassandra_program.so");
+export const SO_PATH = resolve(here, "../../../../../target/deploy/kassandra_oracles_program.so");
 
 /** The deprecated (non-upgradeable) BPF loader: a program account IS its ELF. */
 const BPF_LOADER_2 = "BPFLoader2111111111111111111111111111111111";

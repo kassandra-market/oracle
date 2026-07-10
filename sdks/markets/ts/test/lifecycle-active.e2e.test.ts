@@ -4,7 +4,7 @@
  * claim_lp → redeem` surface is wire-correct against the REAL compiled program +
  * the deployed MetaDAO v0.4 `conditional_vault` + `amm` fixtures in LiteSVM.
  *
- * It mirrors the Rust `programs/kassandra-market/tests/lifecycle_active.rs` +
+ * It mirrors the Rust `programs/markets/tests/lifecycle_active.rs` +
  * `tests/collect_fee.rs`:
  *   1. initConfig(min_liquidity = 1 KASS, fee_bps = 100)
  *   2. createMarket(seed = SEED_A) + contribute(SEED_B) → funded to exactly MIN_LIQ

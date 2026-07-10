@@ -3,7 +3,7 @@ title: "Market lifecycle"
 description: "The Funding → Active → Resolved/Void status machine, the cancel/refund escape, and the permissionless-crank model that drives every phase after creation."
 ---
 
-A market is a state machine over `MarketStatus` (`programs/kassandra-market/src/state.rs:33`),
+A market is a state machine over `MarketStatus` (`programs/markets/src/state.rs:33`),
 stored as a single `u8` on the `Market` account. Every transition after
 `create_market` is a **permissionless crank**: no privileged operator, no admin
 key — anyone can pay the fee and push the market forward, and the program pins
@@ -79,7 +79,7 @@ spam cost.
 <Note>
 Terminal, in the oracle's terms, means `Phase::Resolved` (7) or
 `Phase::InvalidDeadend` (8). The market reads only those four bytes from the oracle
-account (`programs/kassandra-market/src/kass_oracle.rs`).
+account (`programs/markets/src/kass_oracle.rs`).
 </Note>
 
 ## Why permissionless cranks

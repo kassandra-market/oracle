@@ -3,10 +3,10 @@ pub mod metadao;
 pub mod pda;
 
 use solana_sdk::pubkey::Pubkey;
-// Same pubkey as programs/kassandra-market/src/lib.rs.
+// Same pubkey as programs/markets/src/lib.rs.
 pub const PROGRAM_ID: Pubkey = solana_sdk::pubkey!("FEGNHWAB7kc7VC9CCwbvVPsv4Jykz2r2WQ758V4xCT9S");
 
-// Discriminants — mirror programs/kassandra-market/src/instruction.rs::Ix. Guarded by tests/parity.rs.
+// Discriminants — mirror programs/markets/src/instruction.rs::Ix. Guarded by tests/parity.rs.
 pub const IX_INIT_CONFIG: u8 = 0;
 pub const IX_UPDATE_CONFIG: u8 = 1;
 pub const IX_CREATE_MARKET: u8 = 2;

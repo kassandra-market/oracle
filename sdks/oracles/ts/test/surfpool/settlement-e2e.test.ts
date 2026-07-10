@@ -499,7 +499,7 @@ describe.skipIf(!ENABLED)("surfpool settlement tail (claim/close/sweep, real pro
 });
 
 // ---------------------------------------------------------------------------
-// Reward math (mirrors programs/kassandra/src/reward.rs — floor, u128-safe via
+// Reward math (mirrors programs/oracles/src/reward.rs — floor, u128-safe via
 // bigint) + the ceil rejected-fact voter slash (claims.rs::slash_amount).
 // ---------------------------------------------------------------------------
 

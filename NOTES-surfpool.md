@@ -40,7 +40,7 @@ All of this is implemented in `sdks/oracles/ts/test/surfpool/harness.ts` (the
 
 The program id `KassVxvXUEPr5apSr2MqiGva4VFtJXyYLLDFS3f83nY` is hard-coded in the
 program (`lib.rs` `declare`d) and in the SDK. `cargo build-sbf` emits a
-**random** program keypair (`target/deploy/kassandra_program-keypair.json` →
+**random** program keypair (`target/deploy/kassandra_oracles_program-keypair.json` →
 `CahaNz...`), so `solana program deploy` / `--program-id <keypair>` **cannot**
 land the program at the fixed vanity id (we don't hold its private key).
 
@@ -56,7 +56,7 @@ and litesvm's `addProgramFromFile`):
   "lamports": 5000000000,
   "owner": "BPFLoader2111111111111111111111111111111111",
   "executable": true,
-  "data": "<HEX of kassandra_program.so>"   // NOTE: hex, NOT base64
+  "data": "<HEX of kassandra_oracles_program.so>"   // NOTE: hex, NOT base64
 }]
 ```
 
@@ -141,7 +141,7 @@ point the REAL provider at a local mock Anthropic server.
 - Default (fast, offline, **excludes** surfpool): `cd sdk && pnpm test` → 72.
 - Gated E2E (spawns surfpool, needs the built `.so`): `cd sdk && pnpm test:e2e`
   (sets `KASSANDRA_E2E=1`). Skips cleanly if surfpool / the `.so` are absent.
-- Prereqs: `just build` (produces `target/deploy/kassandra_program.so`),
+- Prereqs: `just build` (produces `target/deploy/kassandra_oracles_program.so`),
   surfpool on `PATH` (or `SURFPOOL_BIN`), network reachable for the datasource
   handshake at boot.
 

@@ -2,7 +2,7 @@
  * Decoder for the `Config` singleton account (`state.rs::Config`, 120 bytes) — the
  * program's global record: the futarchy authority gating `update_config`, the
  * canonical KASS mint every market escrows, and the funding-target floor.
- * Field offsets pinned in `programs/kassandra-market/tests/state_layout.rs`.
+ * Field offsets pinned in `programs/markets/tests/state_layout.rs`.
  */
 import { Address } from "@solana/web3.js";
 
