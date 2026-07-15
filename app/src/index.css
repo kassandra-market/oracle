@@ -287,6 +287,11 @@
       rgba(203, 255, 252, 0.045) 34%,
       transparent 72%
     );
+    /* Fade the orb toward the hero's bottom so its glow is fully gone before the
+     * overflow-clip edge — no visible horizontal seam when the cursor nears the
+     * bottom. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 50%, transparent 88%);
+    mask-image: linear-gradient(to bottom, #000 50%, transparent 88%);
     transition: background 0.25s ease-out;
   }
 }
