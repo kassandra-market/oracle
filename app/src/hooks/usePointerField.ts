@@ -12,7 +12,8 @@ import { useEffect, useRef } from 'react'
  *
  * Gated to fine-pointer + hover devices, and disabled under
  * `prefers-reduced-motion` (re-evaluated live if the user toggles either).
- * On disable / pointer-leave the field eases back to rest (center).
+ * When the cursor leaves (or the effect is disabled) the field HOLDS its last
+ * position rather than recentering.
  */
 export function usePointerField<T extends HTMLElement>() {
   const ref = useRef<T>(null)
@@ -52,27 +53,19 @@ export function usePointerField<T extends HTMLElement>() {
       py = Math.max(0, Math.min(100, ry * 100))
       schedule()
     }
-    const rest = () => {
-      x = 0
-      y = 0
-      px = 50
-      py = 30
-      schedule()
-    }
-
+    // Intentionally no pointerleave handler: when the cursor exits we HOLD the
+    // last position (the orb + parallax freeze where they were) instead of
+    // recentering, so the hero keeps its last-hovered composition.
     let bound = false
     const enable = () => {
       if (bound) return
       bound = true
       el.addEventListener('pointermove', onMove)
-      el.addEventListener('pointerleave', rest)
     }
     const disable = () => {
       if (!bound) return
       bound = false
       el.removeEventListener('pointermove', onMove)
-      el.removeEventListener('pointerleave', rest)
-      rest()
     }
 
     const sync = () => (fine.matches && !reduce.matches ? enable() : disable())
