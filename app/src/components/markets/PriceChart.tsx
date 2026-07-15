@@ -3,6 +3,7 @@ import {
   ColorType,
   CrosshairMode,
   LineSeries,
+  LineType,
   createChart,
   type IChartApi,
   type ISeriesApi,
@@ -91,12 +92,14 @@ export function PriceChart({ pubkey }: { pubkey: string }) {
     const yes = chart.addSeries(LineSeries, {
       color: yesColor,
       lineWidth: 2,
+      lineType: LineType.Curved,
       priceFormat: PERCENT_FORMAT,
       autoscaleInfoProvider: () => FULL_SCALE,
     });
     const no = chart.addSeries(LineSeries, {
       color: noColor,
       lineWidth: 2,
+      lineType: LineType.Curved,
       priceFormat: PERCENT_FORMAT,
       autoscaleInfoProvider: () => FULL_SCALE,
     });
@@ -164,7 +167,7 @@ export function PriceChart({ pubkey }: { pubkey: string }) {
         </div>
         <div
           role="group"
-          aria-label="Candle interval"
+          aria-label="Interval"
           className="inline-flex rounded-button border border-pebble p-0.5"
         >
           {INTERVALS.map((iv) => {

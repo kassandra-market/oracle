@@ -4,12 +4,12 @@ import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 
 /**
- * The market Price-history candlestick chart, rendered from the REAL indexer.
+ * The market Price-history line chart, rendered from the REAL indexer.
  *
  * globalSetup stood up an ACTIVE market, ran the actual kassandra-indexer binary
  * with a websocket `accountSubscribe` on the pool, then fired real swaps that moved
  * the price. Here we assert (1) the `/candles` API returns that captured movement,
- * and (2) the app's MarketDetail page renders the candlestick chart from it — the
+ * and (2) the app's MarketDetail page renders the smooth line chart from it — the
  * full chain-swap → ws → Postgres → API → chart pipeline, in a browser.
  */
 const fixture = JSON.parse(
@@ -52,7 +52,7 @@ test('candles API returns the swap-driven price series', async ({ request }) => 
   }
 })
 
-test('MarketDetail renders the candlestick chart from indexed data', async ({ page }) => {
+test('MarketDetail renders the line chart from indexed data', async ({ page }) => {
   await page.goto(`/markets/${fixture.market}`)
   await expect(page.getByRole('button', { name: /^Connected:/ })).toBeVisible()
 
@@ -76,7 +76,7 @@ test('MarketDetail renders the candlestick chart from indexed data', async ({ pa
   // for it to settle to a single instance before clicking — otherwise Playwright's
   // strict-mode single-match trips on the momentary duplicate.
   const oneMinute = page
-    .getByRole('group', { name: 'Candle interval' })
+    .getByRole('group', { name: 'Interval' })
     .getByRole('button', { name: '1m', exact: true })
   await expect(oneMinute).toHaveCount(1)
   await oneMinute.first().click()
