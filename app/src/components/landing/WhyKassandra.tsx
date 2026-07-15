@@ -1,4 +1,4 @@
-import { Card, SectionHeader } from '../ui'
+import { Card, Reveal, SectionHeader } from '../ui'
 
 const FEATURES: { title: string; body: string }[] = [
   {
@@ -28,20 +28,24 @@ export default function WhyKassandra() {
   return (
     <section id="why-kassandra" aria-label="Why Kassandra" className="px-6 py-20">
       <div className="mx-auto max-w-[1200px]">
-        <SectionHeader
-          eyebrow="Why Kassandra"
-          eyebrowPill
-          line1="Credible answers,"
-          line2="not just confident ones."
-          paragraph="Bonds, an open-source resolver, and market-based governance combine into an oracle you can audit end to end."
-        />
+        <Reveal>
+          <SectionHeader
+            eyebrow="Why Kassandra"
+            eyebrowPill
+            line1="Credible answers,"
+            line2="not just confident ones."
+            paragraph="Bonds, an open-source resolver, and market-based governance combine into an oracle you can audit end to end."
+          />
+        </Reveal>
 
         <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-2">
-          {FEATURES.map((f) => (
-            <Card key={f.title} className="h-full">
-              <h3 className="font-serif text-heading-sm font-light text-sepia">{f.title}</h3>
-              <p className="mt-3 font-inter text-body text-bronze">{f.body}</p>
-            </Card>
+          {FEATURES.map((f, i) => (
+            <Reveal key={f.title} delay={i * 90} className="h-full">
+              <Card className="h-full transition-[transform,border-color] duration-200 hover:-translate-y-1 hover:border-cyan-phosphor/40">
+                <h3 className="font-serif text-heading-sm font-light text-sepia">{f.title}</h3>
+                <p className="mt-3 font-inter text-body text-bronze">{f.body}</p>
+              </Card>
+            </Reveal>
           ))}
         </div>
       </div>

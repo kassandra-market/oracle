@@ -5,7 +5,7 @@ description: "The Kassandra frontend — Vite + React 19 + Tailwind v4, its page
 
 The dApp (`app/`) is the human-facing frontend for Kassandra: browse oracles, create them,
 participate in every lifecycle phase, compose and trade challenge markets, and claim or close
-accounts. It is a single-page app styled in the "Delphi" visual language.
+accounts. It is a single-page app styled in the "Auros" visual language (`docs/design/auros-style-guide.md` — a dark, luminous deep-teal terminal).
 
 ## Stack
 
@@ -28,7 +28,7 @@ first**: `pnpm --filter @kassandra-market/oracles build` (or `pnpm -r build`). S
 | Path | Component | Purpose |
 | --- | --- | --- |
 | `/` | `Landing.tsx` | Marketing landing (Hero constellation, HowItWorks). Read-only. |
-| `/oracles` | `Oracles.tsx` | Oracle browser / dashboard: a stats strip plus a grid of Delphi cards, one per decoded on-chain oracle, with search, phase-filter chips, and sort. Read-only. |
+| `/oracles` | `Oracles.tsx` | Oracle browser / dashboard: a stats strip plus a grid of cards, one per decoded on-chain oracle, with search, phase-filter chips, and sort. Read-only. |
 | `/oracles/new` | `CreateOracle.tsx` | Create-oracle form (write). |
 | `/oracles/:pubkey` | `OracleDetail.tsx` | Oracle detail plus all lifecycle write forms — verdict banner, phase timeline, economic panel, and live challenge-market visualization. |
 | `/styleguide` | `StyleGuide.tsx` | Design-system reference page. |

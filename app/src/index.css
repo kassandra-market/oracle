@@ -17,10 +17,13 @@
  * lavender-phosphor).
  */
 @theme {
-  /* ---- Auros palette (canonical) ---- */
-  --color-liquid-abyss: #012624; /* 0 — page canvas */
-  --color-liquid-deep: #011d1c; /* 1 — recessed / footer */
-  --color-liquid-kelp: #003734; /* 2 — raised card + filled action */
+  /* ---- Auros palette (canonical) ----
+   * Lightened variant: the ramp is lifted off near-black into a more luminous
+   * deep teal — airier, but still a dark theme, and still AA-safe for platinum
+   * / silver-mist text. Keep deep < abyss < kelp in lightness. */
+  --color-liquid-abyss: #0b3f3a; /* 0 — page canvas (was #012624) */
+  --color-liquid-deep: #063431; /* 1 — recessed / footer (was #011d1c) */
+  --color-liquid-kelp: #14524b; /* 2 — raised card + filled action (was #003734) */
   --color-liquid-mist: #edfffe; /* emphasized body / labels */
   --color-platinum: #ffffff; /* headings + nav */
   --color-silver-mist: #bbc7c6; /* body / links */
@@ -30,20 +33,20 @@
   --color-cyan-phosphor: #cbfffc; /* aqua end of the signature gradient */
 
   /* ---- Legacy (Delphi) names remapped onto Auros so components re-skin ---- */
-  --color-parchment: #012624; /* page bg -> abyss */
-  --color-soft-cream: #011d1c; /* recessed bg -> deep */
-  --color-pure-card: #003734; /* card -> kelp */
-  --color-ink-black: #011d1c; /* darkest -> deep */
+  --color-parchment: #0b3f3a; /* page bg -> abyss */
+  --color-soft-cream: #063431; /* recessed bg -> deep */
+  --color-pure-card: #14524b; /* card -> kelp */
+  --color-ink-black: #063431; /* darkest -> deep */
   --color-charcoal-bark: #edfffe; /* default body text -> mist */
   --color-sepia: #ffffff; /* headings -> platinum */
-  --color-bronze: #bbc7c6; /* secondary text -> silver-mist */
-  --color-driftwood: #bbc7c6; /* muted body -> silver-mist */
-  --color-stone: #8fa3a1; /* lighter muted -> teal-gray */
-  --color-pebble: rgba(255, 255, 255, 0.1); /* hairline borders on dark */
+  --color-bronze: #c7d3d2; /* secondary text -> silver-mist (lifted for the lighter canvas) */
+  --color-driftwood: #c7d3d2; /* muted body -> silver-mist */
+  --color-stone: #9bb0ad; /* lighter muted -> teal-gray */
+  --color-pebble: rgba(255, 255, 255, 0.12); /* hairline borders on dark */
   --color-chestnut: #8fe9dd; /* positive/confirmed/active accent -> bright aqua (success lines, confirmed chips, active toggles, current step). MUST stay distinct from the kelp card surface. */
   --color-ember-orange: #ff6f61; /* error/danger signal -> living coral (alerts, invalid inputs, disqualify verdicts, high-impact warnings) */
   --color-saffron-pulse: #cbfffc; /* secondary accent -> cyan */
-  --color-peach-glow: #003734; /* soft accent bg -> kelp */
+  --color-peach-glow: #14524b; /* soft accent bg -> kelp */
   --color-cobalt: #cbfffc; /* the verified dot -> cyan (no blue) */
 
   /* Signature gradients — reserved for the primary CTA + rare accent moments */
@@ -154,7 +157,7 @@
   font-weight: 500;
 }
 .wallet-adapter-modal-list .wallet-adapter-button:not([disabled]):hover {
-  background-color: #04524c;
+  background-color: #1c6a61;
   color: #ffffff;
 }
 .wallet-adapter-modal-list-more {
@@ -173,8 +176,9 @@
     margin: 0;
     background-color: var(--color-liquid-abyss);
     background-image:
-      radial-gradient(1200px 760px at 50% -12%, rgba(0, 130, 124, 0.2), transparent 60%),
-      radial-gradient(900px 680px at 100% 0%, rgba(253, 233, 255, 0.06), transparent 55%);
+      radial-gradient(1200px 760px at 50% -12%, rgba(43, 214, 199, 0.22), transparent 60%),
+      radial-gradient(900px 680px at 100% 0%, rgba(253, 233, 255, 0.09), transparent 55%),
+      radial-gradient(1000px 720px at 0% 8%, rgba(43, 214, 199, 0.1), transparent 58%);
     background-attachment: fixed;
     color: var(--color-silver-mist);
     font-family: var(--font-inter);
@@ -191,6 +195,10 @@
     color: var(--color-platinum);
     font-family: var(--font-serif);
     font-weight: 500;
+    text-wrap: balance; /* even line lengths on multi-line headings */
+  }
+  p {
+    text-wrap: pretty; /* avoid single-word orphans in body copy */
   }
   a {
     color: var(--color-silver-mist);
@@ -235,5 +243,70 @@
     text-transform: uppercase;
     letter-spacing: 0.12em;
     font-weight: 500;
+  }
+
+  /*
+   * Scroll-reveal: elements start dimmed + nudged down and settle into place
+   * when `data-revealed` flips (set by the Reveal component's IntersectionObserver).
+   * transform/opacity only — no layout thrash. Stagger via --reveal-delay.
+   */
+  .reveal {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+    transition:
+      opacity 0.6s ease-out,
+      transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+  .reveal[data-revealed='true'] {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+
+  /*
+   * Pointer-driven parallax drift. The hero writes --pointer-x/--pointer-y
+   * (-1..1) onto its container (see usePointerField); a `.drift` child glides
+   * toward the cursor by --drift-depth px, smoothed by a transition.
+   */
+  .drift {
+    transform: translate3d(
+      calc(var(--pointer-x, 0) * var(--drift-depth, 8px)),
+      calc(var(--pointer-y, 0) * var(--drift-depth, 8px)),
+      0
+    );
+    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* The bioluminescent orb that tracks the cursor across the hero. Kept large
+   * and very soft so its falloff reaches full transparency well before any box
+   * edge — no visible rectangle/seam even when the cursor is at a corner. */
+  .cursor-orb {
+    background: radial-gradient(
+      780px circle at var(--pointer-px, 50%) var(--pointer-py, 32%),
+      rgba(43, 214, 199, 0.13),
+      rgba(203, 255, 252, 0.045) 34%,
+      transparent 72%
+    );
+    transition: background 0.25s ease-out;
+  }
+}
+
+/*
+ * Global reduced-motion safety net: neutralize every reveal/drift/orb transition
+ * and land elements in their final state. Sits outside @layer so it beats the
+ * utilities above regardless of source order.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .drift {
+    transform: none !important;
+    transition: none !important;
+  }
+  .cursor-orb {
+    transition: none !important;
   }
 }

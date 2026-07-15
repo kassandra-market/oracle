@@ -1,8 +1,11 @@
 # Kassandra UI
 
 The web UI for **Kassandra** — a decentralized, AI-assisted **optimistic oracle** on Solana.
-Vite + React 19 + TypeScript + Tailwind v4 SPA, styled in the **Delphi** visual language
-("warm parchment editorial with ember sparks").
+Vite + React 19 + TypeScript + Tailwind v4 SPA, styled in the **Auros** visual language
+("abyssal terminal with bioluminescent data orbs" — see `docs/design/auros-style-guide.md`): a
+dark, luminous deep-teal canvas with rationed color, geometric medium-weight display type, and
+surface-lift depth instead of shadows. The palette runs a lightened variant of the Auros teal
+ramp (airier, still AA-safe for the platinum/silver text).
 
 ## Run / build
 
@@ -41,7 +44,7 @@ separate cacheable chunks (`solana` = wallet-adapter + web3.js + deps, `sdk` =
 
 - `/` — the Kassandra landing page (`src/pages/Landing.tsx`).
 - `/oracles` — the oracle browser (`src/pages/Oracles.tsx`): a **dashboard stats strip** over a
-  responsive grid of Delphi cards, one per decoded on-chain oracle (phase chip, relative
+  responsive grid of cards, one per decoded on-chain oracle (phase chip, relative
   deadline, proposer/fact/option counts, resolved option). The stats strip (`DashboardStats`,
   computed by the pure `src/lib/oracleStats.ts` `deriveStats` — client-side over the already
   fetched list, no extra RPC) shows the by-phase-group counts, the total bonds/stake at risk
@@ -64,7 +67,7 @@ separate cacheable chunks (`solana` = wallet-adapter + web3.js + deps, `sdk` =
   The **challenge-market** section now shows a **live visualization** on top of the existing
   market card (`components/oracles/ChallengeMarketPanel.tsx` over the CU1 read layer): the pass
   vs fail pools' **instantaneous (spot) price** + slot-weighted **TWAP** (decimals-aware; a
-  pre-start-delay pool reads "TWAP forming…"), a flat Delphi **TWAP → disqualify-margin bar**
+  pre-start-delay pool reads "TWAP forming…"), a flat **TWAP → disqualify-margin bar**
   (how close the FAIL TWAP is to exceeding PASS by the market margin `num/den`; the single ember
   accent lights when it nears/clears the margin — settling would disqualify the proposer), a
   **countdown** to the TWAP window close, the **challenger's escrowed USDC**, and each pool's raw
@@ -177,12 +180,18 @@ be scripted): under `?mock`, append `&wallet=connected` for a scripted connected
 `&tx=success|error|reject|failconfirm|slow` to script the send/confirm outcome (see
 `src/lib/mockWrite.ts` — swapped in for the real `WalletProvider` only under mock mode).
 
-## The Delphi design system
+## The design system
 
-- **Tokens** live in `src/index.css` as a Tailwind v4 CSS-first `@theme` block: the color
-  palette (parchment canvas, chestnut the only button fill, ember/saffron accents…), the type
-  scale, the radii vocabulary `{4,8,12,16,70}px`, the three font families, and the peach
-  `--shadow-bloom`.
+> The design language is **Auros** (`docs/design/auros-style-guide.md`, abyssal teal). The legacy
+> Delphi token *names* are preserved in `@theme` and remapped onto the Auros palette, so older
+> components re-skin without edits; new code should prefer the Auros-named tokens (`liquid-*`,
+> `platinum`, `silver-mist`, `lavender-phosphor`).
+
+- **Tokens** live in `src/index.css` as a Tailwind v4 CSS-first `@theme` block: the Auros color
+  palette (a lightened deep-teal `liquid-*` surface ramp, platinum/silver-mist text, the
+  lavender-phosphor + cyan accents, the aurora/bioluminescent CTA gradients), the type scale,
+  the radii vocabulary `{6,16}px` (avatars round), and the three font families. Auros avoids
+  elevation entirely — depth is surface color, never shadow (`--shadow-bloom: none`).
 - **Primitives** in `src/components/ui/` (barrel `index.ts`): `Button`
   (PrimaryChestnut / GhostOutline / NavPill), `Card`, `EyebrowTag`, `SectionHeader`,
   `AvatarBubble` (+ `VerifiedDot`), `TriggerPreviewCard`.
@@ -194,15 +203,18 @@ be scripted): under `?mock`, append `&wallet=connected` for a scripted connected
   constellation of scattered question cards), `HowItWorks`, `WhyKassandra`, `TrustPanel`
   (the centered portrait panel — the one place a gradient is allowed), `SiteFooter`.
 
-Design rules (from `docs/design/delphi-style-guide.md`): parchment everywhere (pure-card only
-for lifted cards); chestnut is the ONLY button fill; flat surfaces + hairline pebble borders
-(no heavy drop shadows — only the peach button bloom + the portrait-panel gradient); serif only
-for display ≥20px, Inter for all body; ≤2 text colors per block; ember/saffron as 1–2
-punctuation moments per viewport.
+Design rules: the deep-teal surface ramp (`liquid-deep → liquid-abyss → liquid-kelp`) carries all
+background differentiation — flat surfaces + hairline pebble borders, no drop shadows; the aurora
+gradient is reserved for the primary CTA and the one portrait panel; lavender-phosphor is for
+large stats/emphasis only; radii stay in `{6,16}`; geometric medium-weight display type (never
+bold/light at display sizes). The **landing hero is cursor-reactive** — a bioluminescent orb
+tracks the pointer and the constellation cards drift at per-card depth (see `usePointerField`),
+with staggered scroll-reveal on the sections (the `Reveal` primitive + `.reveal`/`.drift`
+utilities). All motion is transform/opacity only and is disabled under `prefers-reduced-motion`.
 
 ## What's built vs next
 
-The dApp is layered across four slices: **slice 1** the Delphi design system + landing; **slice 2**
+The dApp is layered across four slices: **slice 1** the design system + landing; **slice 2**
 wallet connect (`AppProviders` → wallet-adapter) + the read layer (`src/data/oracles.ts`, the
 `/oracles` browse + `/oracles/:pubkey` detail); **slice 3** the participation write flows
 (propose / submit-fact / vote-fact); **slice 4** the **complete write surface** — create-oracle,
