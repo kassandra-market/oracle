@@ -2,11 +2,9 @@ import { MarketStatus, isTerminal } from "@kassandra-market/markets";
 import type { MarketDetail } from "../../../market/data/markets";
 import { fundingActions, fundingProgress } from "../../../market/lib/marketView";
 import { useConfig } from "../../../market/hooks/useMarketDetail";
-import { ContributeForm } from "./ContributeForm";
 import { CancelControl } from "./CancelControl";
 import { RefundControl } from "./RefundControl";
 import { ActivateControl } from "./ActivateControl";
-import { ClaimLpControl } from "./ClaimLpControl";
 import { ResolveControl } from "./ResolveControl";
 import { RedeemControl } from "./RedeemControl";
 import { CollectFeeControl } from "./CollectFeeControl";
@@ -28,21 +26,21 @@ function ContributorsRemaining({ open }: { open: number }) {
 }
 
 /**
- * The status-gated write surface under the read-only market panels. It routes on
- * `market.status`, rendering only the actions valid for the market's current
- * lifecycle phase:
+ * The status-gated LIFECYCLE-CRANK surface under the read-only market panels.
+ * Providing / withdrawing liquidity (deposit + claim-LP) lives in the
+ * `LiquidityPanel` rendered above this — so this routes only the non-liquidity
+ * cranks valid for the market's current phase:
  *
- *   - Funding   → ContributeForm; plus ActivateControl once the funding floor is
- *                 met AND the oracle is still live (activation needs a non-terminal
- *                 oracle); plus CancelControl when the oracle is terminal AND the
- *                 market is still under its floor (an under-funded market whose
- *                 oracle already resolved can only be cancelled → refunded).
- *   - Active    → ClaimLpControl; plus ResolveControl once the oracle is terminal.
- *                 (The buy/sell TradePanel — with the price chart — renders
- *                 prominently in the detail body, not here.)
+ *   - Funding   → ActivateControl once the funding floor is met AND the oracle is
+ *                 still live (activation needs a non-terminal oracle); plus
+ *                 CancelControl when the oracle is terminal AND the market is still
+ *                 under its floor (an under-funded market whose oracle already
+ *                 resolved can only be cancelled → refunded).
+ *   - Active    → ResolveControl once the oracle is terminal. (The buy/sell
+ *                 TradePanel — with the price chart — renders prominently in the
+ *                 detail body, not here.)
  *   - Resolved / Void → RedeemControl + CollectFeeControl (the permissionless
- *                 protocol-fee crank, shown while a non-zero fee is uncollected) +
- *                 ClaimLpControl (which waits for fee collection before it opens);
+ *                 protocol-fee crank, shown while a non-zero fee is uncollected);
  *                 plus CloseMarketControl once the fee is collected AND every
  *                 contributor has exited (`openContributions === 0`).
  *   - Cancelled → RefundControl (reclaim staked KASS); once every contributor has
@@ -59,7 +57,7 @@ export function MarketActions({
   detail: MarketDetail;
   refetch: () => void;
 }) {
-  const { pubkey, market, oracle, contributions } = detail;
+  const { pubkey, market, oracle } = detail;
   const oracleTerminal = oracle ? isTerminal(oracle.phase) : false;
   const config = useConfig();
   // The permissionless fee crank is available on a settled market that carries a
@@ -73,7 +71,6 @@ export function MarketActions({
       const { canActivate, canCancel } = fundingActions(funded, oracleTerminal);
       return (
         <div className="mt-6 flex flex-col gap-6">
-          <ContributeForm pubkey={pubkey} market={market} onSuccess={refetch} />
           {canActivate ? <ActivateControl pubkey={pubkey} market={market} onSuccess={refetch} /> : null}
           {canCancel ? <CancelControl pubkey={pubkey} market={market} onSuccess={refetch} /> : null}
         </div>
@@ -82,18 +79,13 @@ export function MarketActions({
 
     case MarketStatus.Active:
       // The buy/sell TradePanel (with the chart) renders prominently in the detail
-      // body; here we keep only the secondary Active actions.
-      return (
+      // body; liquidity (claim-LP) lives in the LiquidityPanel — here we keep only
+      // the resolve crank.
+      return oracleTerminal ? (
         <div className="mt-6 flex flex-col gap-6">
-          {oracleTerminal ? <ResolveControl pubkey={pubkey} market={market} onSuccess={refetch} /> : null}
-          <ClaimLpControl
-            pubkey={pubkey}
-            market={market}
-            contributions={contributions}
-            onSuccess={refetch}
-          />
+          <ResolveControl pubkey={pubkey} market={market} onSuccess={refetch} />
         </div>
-      );
+      ) : null;
 
     case MarketStatus.Resolved:
     case MarketStatus.Void: {
@@ -112,12 +104,6 @@ export function MarketActions({
               onSuccess={refetch}
             />
           ) : null}
-          <ClaimLpControl
-            pubkey={pubkey}
-            market={market}
-            contributions={contributions}
-            onSuccess={refetch}
-          />
           {canClose ? (
             <CloseMarketControl pubkey={pubkey} market={market} onSuccess={refetch} />
           ) : market.openContributions > 0 ? (

@@ -14,43 +14,52 @@ import {
 } from "../../../market/data/actions";
 import { parseKassAmount, balanceGateError } from "../../../market/data/amount";
 import { formatKass, outcomeLabel } from "../../../market/lib/marketView";
-import type { MarketSummary } from "../../../market/data/markets";
+import type { MarketDetail, MarketSummary } from "../../../market/data/markets";
 import { ConnectGate } from "./ConnectGate";
 import { Field, KassBalanceLine, TextInput } from "./formPrimitives";
 import { BatchStepList } from "./CreateMarketForm/BatchStepList";
 
 /**
- * Bulk liquidity for a categorical oracle's GROUP of sub-markets: deposit into,
- * or withdraw LP from, several/all outcomes at once. The default deposit splits
- * the entered total UNIFORMLY across every outcome still in funding
- * ({@link uniformSplit}); withdraw claims LP across every outcome whose fee has
- * been collected. Both fan the single-market builders into one
- * {@link useActionSequence} run. Renders nothing for a lone market (not a group).
+ * Liquidity provision + withdrawal for a market — on EVERY market, not just a
+ * categorical group. Providing liquidity funds the market's escrow (Contribute),
+ * which becomes the cYES/cNO pool traders trade against once it activates; when
+ * an oracle has several outcome sub-markets they GROUP, and the default deposit
+ * splits the entered total UNIFORMLY across the outcomes still in funding
+ * ({@link uniformSplit}). Withdrawal claims the caller's pro-rata LP once fees are
+ * collected. Both fan the single-market builders into one {@link useActionSequence}
+ * run. Renders on all markets — a lone market is simply a group of one.
  */
-export function GroupLiquidityPanel({ oracle }: { oracle: string }) {
+export function LiquidityPanel({
+  detail,
+  onSuccess,
+}: {
+  detail: MarketDetail;
+  onSuccess?: () => void;
+}) {
+  const oracle = detail.market.oracle.toString();
   const indexer = useIndexer();
   const config = useConfig();
   const kassMint = config.data ? config.data.kassMint.toString() : undefined;
   const { balance, loading: balanceLoading, refetch: refetchBalance } = useKassBalance(kassMint);
   const { data: allMarkets } = useMarkets();
 
-  // The group = every sub-market on this oracle, in outcome order.
-  const siblings = useMemo<MarketSummary[]>(
-    () =>
-      (allMarkets ?? [])
-        .filter((m) => m.market.oracle.toString() === oracle)
-        .sort((a, b) => a.market.outcomeIndex - b.market.outcomeIndex),
-    [allMarkets, oracle],
-  );
+  // The market's group = every sub-market on this oracle, in outcome order. Falls
+  // back to the current market alone while the list loads / if it's not listed.
+  const group = useMemo<MarketSummary[]>(() => {
+    const siblings = (allMarkets ?? [])
+      .filter((m) => m.market.oracle.toString() === oracle)
+      .sort((a, b) => a.market.outcomeIndex - b.market.outcomeIndex);
+    return siblings.length > 0
+      ? siblings
+      : [{ pubkey: detail.pubkey, market: detail.market, reserves: detail.reserves, oracleOptionsCount: null }];
+  }, [allMarkets, oracle, detail]);
 
+  const isGroup = group.length > 1;
   const funding = useMemo(
-    () => siblings.filter((m) => m.market.status === MarketStatus.Funding),
-    [siblings],
+    () => group.filter((m) => m.market.status === MarketStatus.Funding),
+    [group],
   );
-  const claimable = useMemo(
-    () => siblings.filter((m) => m.market.feeCollected),
-    [siblings],
-  );
+  const feeCollected = useMemo(() => group.filter((m) => m.market.feeCollected), [group]);
 
   const [total, setTotal] = useState("");
   const [error, setError] = useState<string | undefined>();
@@ -58,16 +67,28 @@ export function GroupLiquidityPanel({ oracle }: { oracle: string }) {
 
   const seq = useActionSequence(() => {
     refetchBalance();
+    onSuccess?.();
   });
 
-  // Parse the total + its uniform per-outcome split across the funding markets.
+  // Withdrawal is gated on the CALLER actually holding an unclaimed position on
+  // this market (once its fee is collected) — mirrors the single-market ClaimLp
+  // gate. For a group we then claim across every fee-collected outcome.
+  const walletHasPosition =
+    seq.address != null &&
+    detail.market.feeCollected &&
+    detail.contributions.some(
+      (c) => c.contribution.contributor.toString() === seq.address && !c.contribution.claimed,
+    );
+
   const parsed = total.trim() === "" ? null : parseKassAmount(total);
   const totalValue = parsed?.value ?? null;
   const shares = totalValue !== null ? uniformSplit(totalValue, funding.length) : [];
-  const perShareLabel =
-    funding.length > 0 && totalValue !== null && totalValue > 0n
-      ? `${formatKass(shares[0])}${shares.some((s) => s !== shares[0]) ? "–" + formatKass(shares.find((s) => s !== shares[0])!) : ""} KASS each`
-      : null;
+  const perShareHint =
+    isGroup && funding.length > 0
+      ? totalValue !== null && totalValue > 0n
+        ? `Split uniformly across ${funding.length} funding outcome${funding.length > 1 ? "s" : ""} · ~${formatKass(shares[0])} KASS each`
+        : `Split uniformly across ${funding.length} funding outcome${funding.length > 1 ? "s" : ""}`
+      : "Funds the pool traders trade against once the market activates.";
 
   async function onDeposit(e: FormEvent) {
     e.preventDefault();
@@ -101,7 +122,7 @@ export function GroupLiquidityPanel({ oracle }: { oracle: string }) {
   async function onWithdraw() {
     setError(undefined);
     if (!seq.address) return;
-    const entries = claimable.map((m) => ({
+    const entries = feeCollected.map((m) => ({
       market: m.pubkey,
       label: outcomeLabel(m.market.outcomeIndex),
       lpMint: m.market.lpMint.toString(),
@@ -116,32 +137,29 @@ export function GroupLiquidityPanel({ oracle }: { oracle: string }) {
     }
   }
 
-  // Not a group (a lone market uses its own Contribute / Claim-LP controls).
-  if (siblings.length <= 1) return null;
+  const depositVerb = seq.busy
+    ? "Providing…"
+    : isGroup
+      ? `Provide liquidity to ${funding.length} outcomes`
+      : "Provide liquidity";
 
   return (
     <Card className="flex flex-col gap-4">
       <div>
-        <h3 className="font-serif text-subheading font-light text-sepia">Group liquidity</h3>
+        <h3 className="font-serif text-subheading font-light text-sepia">Provide liquidity</h3>
         <p className="mt-1 font-inter text-[13px] text-bronze">
-          Fund or withdraw across all {siblings.length} outcomes of this market at once.
+          {isGroup
+            ? `Fund or withdraw across all ${group.length} outcomes of this market at once — the liquidity traders trade against.`
+            : "Add liquidity so traders can trade against the pool, then withdraw your share later."}
         </p>
       </div>
 
       <ConnectGate connected={seq.connected}>
         <div className="flex flex-col gap-5">
-          {/* Deposit — uniform split across the outcomes still in funding. */}
+          {/* Deposit — provide liquidity to the outcome(s) still in funding. */}
           {funding.length > 0 ? (
             <form onSubmit={onDeposit} className="flex flex-col gap-2">
-              <Field
-                label="Deposit (total KASS)"
-                hint={
-                  perShareLabel
-                    ? `Split uniformly across ${funding.length} funding outcome${funding.length > 1 ? "s" : ""} · ${perShareLabel}`
-                    : `Split uniformly across ${funding.length} funding outcome${funding.length > 1 ? "s" : ""}`
-                }
-                error={error}
-              >
+              <Field label="Provide liquidity (KASS)" hint={perShareHint} error={error}>
                 {(ids) => (
                   <TextInput
                     ids={ids}
@@ -155,26 +173,31 @@ export function GroupLiquidityPanel({ oracle }: { oracle: string }) {
               <KassBalanceLine balance={balance} loading={balanceLoading} format={formatKass} />
               <div>
                 <Button type="submit" variant="PrimaryChestnut" disabled={seq.busy}>
-                  {seq.busy ? "Depositing…" : `Deposit into ${funding.length} outcomes`}
+                  {depositVerb}
                 </Button>
               </div>
             </form>
           ) : (
             <p className="font-inter text-[13px] text-driftwood">
-              No outcomes are in funding — deposits are closed for this group.
+              Funding is closed — this market&apos;s liquidity is live in the trading pool.
             </p>
           )}
 
-          {/* Withdraw — claim LP across every outcome whose fee has been collected. */}
-          {claimable.length > 0 ? (
+          {/* Withdraw — claim the caller's LP once fees are collected. */}
+          {walletHasPosition ? (
             <div className="flex flex-col gap-2 border-t border-pebble pt-4">
               <p className="font-inter text-[13px] text-bronze">
-                Withdraw your LP from {claimable.length} settled outcome
-                {claimable.length > 1 ? "s" : ""}.
+                {isGroup
+                  ? `Withdraw your liquidity from ${feeCollected.length} settled outcome${feeCollected.length > 1 ? "s" : ""}.`
+                  : "Withdraw your provided liquidity."}
               </p>
               <div>
                 <Button type="button" variant="GhostOutline" disabled={seq.busy} onClick={onWithdraw}>
-                  {seq.busy ? "Withdrawing…" : `Withdraw from ${claimable.length} outcomes`}
+                  {seq.busy
+                    ? "Withdrawing…"
+                    : isGroup
+                      ? `Withdraw from ${feeCollected.length} outcomes`
+                      : "Withdraw liquidity"}
                 </Button>
               </div>
             </div>
@@ -187,4 +210,4 @@ export function GroupLiquidityPanel({ oracle }: { oracle: string }) {
   );
 }
 
-export default GroupLiquidityPanel;
+export default LiquidityPanel;
