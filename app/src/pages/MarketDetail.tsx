@@ -8,7 +8,7 @@ import { ProbabilityBar } from "../components/markets/ProbabilityBar";
 import { Truncated } from "../components/markets/Truncated";
 import { TradePanel } from "../components/markets/actions/TradePanel";
 import { MarketActions } from "../components/markets/actions/MarketActions";
-import { GroupLiquidityPanel } from "../components/markets/actions/GroupLiquidityPanel";
+import { LiquidityPanel } from "../components/markets/actions/LiquidityPanel";
 import { useMarketDetail } from "../market/hooks/useMarketDetail";
 import { MarketNotFoundError, type MarketDetail as MarketDetailData } from "../market/data/markets";
 import { explorerAddressUrl } from "../market/lib/explorer";
@@ -252,14 +252,14 @@ function DetailBody({
         )}
       </Panel>
 
-      {/* Bulk liquidity across this oracle's whole GROUP of outcome sub-markets —
-          self-hides for a lone (binary) market. Sits above the single-market
-          actions so "fund/withdraw all outcomes" is the primary affordance. */}
-      <GroupLiquidityPanel oracle={market.oracle.toString()} />
+      {/* Provide / withdraw liquidity — on EVERY market (a lone market is a group
+          of one; a categorical oracle groups its outcomes and splits deposits
+          uniformly). The liquidity traders trade against. */}
+      <LiquidityPanel detail={detail} onSuccess={refetch} />
 
-      {/* Status-gated write actions: contribute (Funding), and the redeem/claim/
-          close/resolve cranks (Active + terminal). The Active buy/sell TradePanel
-          is rendered above (co-located with the chart). */}
+      {/* Status-gated lifecycle cranks (activate / cancel / resolve / redeem /
+          collect-fee / close / refund). Liquidity lives in the panel above; the
+          Active buy/sell TradePanel is rendered higher up (with the chart). */}
       <MarketActions detail={detail} refetch={refetch} />
     </div>
   );
