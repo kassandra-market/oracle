@@ -1,10 +1,12 @@
 /**
  * Render coverage for the market-detail TAB STRUCTURE. The data hook is mocked to
  * return a ready Active market, and we assert (via `renderToStaticMarkup`) the
- * grouped tab bar: an Active market exposes a Trade tab AND a Liquidity tab
- * (the Liquidity tab must be present for Active markets, not just Funding), plus
- * the always-on Overview / Manage / Details. Only the default Overview panel
- * renders its body (the gauge), so the heavy action panels stay dormant.
+ * grouped tab bar: an Active market exposes a Trade tab AND a Liquidity tab (the
+ * Liquidity tab must be present for Active markets, not just Funding), plus the
+ * always-on Manage / Details — and NO standalone Overview tab (its funding /
+ * implied-price / oracle panels now live in Liquidity + Details). The default tab
+ * is Trade, so only the Trade panel body renders; the heavy Liquidity/Manage
+ * panels stay dormant. `TradePanel` is stubbed (it needs wallet/indexer context).
  */
 import { vi } from 'vitest'
 import { MarketStatus } from '@kassandra-market/markets'
@@ -41,6 +43,12 @@ vi.mock('../src/market/hooks/useMarketDetail', () => ({
   useConfig: () => ({ data: undefined, loading: false, error: undefined, refetch: () => {} }),
 }))
 
+// Stub the Trade surface — it's the default panel now, but it pulls in wallet +
+// indexer context this lightweight structural test doesn't provide.
+vi.mock('../src/components/markets/actions/TradePanel', () => ({
+  TradePanel: () => null,
+}))
+
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -59,17 +67,18 @@ function render(): string {
 }
 
 describe('MarketDetail tabs', () => {
-  it('exposes Trade + Liquidity tabs for an Active market', () => {
+  it('exposes Trade + Liquidity + Manage + Details tabs and no Overview tab', () => {
     const html = render()
-    for (const label of ['Overview', 'Trade', 'Liquidity', 'Manage', 'Details']) {
+    for (const label of ['Trade', 'Liquidity', 'Manage', 'Details']) {
       expect(html).toMatch(new RegExp(`role="tab"[^>]*>(?:(?!</button>).)*${label}`))
     }
+    expect(html).not.toMatch(/role="tab"[^>]*>(?:(?!<\/button>).)*Overview/)
   })
 
-  it('renders the probability gauge in the default Overview panel', () => {
+  it('defaults to the Trade panel; other panels stay dormant', () => {
     const html = render()
-    expect(html).toContain('implied YES')
-    // Inactive panels stay dormant — the Trade panel body is not rendered.
-    expect(html).not.toContain('role="tabpanel" id="panel-trade"')
+    expect(html).toContain('role="tabpanel" id="panel-trade"')
+    // Inactive panels render null — the Liquidity panel body is absent by default.
+    expect(html).not.toContain('role="tabpanel" id="panel-liquidity"')
   })
 })

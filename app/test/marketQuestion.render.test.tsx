@@ -48,6 +48,12 @@ vi.mock('../src/market/hooks/useMarketDetail', () => ({
   useConfig: () => ({ data: undefined, loading: false, error: undefined, refetch: () => {} }),
 }))
 
+// The MarketDetail default tab is Trade; stub the trade surface (it needs wallet +
+// indexer context) so the header-focused render doesn't crash.
+vi.mock('../src/components/markets/actions/TradePanel', () => ({
+  TradePanel: () => null,
+}))
+
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
