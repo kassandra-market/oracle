@@ -81,6 +81,28 @@ function ReserveFigure({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** A small hoverable "i" carrying an explanatory tooltip (native `title` +
+ *  `aria-label`, matching the app's other title-based tips). */
+function InfoTip({ label, children }: { label: string; children: string }) {
+  return (
+    <span
+      role="img"
+      aria-label={`${label}: ${children}`}
+      title={children}
+      className="ml-1 inline-flex h-4 w-4 cursor-help select-none items-center justify-center rounded-full border border-pebble align-middle font-inter text-[10px] leading-none text-driftwood"
+    >
+      i
+    </span>
+  );
+}
+
+/** `part / whole` as a one-decimal percent string (`"0%"` when `whole <= 0`), via
+ *  an integer-basis-point intermediate so the bigint LP figures never lose data. */
+function percentOf(part: bigint, whole: bigint): string {
+  if (whole <= 0n) return "0%";
+  return `${(Number((part * 10_000n) / whole) / 100).toFixed(1)}%`;
+}
+
 function DetailBody({
   detail,
   refetch,
@@ -95,6 +117,16 @@ function DetailBody({
   const optionsCount = oracle?.optionsCount ?? null;
   const yesProbability = impliedYesProbability(reserves);
 
+  // LP provenance (only meaningful once the pool is seeded at activation):
+  //   - funding LP  = `activationLp` (minted from the funders' escrow at activate),
+  //   - independent LP = the rest of `grossLpTotal` (post-activation add_liquidity).
+  // `grossLpTotal` is the frozen who-provided-what total (fee-independent), so it's
+  // the honest basis for the split even after `collect_fee` trims `lpTotal`.
+  const grossLp = market.grossLpTotal;
+  const fundingLp = market.activationLp;
+  const independentLp = grossLp > fundingLp ? grossLp - fundingLp : 0n;
+  const hasPool = grossLp > 0n;
+
   // The human-readable question + option labels — on-chain (oracle_meta PDA),
   // read best-effort via the indexer. Absent (no indexer / not yet loaded) → the
   // view degrades to the pubkey + numeric outcome index it always had.
@@ -107,9 +139,9 @@ function DetailBody({
   const boundLabel = options[market.outcomeIndex]?.trim() || null;
 
   // Tabs are grouped by intent: act on the AMM (Trade, Active only), provide/
-  // withdraw + read market state (Liquidity — present in EVERY phase incl. Active,
-  // and where funding progress + the implied price now live), run the lifecycle
-  // cranks (Manage), and inspect the oracle + bindings (Details).
+  // withdraw + read funding & pool composition (Liquidity — present in EVERY phase
+  // incl. Active), run the lifecycle cranks (Manage), and inspect the implied
+  // probability + oracle + bindings (Details).
   const tabs = useMemo<TabItem[]>(() => {
     const items: TabItem[] = [];
     if (isActive) items.push({ id: "trade", label: "Trade", dot: "ember" });
@@ -172,63 +204,83 @@ function DetailBody({
         </TabPanel>
       ) : null}
 
-      {/* Liquidity — the market-state read (funding progress + the implied price an
-          LP would provide at) sits atop bulk group liquidity, this market's own
-          provide/withdraw surface, and the contributions ledger. Every phase. */}
+      {/* Liquidity — funding progress, the LP provenance split (funding vs
+          independent LPs), and the pool's cYES/cNO token composition, atop bulk
+          group liquidity, this market's provide/withdraw surface, and the
+          contributions ledger. Present in every phase (incl. Active). */}
       <TabPanel id="liquidity" active={activeTab === "liquidity"} className="tab-enter flex flex-col gap-6">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Funding progress + floor + protocol fee. */}
-          <Panel title="Funding">
-            <FundingBar market={market} />
-            <dl className="flex flex-wrap gap-x-6 gap-y-1 font-inter text-[13px] text-bronze">
+        <Panel title="Funding & liquidity">
+          <FundingBar market={market} />
+          <dl className="flex flex-wrap gap-x-6 gap-y-1 font-inter text-[13px] text-bronze">
+            <div className="flex gap-1">
+              <dt className="text-driftwood">Raised</dt>
+              <dd className="font-medium tabular-nums text-sepia">
+                {formatKass(market.totalContributed)} KASS
+              </dd>
+            </div>
+            <div className="flex gap-1">
+              <dt className="text-driftwood">Floor</dt>
+              <dd className="font-medium tabular-nums text-sepia">
+                {formatKass(market.minLiquidity)} KASS
+              </dd>
+            </div>
+            <div className="flex gap-1">
+              <dt className="text-driftwood">Protocol fee</dt>
+              <dd className="font-medium tabular-nums text-sepia">
+                {(market.feeBps / 100).toFixed(2)}%
+              </dd>
+            </div>
+            {market.feeBps > 0 ? (
               <div className="flex gap-1">
-                <dt className="text-driftwood">Raised</dt>
-                <dd className="font-medium tabular-nums text-sepia">
-                  {formatKass(market.totalContributed)} KASS
-                </dd>
+                <dt className="text-driftwood">Fee collected</dt>
+                <dd className="font-medium text-sepia">{market.feeCollected ? "yes" : "no"}</dd>
               </div>
-              <div className="flex gap-1">
-                <dt className="text-driftwood">Floor</dt>
-                <dd className="font-medium tabular-nums text-sepia">
-                  {formatKass(market.minLiquidity)} KASS
-                </dd>
-              </div>
-              <div className="flex gap-1">
-                <dt className="text-driftwood">Protocol fee</dt>
-                <dd className="font-medium tabular-nums text-sepia">
-                  {(market.feeBps / 100).toFixed(2)}%
-                </dd>
-              </div>
-              {market.feeBps > 0 ? (
-                <div className="flex gap-1">
-                  <dt className="text-driftwood">Fee collected</dt>
-                  <dd className="font-medium text-sepia">{market.feeCollected ? "yes" : "no"}</dd>
-                </div>
-              ) : null}
-            </dl>
-          </Panel>
+            ) : null}
+          </dl>
 
-          {/* Implied probability — the price an LP provides at (semicircle gauge +
-              live cYES/cNO reserves) for an Active market. */}
-          <Panel title="Implied probability">
-            {isActive ? (
-              <>
-                <ProbabilityGauge probability={yesProbability} />
-                {reserves ? (
-                  <dl className="flex flex-col gap-1.5 border-t border-pebble pt-3 font-inter text-[13px]">
-                    <ReserveFigure label="cYES reserve" value={formatKass(reserves.base)} />
-                    <ReserveFigure label="cNO reserve" value={formatKass(reserves.quote)} />
-                  </dl>
-                ) : null}
-              </>
-            ) : (
-              <p className="font-inter text-[13px] text-driftwood">
-                Live prices appear once the market is Active (the cYES/cNO pool is composed at
-                activation).
+          {/* LP provenance — how much of the pool's LP was seeded by the funders
+              vs added by independent LPs after activation. */}
+          {hasPool ? (
+            <div className="flex flex-col gap-1.5 border-t border-pebble pt-3">
+              <p className="font-inter text-[12px] font-medium uppercase tracking-[0.06em] text-driftwood">
+                LP composition
+                <InfoTip label="LP composition">
+                  Funding LP was minted from the funders' escrow when the market was activated;
+                  independent LP was added later by anyone depositing into the live pool. Both share
+                  the pool pro-rata by LP.
+                </InfoTip>
               </p>
-            )}
-          </Panel>
-        </div>
+              <dl className="flex flex-col gap-1.5 font-inter text-[13px]">
+                <ReserveFigure
+                  label={`From funding (${percentOf(fundingLp, grossLp)})`}
+                  value={`${formatKass(fundingLp)} LP`}
+                />
+                <ReserveFigure
+                  label={`From independent LPs (${percentOf(independentLp, grossLp)})`}
+                  value={`${formatKass(independentLp)} LP`}
+                />
+                <ReserveFigure label="Total LP" value={`${formatKass(grossLp)} LP`} />
+              </dl>
+            </div>
+          ) : null}
+
+          {/* Pool composition — the underlying cYES/cNO token reserves. */}
+          {reserves ? (
+            <div className="flex flex-col gap-1.5 border-t border-pebble pt-3">
+              <p className="font-inter text-[12px] font-medium uppercase tracking-[0.06em] text-driftwood">
+                Pool composition
+                <InfoTip label="Pool composition">
+                  The AMM holds a pair of conditional tokens: cYES pays 1 KASS if the outcome
+                  resolves YES, cNO pays 1 KASS if it resolves NO. Their reserves set the price.
+                </InfoTip>
+              </p>
+              <dl className="flex flex-col gap-1.5 font-inter text-[13px]">
+                <ReserveFigure label="cYES (pays 1 KASS on YES)" value={formatKass(reserves.base)} />
+                <ReserveFigure label="cNO (pays 1 KASS on NO)" value={formatKass(reserves.quote)} />
+              </dl>
+            </div>
+          ) : null}
+        </Panel>
 
         <GroupLiquidityPanel oracle={market.oracle.toString()} />
         <Panel title="Your liquidity">
@@ -283,9 +335,31 @@ function DetailBody({
         </Panel>
       </TabPanel>
 
-      {/* Details — the linked oracle context + the MetaDAO bindings (accounts +
-          Explorer links). */}
+      {/* Details — the implied probability read, the linked oracle context, and the
+          MetaDAO bindings (accounts + Explorer links). */}
       <TabPanel id="details" active={activeTab === "details"} className="tab-enter flex flex-col gap-6">
+        <Panel title="Implied probability">
+          {isActive ? (
+            <>
+              <p className="font-inter text-[13px] text-driftwood">
+                The market's live estimate that this outcome resolves{" "}
+                <span className="font-medium text-ember-orange">YES</span>.
+                <InfoTip label="What is implied probability">
+                  Implied probability is the market's estimate of the chance this outcome resolves
+                  YES, read from the pool price: P(YES) = cNO ÷ (cYES + cNO). A larger cNO reserve
+                  (cheaper NO) prices YES as more likely.
+                </InfoTip>
+              </p>
+              <ProbabilityGauge probability={yesProbability} />
+            </>
+          ) : (
+            <p className="font-inter text-[13px] text-driftwood">
+              Live prices appear once the market is Active (the cYES/cNO pool is composed at
+              activation).
+            </p>
+          )}
+        </Panel>
+
         <Panel title="Linked oracle">
           {subject ? (
             <p className="text-balance font-serif text-subheading font-light text-sepia">
