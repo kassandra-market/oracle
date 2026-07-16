@@ -5,10 +5,10 @@
 
 **Delivered:** on-chain `add_liquidity` (Ix 11) + gross-LP `claim_lp`/state changes
 (program tests incl. an exact fairness proof + fee-path consistency), Rust & TS
-SDK builders/flow, indexer DTO fields, and an `AddLiquidityControl` in the Active
-markets' Liquidity tab. Deferred: bulk add across an oracle's Active sibling group
-(per-sibling reserves + mixed funding/active cohort UX) — the per-market control
-already delivers the goal.
+SDK builders/flow, indexer DTO fields, an `AddLiquidityControl` in the Active
+markets' Liquidity tab, AND bulk add across an oracle's sibling group
+(`GroupLiquidityPanel` uniform-splits the total across every depositable outcome —
+Funding → contribute, Active-with-reserves → add_liquidity).
 
 **Goal:** let anyone deposit KASS into a market that is already `Active` (its
 cYES/cNO AMM is live), receiving pooled LP that is claimable pro-rata alongside
