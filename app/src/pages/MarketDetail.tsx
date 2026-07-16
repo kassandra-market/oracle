@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useMemo } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MarketStatus } from "@kassandra-market/markets";
 import type { Address } from "@solana/web3.js";
 import { Button, Card, EyebrowTag, SectionHeader, Tabs, TabPanel, type TabItem } from "../components/ui";
@@ -153,10 +153,18 @@ function DetailBody({
 
   // Default to trading; a non-Active market (no Trade tab) opens on Liquidity.
   const defaultTab = isActive ? "trade" : "liquidity";
-  const [tab, setTab] = useState(defaultTab);
-  // If the active tab vanishes (e.g. an Active market resolves away the Trade tab
-  // while it's open), fall back to the default so no dead panel is shown.
-  const activeTab = tabs.some((t) => t.id === tab) ? tab : defaultTab;
+  // The active tab lives in the URL (`?tab=`) so a refresh (or a shared link)
+  // restores it. An absent or stale param (e.g. an Active market resolved away the
+  // Trade tab) falls back to the default so no dead panel is shown. `replace` keeps
+  // tab switches out of the history stack (Back leaves the page, not the tab).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paramTab = searchParams.get("tab");
+  const activeTab = tabs.some((t) => t.id === paramTab) ? paramTab! : defaultTab;
+  const setTab = (id: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", id);
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <div className="mt-8 flex flex-col gap-6">

@@ -54,9 +54,9 @@ import { describe, expect, it } from "vitest";
 
 import MarketDetail from "../src/pages/MarketDetail";
 
-function render(): string {
+function render(query = ""): string {
   return renderToStaticMarkup(
-    <MemoryRouter initialEntries={[`/markets/${PUB}`]}>
+    <MemoryRouter initialEntries={[`/markets/${PUB}${query}`]}>
       <Routes>
         <Route path="/markets/:pubkey" element={<MarketDetail />} />
       </Routes>
@@ -87,5 +87,18 @@ describe("Funding & liquidity panel", () => {
     const html = render();
     // The gauge moved to the Details tab (dormant here).
     expect(html).not.toContain("Implied YES probability");
+  });
+
+  it("restores the tab named in ?tab= on load (refresh persistence)", () => {
+    // A non-default tab (default here is Liquidity) is opened straight from the URL.
+    const html = render("?tab=manage");
+    expect(html).toContain('role="tabpanel" id="panel-manage"');
+    expect(html).not.toContain('role="tabpanel" id="panel-liquidity"');
+  });
+
+  it("falls back to the default tab when ?tab= is unknown", () => {
+    const html = render("?tab=bogus");
+    expect(html).toContain('role="tabpanel" id="panel-liquidity"');
+    expect(html).not.toContain('role="tabpanel" id="panel-manage"');
   });
 });
