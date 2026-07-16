@@ -54,8 +54,12 @@ function cssVar(el: HTMLElement, name: string, dflt: string): string {
  *
  * Meaningful only for an Active market (the cYES/cNO pool exists); a market with
  * no points yet renders a quiet empty state rather than a blank frame.
+ *
+ * `refreshKey` — bump it (e.g. after a trade confirms) to reload the series
+ * immediately instead of waiting for the next {@link POLL_MS} poll, so the curve
+ * moves in lockstep with the live YES/NO readouts rather than lagging behind.
  */
-export function PriceChart({ pubkey }: { pubkey: string }) {
+export function PriceChart({ pubkey, refreshKey }: { pubkey: string; refreshKey?: number }) {
   const indexer = useIndexer();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -149,7 +153,7 @@ export function PriceChart({ pubkey }: { pubkey: string }) {
       active = false;
       clearInterval(id);
     };
-  }, [indexer, pubkey, intervalSecs]);
+  }, [indexer, pubkey, intervalSecs, refreshKey]);
 
   return (
     <div className="flex flex-col gap-3">

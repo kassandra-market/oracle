@@ -112,11 +112,12 @@ function DetailBody({
   // The full-text label of the specific outcome THIS sub-market pays YES on.
   const boundLabel = options[market.outcomeIndex]?.trim() || null;
 
-  // Tabs are grouped by intent: read the market (Overview), act on the AMM (Trade,
-  // Active only), provide/withdraw (Liquidity — present in EVERY phase incl.
-  // Active), run the lifecycle cranks (Manage), and inspect bindings (Details).
+  // Tabs are grouped by intent: act on the AMM (Trade, Active only — the read
+  // snapshot of price/reserves lives here too), provide/withdraw (Liquidity —
+  // present in EVERY phase incl. Active, and where funding is surfaced), run the
+  // lifecycle cranks (Manage), and inspect the oracle + bindings (Details).
   const tabs = useMemo<TabItem[]>(() => {
-    const items: TabItem[] = [{ id: "overview", label: "Overview" }];
+    const items: TabItem[] = [];
     if (isActive) items.push({ id: "trade", label: "Trade", dot: "ember" });
     items.push({ id: "liquidity", label: "Liquidity" });
     items.push({ id: "manage", label: "Manage" });
@@ -124,10 +125,11 @@ function DetailBody({
     return items;
   }, [isActive]);
 
-  const [tab, setTab] = useState("overview");
-  // If the active tab vanishes (e.g. an Active market resolves away the Trade
-  // tab while it's open), fall back to Overview so no dead panel is shown.
-  const activeTab = tabs.some((t) => t.id === tab) ? tab : "overview";
+  const [tab, setTab] = useState("trade");
+  // Default to Trade; if it's absent (non-Active market) or the active tab
+  // vanishes (an Active market resolves away Trade while it's open), fall back to
+  // the first available tab so no dead panel is shown.
+  const activeTab = tabs.some((t) => t.id === tab) ? tab : (tabs[0]?.id ?? "liquidity");
 
   return (
     <div className="mt-8 flex flex-col gap-6">
@@ -161,35 +163,112 @@ function DetailBody({
 
       <Tabs items={tabs} value={activeTab} onChange={setTab} ariaLabel="Market sections" />
 
-      {/* Overview — the read snapshot: status, live probability gauge, funding, oracle link. */}
-      <TabPanel id="overview" active={activeTab === "overview"} className="tab-enter flex flex-col gap-6">
-        <Panel title="Outcome & settlement">
-          <p className="font-inter text-[13px] text-driftwood">
-            This sub-market pays <span className="font-medium text-ember-orange">YES</span> if the
-            linked oracle resolves to{" "}
-            {boundLabel ? (
-              <span className="font-medium text-sepia">“{boundLabel}”</span>
-            ) : (
-              <span className="font-medium text-sepia">outcome {market.outcomeIndex}</span>
-            )}
-            {optionsCount !== null ? (
-              <span className="text-stone">
-                {" "}
-                (outcome {market.outcomeIndex} of {optionsCount})
+      {/* Trade — the price chart + buy/sell form, plus the implied-probability
+          snapshot (gauge + pool reserves). Active only; the cYES/cNO pool exists. */}
+      {isActive ? (
+        <TabPanel id="trade" active={activeTab === "trade"} className="tab-enter flex flex-col gap-6">
+          <TradePanel
+            pubkey={pubkey}
+            market={market}
+            reserves={reserves}
+            onSuccess={refetch}
+            question={subject}
+            boundLabel={boundLabel}
+          />
+          <Panel title="Implied probability">
+            <ProbabilityGauge probability={yesProbability} />
+            {reserves ? (
+              <dl className="flex flex-col gap-1.5 border-t border-pebble pt-3 font-inter text-[13px]">
+                <ReserveFigure label="cYES reserve" value={formatKass(reserves.base)} />
+                <ReserveFigure label="cNO reserve" value={formatKass(reserves.quote)} />
+              </dl>
+            ) : null}
+          </Panel>
+        </TabPanel>
+      ) : null}
+
+      {/* Liquidity — bulk group liquidity + this market's own provide/withdraw
+          surface + the contributions ledger. Present in every phase (incl. Active). */}
+      <TabPanel id="liquidity" active={activeTab === "liquidity"} className="tab-enter flex flex-col gap-6">
+        <Panel title="Funding">
+          <FundingBar market={market} />
+          <dl className="flex flex-wrap gap-x-6 gap-y-1 font-inter text-[13px] text-bronze">
+            <div className="flex gap-1">
+              <dt className="text-driftwood">Raised</dt>
+              <dd className="font-medium tabular-nums text-sepia">
+                {formatKass(market.totalContributed)} KASS
+              </dd>
+            </div>
+            <div className="flex gap-1">
+              <dt className="text-driftwood">Floor</dt>
+              <dd className="font-medium tabular-nums text-sepia">
+                {formatKass(market.minLiquidity)} KASS
+              </dd>
+            </div>
+            <div className="flex gap-1">
+              <dt className="text-driftwood">Protocol fee</dt>
+              <dd className="font-medium tabular-nums text-sepia">
+                {(market.feeBps / 100).toFixed(2)}%
+              </dd>
+            </div>
+            {market.feeBps > 0 ? (
+              <div className="flex gap-1">
+                <dt className="text-driftwood">Fee collected</dt>
+                <dd className="font-medium text-sepia">{market.feeCollected ? "yes" : "no"}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </Panel>
+        <GroupLiquidityPanel oracle={market.oracle.toString()} />
+        <Panel title="Your liquidity">
+          <MarketLiquidityActions detail={detail} refetch={refetch} />
+        </Panel>
+        <Panel title={`Contributions (${contributions.length})`}>
+          {contributions.length === 0 ? (
+            <p className="font-inter text-[13px] text-driftwood">No contributions yet.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-pebble/60">
+              {contributions.map(({ pubkey, contribution }) => (
+                <li key={pubkey} className="flex items-center justify-between gap-3 py-2">
+                  <Truncated
+                    value={contribution.contributor.toString()}
+                    label="contributor"
+                    copyable
+                    head={4}
+                    tail={4}
+                  />
+                  <span className="flex items-center gap-3">
+                    <span className="font-inter text-[13px] font-medium tabular-nums text-sepia">
+                      {formatKass(contribution.amount)} KASS
+                    </span>
+                    <span
+                      className={`font-inter text-[11px] ${
+                        contribution.claimed ? "text-stone" : "text-chestnut"
+                      }`}
+                    >
+                      {contribution.claimed ? "claimed" : "open"}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </TabPanel>
+
+      {/* Manage — the lifecycle cranks (activate / resolve / redeem / collect / close). */}
+      <TabPanel id="manage" active={activeTab === "manage"} className="tab-enter flex flex-col gap-6">
+        {marketTerminal ? (
+          <Panel title="Settlement">
+            <div className="flex flex-wrap items-center gap-2 font-inter text-[13px]">
+              <span className="text-driftwood">Current</span>
+              <span className="font-medium text-sepia">
+                {outcomeResolutionText(oracle, market.outcomeIndex)}
               </span>
-            ) : null}
-            .
-          </p>
-          <div className="flex flex-wrap items-center gap-2 font-inter text-[13px]">
-            <span className="text-driftwood">Current</span>
-            <span className="font-medium text-sepia">
-              {outcomeResolutionText(oracle, market.outcomeIndex)}
-            </span>
-            {market.settled ? (
-              <span className="text-[12px] text-chestnut">· settled on-chain</span>
-            ) : null}
-          </div>
-          {marketTerminal ? (
+              {market.settled ? (
+                <span className="text-[12px] text-chestnut">· settled on-chain</span>
+              ) : null}
+            </div>
             <p className="font-inter text-[13px] text-driftwood">
               {market.openContributions > 0
                 ? `${market.openContributions} contributor${
@@ -200,63 +279,16 @@ function DetailBody({
                 Closing the market reclaims its account rent to the creator.
               </span>
             </p>
-          ) : null}
+          </Panel>
+        ) : null}
+        <Panel title="Lifecycle actions">
+          <MarketLifecycleActions detail={detail} refetch={refetch} />
         </Panel>
+      </TabPanel>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Implied probability — a semicircle gauge for an Active market. */}
-          <Panel title="Implied probability">
-            {isActive ? (
-              <>
-                <ProbabilityGauge probability={yesProbability} />
-                {reserves ? (
-                  <dl className="flex flex-col gap-1.5 border-t border-pebble pt-3 font-inter text-[13px]">
-                    <ReserveFigure label="cYES reserve" value={formatKass(reserves.base)} />
-                    <ReserveFigure label="cNO reserve" value={formatKass(reserves.quote)} />
-                  </dl>
-                ) : null}
-              </>
-            ) : (
-              <p className="font-inter text-[13px] text-driftwood">
-                Live prices appear once the market is Active (the cYES/cNO pool is composed at
-                activation).
-              </p>
-            )}
-          </Panel>
-
-          {/* Funding */}
-          <Panel title="Funding">
-            <FundingBar market={market} />
-            <dl className="flex flex-wrap gap-x-6 gap-y-1 font-inter text-[13px] text-bronze">
-              <div className="flex gap-1">
-                <dt className="text-driftwood">Raised</dt>
-                <dd className="font-medium tabular-nums text-sepia">
-                  {formatKass(market.totalContributed)} KASS
-                </dd>
-              </div>
-              <div className="flex gap-1">
-                <dt className="text-driftwood">Floor</dt>
-                <dd className="font-medium tabular-nums text-sepia">
-                  {formatKass(market.minLiquidity)} KASS
-                </dd>
-              </div>
-              <div className="flex gap-1">
-                <dt className="text-driftwood">Protocol fee</dt>
-                <dd className="font-medium tabular-nums text-sepia">
-                  {(market.feeBps / 100).toFixed(2)}%
-                </dd>
-              </div>
-              {market.feeBps > 0 ? (
-                <div className="flex gap-1">
-                  <dt className="text-driftwood">Fee collected</dt>
-                  <dd className="font-medium text-sepia">{market.feeCollected ? "yes" : "no"}</dd>
-                </div>
-              ) : null}
-            </dl>
-          </Panel>
-        </div>
-
-        {/* Linked oracle */}
+      {/* Details — the linked oracle (subject + options + phase) and the MetaDAO
+          bindings (accounts + Explorer links). */}
+      <TabPanel id="details" active={activeTab === "details"} className="tab-enter flex flex-col gap-6">
         <Panel title="Linked oracle">
           {subject ? (
             <p className="text-balance font-serif text-subheading font-light text-sepia">
@@ -308,71 +340,6 @@ function DetailBody({
             </p>
           )}
         </Panel>
-      </TabPanel>
-
-      {/* Trade — the price chart + buy/sell form (Active only; the cYES/cNO pool exists). */}
-      {isActive ? (
-        <TabPanel id="trade" active={activeTab === "trade"} className="tab-enter">
-          <TradePanel
-            pubkey={pubkey}
-            market={market}
-            reserves={reserves}
-            onSuccess={refetch}
-            question={subject}
-            boundLabel={boundLabel}
-          />
-        </TabPanel>
-      ) : null}
-
-      {/* Liquidity — bulk group liquidity + this market's own provide/withdraw
-          surface + the contributions ledger. Present in every phase (incl. Active). */}
-      <TabPanel id="liquidity" active={activeTab === "liquidity"} className="tab-enter flex flex-col gap-6">
-        <GroupLiquidityPanel oracle={market.oracle.toString()} />
-        <Panel title="Your liquidity">
-          <MarketLiquidityActions detail={detail} refetch={refetch} />
-        </Panel>
-        <Panel title={`Contributions (${contributions.length})`}>
-          {contributions.length === 0 ? (
-            <p className="font-inter text-[13px] text-driftwood">No contributions yet.</p>
-          ) : (
-            <ul className="flex flex-col divide-y divide-pebble/60">
-              {contributions.map(({ pubkey, contribution }) => (
-                <li key={pubkey} className="flex items-center justify-between gap-3 py-2">
-                  <Truncated
-                    value={contribution.contributor.toString()}
-                    label="contributor"
-                    copyable
-                    head={4}
-                    tail={4}
-                  />
-                  <span className="flex items-center gap-3">
-                    <span className="font-inter text-[13px] font-medium tabular-nums text-sepia">
-                      {formatKass(contribution.amount)} KASS
-                    </span>
-                    <span
-                      className={`font-inter text-[11px] ${
-                        contribution.claimed ? "text-stone" : "text-chestnut"
-                      }`}
-                    >
-                      {contribution.claimed ? "claimed" : "open"}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-      </TabPanel>
-
-      {/* Manage — the lifecycle cranks (activate / resolve / redeem / collect / close). */}
-      <TabPanel id="manage" active={activeTab === "manage"} className="tab-enter">
-        <Panel title="Lifecycle actions">
-          <MarketLifecycleActions detail={detail} refetch={refetch} />
-        </Panel>
-      </TabPanel>
-
-      {/* Details — the MetaDAO bindings (accounts + Explorer links). */}
-      <TabPanel id="details" active={activeTab === "details"} className="tab-enter">
         <Panel title="Bindings">
           <div className="divide-y divide-pebble/60">
             <AddressRow label="Oracle" address={market.oracle} />

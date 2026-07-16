@@ -215,10 +215,16 @@ export function TradePanel({
   const yes = useKassBalance(yesMint);
   const no = useKassBalance(noMint);
 
+  // Bumped on every confirmed trade so the price chart reloads its series at
+  // once (rather than waiting for its poll), keeping the curve in sync with the
+  // freshly-refetched YES/NO readouts.
+  const [tradeNonce, setTradeNonce] = useState(0);
+
   const action = useWriteAction(() => {
     kass.refetch();
     yes.refetch();
     no.refetch();
+    setTradeNonce((n) => n + 1);
     onSuccess();
   });
 
@@ -330,7 +336,7 @@ export function TradePanel({
         <div className="flex justify-end">
           <UnitTabs value={unit} onChange={setUnit} usdAvailable={usdAvailable} />
         </div>
-        <PriceChart pubkey={pubkey} />
+        <PriceChart pubkey={pubkey} refreshKey={tradeNonce} />
       </Card>
 
       {/* Order ticket — the floating buy/sell card. */}
