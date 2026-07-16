@@ -91,6 +91,14 @@ fn activate_happy_path() {
         "lp_vault == lp_total"
     );
 
+    // Gross-LP accounting basis frozen at activation.
+    assert_eq!(m.activation_lp, m.lp_total, "activation_lp == lp_total");
+    assert_eq!(m.gross_lp_total, m.lp_total, "gross_lp_total == lp_total");
+    assert_eq!(
+        m.activation_contributed, m.total_contributed,
+        "activation_contributed == total_contributed"
+    );
+
     // All bindings recorded on the Market.
     assert_eq!(m.question.to_bytes(), refs.question.to_bytes());
     assert_eq!(m.vault.to_bytes(), refs.vault.to_bytes());

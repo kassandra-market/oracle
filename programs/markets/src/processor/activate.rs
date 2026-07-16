@@ -306,6 +306,12 @@ pub fn process(
     m.lp_mint = *lp_mint_ai.address();
     m.lp_vault = *lp_vault_ai.address();
     m.lp_total = lp_total;
+    // Freeze the activation basis for the gross-LP claim accounting: funders' shares
+    // derive from (activation_lp, activation_contributed); gross_lp_total starts at
+    // the activation LP and grows with each post-activation add_liquidity.
+    m.activation_lp = lp_total;
+    m.activation_contributed = m.total_contributed;
+    m.gross_lp_total = lp_total;
     m.status = MarketStatus::Active.as_u8();
     write_market(market_ai, &m)?;
 
