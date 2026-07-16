@@ -61,6 +61,8 @@ test('submitFact: post a curated fact with a stake', async ({ page }) => {
 test('voteFact: approve a fact with a stake', async ({ page }) => {
   const o = wallet.oracles.factVoting
   await openOracle(page, o.address)
+  // Fact cards (with their vote controls) live under the Records tab.
+  await page.getByRole('tab', { name: /Records/ }).click()
   await page.getByRole('radio', { name: 'Approve' }).click()
   await page.getByPlaceholder('e.g. 1').fill('1')
   await page.getByRole('button', { name: 'Cast vote' }).click()
@@ -94,6 +96,8 @@ test('finalize: permissionless crank of an elapsed proposal window', async ({ pa
 test('claim: a winning proposer claims its payout on a resolved oracle', async ({ page }) => {
   const o = wallet.oracles.resolved
   await openOracle(page, o.address)
+  // Proposer cards (with their settle/claim controls) live under the Records tab.
+  await page.getByRole('tab', { name: /Records/ }).click()
   await page.getByRole('button', { name: /Claim/i }).first().click()
   // On-chain: claim closes the wallet's Proposer account (rent reclaimed).
   await poll(() => getAccountData(o.proposer!), (data) => data === null)

@@ -53,11 +53,15 @@ test('ActivityFeed renders the indexed events on the oracle page', async ({ page
   await page.goto(`/oracles/${fixture.oracle.address}`)
   await expect(page.getByRole('button', { name: /^Connected:/ })).toBeVisible()
 
-  // The Activity section exists (only rendered when VITE_INDEXER_URL is set).
+  // The Activity feed lives under the Activity tab (only present when the indexer
+  // backend is configured, i.e. VITE_INDEXER_URL is set).
+  await page.getByRole('tab', { name: /Activity/ }).click()
+
   const activity = page.getByRole('heading', { name: 'On-chain activity' })
   await expect(activity).toBeVisible()
 
-  const feed = page.locator('section', { has: page.getByRole('heading', { name: 'Activity' }) })
+  // Scope the row assertions to the active Activity tab panel.
+  const feed = page.locator('#panel-activity')
 
   // Each seeded instruction type shows as a human-labelled row (e.g. "Create
   // oracle", "Propose", "Finalize proposals", "Submit fact").

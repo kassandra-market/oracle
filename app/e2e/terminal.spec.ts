@@ -28,6 +28,10 @@ test('terminal: claim proposer, fact-vote, fact payouts and close the AI claim',
   await page.goto(`/oracles/${o.address}`)
   await expect(page.getByRole('button', { name: /^Connected:/ })).toBeVisible()
 
+  // The proposer / fact / AI-claim cards (and their terminal settle controls)
+  // live under the Records tab.
+  await page.getByRole('tab', { name: /Records/ }).click()
+
   // claim_proposer — the winning proposer's payout; the Proposer account closes.
   await page.getByRole('button', { name: 'Claim proposer payout' }).click()
   await poll(() => getAccountData(o.proposer), (d) => d === null)
