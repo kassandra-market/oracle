@@ -136,12 +136,6 @@
  * Auros abyss: deep-teal panel, platinum sans title, kelp wallet rows with a
  * cyan-tinted hover. No purple (#512da8) leaks through.
  */
-@keyframes wallet-modal-in {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-}
 .wallet-adapter-modal-wrapper {
   background-color: var(--color-liquid-deep);
   color: var(--color-liquid-mist);
@@ -149,8 +143,20 @@
   border-radius: var(--radius-card);
   box-shadow: none;
   font-family: var(--font-inter);
-  /* Centered modal: scale up from the middle + fade (never from scale 0). */
-  animation: wallet-modal-in 200ms var(--ease-out);
+  /* Materialize from the center: scale + fade + un-blur together (a real glass
+   * surface arriving, not a flat fade). Transition-based (not a locked keyframe)
+   * so it can be interrupted/retargeted. */
+  transition:
+    opacity 220ms var(--ease-out),
+    transform 220ms var(--ease-out),
+    filter 220ms var(--ease-out);
+}
+@starting-style {
+  .wallet-adapter-modal-wrapper {
+    opacity: 0;
+    transform: scale(0.96);
+    filter: blur(4px);
+  }
 }
 .wallet-adapter-modal-title {
   color: var(--color-platinum);
@@ -200,6 +206,10 @@
     line-height: var(--leading-body);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Let the type respond to size (the scale already carries size-specific
+     * tracking: tight negative on display, ~0 on body, positive on captions). */
+    font-optical-sizing: auto;
+    text-rendering: optimizeLegibility;
   }
   /* Headings: platinum, geometric, medium weight (never bold, never light). */
   h1,
@@ -283,12 +293,15 @@
    * toward the cursor by --drift-depth px, smoothed by a transition.
    */
   .drift {
+    /* No CSS transition: usePointerField springs --pointer-x/y each frame, so
+     * the drift follows the sprung value directly (a transition here would just
+     * add lag on top of the spring). */
     transform: translate3d(
       calc(var(--pointer-x, 0) * var(--drift-depth, 8px)),
       calc(var(--pointer-y, 0) * var(--drift-depth, 8px)),
       0
     );
-    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
   }
 
   /* Connector line between an oracle card and the market that uses it — a faint
@@ -317,7 +330,9 @@
      * bottom. */
     -webkit-mask-image: linear-gradient(to bottom, #000 50%, transparent 88%);
     mask-image: linear-gradient(to bottom, #000 50%, transparent 88%);
-    transition: background 0.25s ease-out;
+    /* No CSS transition: the spotlight center reads the sprung --pointer-px/py,
+     * so it already glides (the spring is the smoothing). */
+    will-change: background-position;
   }
 }
 
@@ -342,8 +357,33 @@
   .hero-link-flow {
     animation: none !important;
   }
-  /* Keep a gentle fade but drop the scale movement on the modal. */
+  /* Modal: keep the opacity fade, drop the scale + blur movement. */
   .wallet-adapter-modal-wrapper {
-    animation-name: none !important;
+    transition: opacity 200ms var(--ease-out) !important;
+  }
+}
+
+/*
+ * Translucent floating chrome (nav + footer): a blurred material that lets the
+ * abyssal canvas — and content scrolling under the sticky nav — show through,
+ * with a bright top edge catching the light. Reduced-transparency users get a
+ * solid, frostier surface instead.
+ */
+.chrome-glass {
+  background-color: color-mix(in srgb, var(--color-liquid-deep) 68%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  /* No backdrop-filter (older Safari/Firefox) → fall back to the solid surface. */
+  .chrome-glass {
+    background-color: var(--color-liquid-deep);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .chrome-glass {
+    background-color: var(--color-liquid-deep);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 }

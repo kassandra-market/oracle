@@ -163,7 +163,8 @@ function ConnectControl() {
 }
 
 /**
- * Auros top bar — soft-cream, a single hairline bottom border, not sticky.
+ * Auros top bar — a translucent glass material (`chrome-glass`) that sticks to
+ * the viewport top so content scrolls UNDER it, with a hairline bottom edge.
  * ≥md: left links · centered serif wordmark · right actions (cluster selector +
  * wallet connect). <md: a hamburger toggles a collapsible panel carrying the
  * primary links + the cluster selector, so navigation stays reachable on phones;
@@ -190,7 +191,10 @@ export default function NavBar() {
   }, [open])
 
   return (
-    <nav aria-label="Primary" className="border-b border-pebble bg-soft-cream">
+    <nav
+      aria-label="Primary"
+      className="chrome-glass sticky top-0 z-40 border-b border-pebble"
+    >
       <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-6 py-4">
         {/* Left: hamburger (<md) + primary links (≥md) */}
         <div className="flex flex-1 items-center">
@@ -247,8 +251,8 @@ export default function NavBar() {
         </div>
       </div>
 
-      {/* Mobile menu panel — in normal flow beneath the bar (the nav isn't
-          sticky, so it pushes content down rather than overlaying). */}
+      {/* Mobile menu panel — drops beneath the bar; since the nav is sticky it
+          floats over the page content on the same glass material. */}
       {open ? (
         <div id="mobile-nav-menu" className="border-t border-pebble md:hidden">
           <ul className="flex flex-col px-6 py-1">
