@@ -27,6 +27,8 @@ test('sweepOracle: permissionless dust sweep + terminal close', async ({ page })
   const o = wallet.oracles.sweepReady
   await page.goto(`/oracles/${o.address}`)
   await expect(page.getByRole('button', { name: /^Connected:/ })).toBeVisible()
+  // The permissionless sweep lives under the Manage tab.
+  await page.getByRole('tab', { name: /Manage/ }).click()
   await page.getByRole('button', { name: 'Sweep oracle' }).click()
   // On-chain: sweep closes the Oracle account (rent → creator).
   await poll(() => getAccountData(o.address), (d) => d === null)

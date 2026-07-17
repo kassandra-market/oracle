@@ -28,16 +28,17 @@ test('terminal: claim proposer, fact-vote, fact payouts and close the AI claim',
   await page.goto(`/oracles/${o.address}`)
   await expect(page.getByRole('button', { name: /^Connected:/ })).toBeVisible()
 
-  // The proposer / fact / AI-claim cards (and their terminal settle controls)
-  // live under the Records tab.
-  await page.getByRole('tab', { name: /Records/ }).click()
+  // Terminal settle controls sit on their cards: proposer + AI-claim under the
+  // Details tab, the fact-vote + fact payouts on the fact card under the Facts tab.
 
   // claim_proposer — the winning proposer's payout; the Proposer account closes.
+  await page.getByRole('tab', { name: /Details/ }).click()
   await page.getByRole('button', { name: 'Claim proposer payout' }).click()
   await poll(() => getAccountData(o.proposer), (d) => d === null)
 
   // claim_fact_vote — MUST precede the fact claim (the fact closes only once its
   // voters have claimed); the FactVote account closes.
+  await page.getByRole('tab', { name: /Facts/ }).click()
   await page.getByRole('button', { name: 'Claim your fact vote' }).click()
   await poll(() => getAccountData(o.factVote), (d) => d === null)
 
@@ -46,6 +47,7 @@ test('terminal: claim proposer, fact-vote, fact payouts and close the AI claim',
   await poll(() => getAccountData(o.fact), (d) => d === null)
 
   // close_ai_claim — reclaim the AiClaim rent; the AiClaim account closes.
+  await page.getByRole('tab', { name: /Details/ }).click()
   await page.getByRole('button', { name: 'Close AI claim' }).click()
   await poll(() => getAccountData(o.aiClaim), (d) => d === null)
 })

@@ -130,7 +130,11 @@ function OracleBody({
     return () => clearInterval(id)
   }, [])
   // The oracle can be cranked forward once an advanceable phase's window has closed.
-  const canAdvance = ADVANCEABLE_PHASES.has(oracle.phase) && oracle.deadline <= BigInt(nowSec)
+  // (`phase` is `Phase | undefined` — an unreadable/unknown phase can't advance.)
+  const canAdvance =
+    oracle.phase !== undefined &&
+    ADVANCEABLE_PHASES.has(oracle.phase) &&
+    oracle.deadline <= BigInt(nowSec)
 
   // Four sections: the at-a-glance Overview (lifecycle + economics), the Facts
   // column, the Manage participate surface (forms + crank + the challenge market

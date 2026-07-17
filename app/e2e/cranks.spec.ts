@@ -30,12 +30,14 @@ async function crank(page: Page, address: string, button: RegExp): Promise<void>
   await expect(page.getByRole('button', { name: /^Connected:/ })).toBeVisible()
   const o = await oracleAt(address)
   await setClockTo(Number(o.phaseEndsAt) + 120) // elapse the window
+  // The advance/finalize cranks live under the Manage tab.
+  await page.getByRole('tab', { name: /Manage/ }).click()
   await page.getByRole('button', { name: button }).click()
 }
 
 test('advancePhase: crank FactProposal → FactVoting', async ({ page }) => {
   const o = wallet.oracles.factProposalCrank
-  await crank(page, o.address, /Advance phase/i)
+  await crank(page, o.address, /Advance to fact voting/i)
   await poll(() => oracleAt(o.address), (x) => x.phaseRaw !== 2)
 })
 

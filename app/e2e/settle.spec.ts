@@ -27,6 +27,8 @@ test('finalizeOracle: crank Challenge → terminal', async ({ page }) => {
   await expect(page.getByRole('button', { name: /^Connected:/ })).toBeVisible()
   const oc = await oracleAt(o.address)
   await setClockTo(Number(oc.phaseEndsAt) + 120) // elapse the Challenge window
+  // The advance/finalize crank lives under the Manage tab.
+  await page.getByRole('tab', { name: /Manage/ }).click()
   await page.getByRole('button', { name: /Finalize oracle/i }).click()
   // On-chain: the oracle reached a terminal phase (Resolved=7 / InvalidDeadend=8).
   await poll(() => oracleAt(o.address), (x) => x.phaseRaw === 7 || x.phaseRaw === 8)

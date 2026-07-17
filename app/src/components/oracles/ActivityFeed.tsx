@@ -57,7 +57,7 @@ export function ActivityFeed({ oracle }: { oracle: string }) {
   if (!isIndexerConfigured()) return null
 
   return (
-    <Card className="flex flex-col gap-3">
+    <Card className="flex flex-col gap-3" data-testid="activity-feed">
       <div className="flex items-center justify-between">
         <h3 className="font-serif text-subheading font-light text-sepia">On-chain activity</h3>
         {data && data.length > 0 ? (
