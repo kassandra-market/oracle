@@ -21,6 +21,7 @@ export function FactCard({
   fact,
   voting,
   settle,
+  contest,
 }: {
   pubkey: string
   fact: Fact
@@ -28,6 +29,9 @@ export function FactCard({
   voting?: { oracle: string; kassMint: Address; refetch: () => void }
   /** When set (terminal phase), renders the fact-claim + fact-vote-claim controls. */
   settle?: SettleCtx
+  /** When set (Challenge phase, contestable fact), a button that jumps to Manage to
+   *  open a challenge market. Kept as a jump (not the flow) — the market lives in Manage. */
+  contest?: () => void
 }) {
   return (
     <Card className="flex flex-col gap-2">
@@ -69,6 +73,15 @@ export function FactCard({
           {fact.uri.length > 0 ? fact.uri : '—'}
         </p>
       </div>
+      {contest ? (
+        <button
+          type="button"
+          onClick={contest}
+          className="self-start rounded-button border border-ember-orange/50 bg-ember-orange/10 px-3 py-1.5 font-inter text-[13px] font-medium text-ember-orange transition-colors hover:bg-ember-orange/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember-orange/40 focus-visible:ring-offset-2 focus-visible:ring-offset-parchment active:scale-[0.98]"
+        >
+          Contest with a market →
+        </button>
+      ) : null}
       {voting ? (
         <VoteControl
           oracle={voting.oracle}

@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Phase } from '@kassandra-market/oracles'
 import { Button, Card, EyebrowTag, Tabs, TabPanel, type TabItem } from '../../components/ui'
 import { PhaseChip } from '../../components/oracles/PhaseChip'
 import { PhaseTimeline } from '../../components/oracles/PhaseTimeline'
-import { EconomicPanel } from '../../components/oracles/EconomicPanel'
+import { OracleEconomics } from '../../components/oracles/OracleEconomics'
 import { ChallengeMarketPanel } from '../../components/oracles/ChallengeMarketPanel'
+import { ChallengeControl } from '../../components/oracles/actions/ChallengeControl'
 import { ChallengeTradeControls } from '../../components/oracles/actions/ChallengeTradeControls'
 import { Truncated } from '../../components/oracles/Truncated'
 import { ActivityFeed } from '../../components/oracles/ActivityFeed'
@@ -15,14 +16,24 @@ import { useOracleDetail } from '../../hooks/useOracles'
 import { useOracleMeta } from '../../hooks/useOracleMeta'
 import { OracleNotFoundError } from '../../data/oracles'
 import { CLUSTER_LABELS, useCluster } from '../../lib/cluster'
-import { RESOLVED_OPTION_NONE, formatKass, relativeDeadline, windowLabel } from '../../lib/oracleView'
+import { RESOLVED_OPTION_NONE, relativeDeadline, windowLabel } from '../../lib/oracleView'
 import type { SettleCtx } from './helpers'
-import { BackLink, Row, Section, StatMeter, VerdictBanner } from './primitives'
+import { BackLink, Row, Section, VerdictBanner } from './primitives'
 import { AiClaimCard, FactCard, MarketCard, ProposerCard } from './cards'
 
 const emptyNote = (text: string) => (
   <p className="font-inter text-[14px] text-driftwood">{text}</p>
 )
+
+/** Phases whose window elapsing unlocks a permissionless advance/finalize crank. */
+const ADVANCEABLE_PHASES = new Set<Phase>([
+  Phase.Proposal,
+  Phase.FactProposal,
+  Phase.FactVoting,
+  Phase.AiClaim,
+  Phase.Challenge,
+  Phase.FinalRecompute,
+])
 
 /**
  * The oracle detail view at `/oracles/:pubkey` — an editorial layout of one
@@ -108,27 +119,34 @@ function OracleBody({
   const settle: SettleCtx | undefined = settleOpen
     ? { oracle: pubkey, kassMint: oracle.kassMint, refetch }
     : undefined
+  // A fact is contestable while the challenge round is open and no market exists yet.
+  const contestOpen = tradeOpen && market === undefined
 
-  // Section tabs: read the dispute (Overview + its economics/participate surface),
-  // browse the on-chain Records (facts/proposers/claims), watch the challenge
-  // Market, follow live Activity (indexer-gated), and inspect the Details
-  // (parameters + accounts). The verdict banner + lifecycle strip stay ABOVE the
-  // tabs as a persistent at-a-glance header.
+  // Coarse wall-clock tick (no per-second timer needed for a tab dot) so the
+  // "can advance" indicator lights on its own once the phase window elapses.
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000))
+  useEffect(() => {
+    const id = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 15_000)
+    return () => clearInterval(id)
+  }, [])
+  // The oracle can be cranked forward once an advanceable phase's window has closed.
+  const canAdvance = ADVANCEABLE_PHASES.has(oracle.phase) && oracle.deadline <= BigInt(nowSec)
+
+  // Four sections: the at-a-glance Overview (lifecycle + economics), the Facts
+  // column, the Manage participate surface (forms + crank + the challenge market
+  // when there's contestation), and the Details record (proposers, AI claims,
+  // activity, parameters, accounts). The Manage tab flags a dot when there's an
+  // open challenge (chestnut) or the oracle is ready to advance (ember).
   const indexerOn = isIndexerConfigured()
   const tabs = useMemo<TabItem[]>(() => {
-    const items: TabItem[] = [
+    const detailsCount = proposers.length + aiClaims.length
+    return [
       { id: 'overview', label: 'Overview' },
-      {
-        id: 'records',
-        label: 'Records',
-        count: facts.length + proposers.length + aiClaims.length,
-      },
-      { id: 'market', label: 'Market', dot: market ? 'chestnut' : null },
+      { id: 'facts', label: 'Facts', count: facts.length },
+      { id: 'manage', label: 'Manage', dot: market ? 'chestnut' : canAdvance ? 'ember' : null },
+      { id: 'details', label: 'Details', count: detailsCount || undefined },
     ]
-    if (indexerOn) items.push({ id: 'activity', label: 'Activity' })
-    items.push({ id: 'details', label: 'Details' })
-    return items
-  }, [facts.length, proposers.length, aiClaims.length, market, indexerOn])
+  }, [facts.length, proposers.length, aiClaims.length, market, canAdvance])
 
   const [tab, setTab] = useState('overview')
   const activeTab = tabs.some((t) => t.id === tab) ? tab : 'overview'
@@ -185,105 +203,88 @@ function OracleBody({
         ) : null}
       </header>
 
-      {/* At-a-glance verdict (h2 banner) + lifecycle timeline — a persistent
-          header ABOVE the tabs so the phase + verdict never hide behind a tab. */}
-      <VerdictBanner oracle={oracle} />
-      <PhaseTimeline oracle={oracle} />
-
       <div className="mt-8">
         <Tabs items={tabs} value={activeTab} onChange={setTab} ariaLabel="Oracle sections" />
       </div>
 
-      {/* Overview — the graphical stats meters, the bond pool, the economic
-          proportion viz, and the phase-gated participate surface. */}
-      <TabPanel id="overview" active={activeTab === 'overview'} className="tab-enter mt-6">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <StatMeter label="Options" value={oracle.optionsCount} />
-          <StatMeter label="Proposers" value={oracle.proposerCount} />
-          <StatMeter
-            label="Surviving"
-            value={oracle.survivingCount}
-            total={oracle.proposerCount}
-          />
-          <StatMeter label="Facts" value={oracle.factCount} />
-          <StatMeter
-            label="Settled facts"
-            value={oracle.settledCount}
-            total={oracle.factCount}
-          />
-          <StatMeter
-            label="Open challenges"
-            value={oracle.openChallengeCount}
-            total={oracle.factCount}
-            accent
-          />
-        </div>
+      {/* Overview — at-a-glance: the lifecycle (verdict + timeline) and the revamped
+          economics. Actions (advance/finalize + forms) live in the Manage tab. */}
+      <TabPanel
+        id="overview"
+        active={activeTab === 'overview'}
+        className="tab-enter mt-6 flex flex-col gap-6"
+      >
+        <VerdictBanner oracle={oracle} />
+        <PhaseTimeline oracle={oracle} />
+        <OracleEconomics oracle={oracle} proposers={proposers.map((p) => p.proposer)} />
+      </TabPanel>
 
-        {/* Bond pool (scaled KASS) */}
-        <div className="mt-4">
-          <Card>
-            <div className="font-inter text-[11px] uppercase tracking-[0.06em] text-driftwood">
-              Bond pool
-            </div>
-            <div className="mt-1 font-serif text-heading-sm font-light tabular-nums text-sepia">
-              {formatKass(oracle.bondPool)} KASS
-            </div>
-            <p className="mt-1 font-inter text-[12px] text-driftwood">
-              dispute-bond total {formatKass(oracle.disputeBondTotal)} KASS
-            </p>
-          </Card>
-        </div>
+      {/* Facts — the column of fact cards: details + state chips, the per-fact vote
+          (FactVoting) / claim (terminal) controls, and a jump to Manage to contest a
+          surviving fact with a market while the challenge round is open. */}
+      <TabPanel id="facts" active={activeTab === 'facts'} className="tab-enter mt-6">
+        {facts.length === 0 ? (
+          emptyNote('No facts submitted for this oracle.')
+        ) : (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {facts.map((f) => (
+              <FactCard
+                key={f.pubkey}
+                pubkey={f.pubkey}
+                fact={f.fact}
+                voting={votingOpen ? { oracle: pubkey, kassMint: oracle.kassMint, refetch } : undefined}
+                settle={settle}
+                contest={contestOpen && f.fact.agreed ? () => setTab('manage') : undefined}
+              />
+            ))}
+          </div>
+        )}
+      </TabPanel>
 
-        {/* Economic picture — flat proportion viz over the decoded economics. */}
-        <EconomicPanel oracle={oracle} proposers={proposers.map((p) => p.proposer)} />
-
-        {/* Participate — the wallet-signed write forms + permissionless finalize
-            cranks, phase-gated (WF2/RF1). The finalize tails are the proposer /
-            fact PDA pubkeys from the already-fetched detail. */}
+      {/* Manage — the phase-gated participate forms, plus the challenge market when
+          there's contestation: an open market (card + read panel + trade), or the
+          challenge round open to compose one. */}
+      <TabPanel
+        id="manage"
+        active={activeTab === 'manage'}
+        className="tab-enter mt-6 flex flex-col gap-6"
+      >
         <OracleActions
           pubkey={pubkey}
           oracle={oracle}
           refetch={refetch}
           proposers={proposers.map((p) => p.pubkey)}
           facts={facts.map((f) => f.pubkey)}
-          market={market}
         />
+        {market ? (
+          <>
+            <MarketCard pubkey={market.pubkey} market={market.market} settle={settle} />
+            <ChallengeMarketPanel market={market.market} oracle={oracle} />
+            {tradeOpen ? (
+              <ChallengeTradeControls
+                oraclePubkey={pubkey}
+                oracle={oracle}
+                market={market.market}
+                proposers={proposers}
+                refetch={refetch}
+              />
+            ) : null}
+          </>
+        ) : tradeOpen ? (
+          <ChallengeControl pubkey={pubkey} oracle={oracle} market={undefined} refetch={refetch} />
+        ) : null}
       </TabPanel>
 
-      {/* Records — the on-chain facts, proposers and AI claims. */}
-      <TabPanel id="records" active={activeTab === 'records'} className="tab-enter">
-        <Section title="Facts" count={facts.length}>
-          {facts.length === 0 ? (
-            emptyNote('No facts submitted for this oracle.')
-          ) : (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {facts.map((f) => (
-                <FactCard
-                  key={f.pubkey}
-                  pubkey={f.pubkey}
-                  fact={f.fact}
-                  voting={
-                    votingOpen ? { oracle: pubkey, kassMint: oracle.kassMint, refetch } : undefined
-                  }
-                  settle={settle}
-                />
-              ))}
-            </div>
-          )}
-        </Section>
-
+      {/* Details — proposers, AI claims, activity (indexer-gated), and the readable
+          parameters + account bindings. */}
+      <TabPanel id="details" active={activeTab === 'details'} className="tab-enter mt-6">
         <Section title="Proposers" count={proposers.length}>
           {proposers.length === 0 ? (
             emptyNote('No proposers registered.')
           ) : (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {proposers.map((p) => (
-                <ProposerCard
-                  key={p.pubkey}
-                  pubkey={p.pubkey}
-                  proposer={p.proposer}
-                  settle={settle}
-                />
+                <ProposerCard key={p.pubkey} pubkey={p.pubkey} proposer={p.proposer} settle={settle} />
               ))}
             </div>
           )}
@@ -300,40 +301,13 @@ function OracleBody({
             </div>
           )}
         </Section>
-      </TabPanel>
 
-      {/* Market — the existing card (accounts + close control) plus the CU1
-          live visualization panel (prices / TWAP / margin / countdown). */}
-      <TabPanel id="market" active={activeTab === 'market'} className="tab-enter mt-6">
-        {market ? (
-          <>
-            <MarketCard pubkey={market.pubkey} market={market.market} settle={settle} />
-            <ChallengeMarketPanel market={market.market} oracle={oracle} />
-            {tradeOpen ? (
-              <ChallengeTradeControls
-                oraclePubkey={pubkey}
-                oracle={oracle}
-                market={market.market}
-                proposers={proposers}
-                refetch={refetch}
-              />
-            ) : null}
-          </>
-        ) : (
-          emptyNote('No challenge market opened for this oracle.')
-        )}
-      </TabPanel>
+        {indexerOn ? (
+          <Section title="Activity">
+            <ActivityFeed oracle={pubkey} />
+          </Section>
+        ) : null}
 
-      {/* Activity — indexed event history (tab present only when the indexer
-          backend is configured). */}
-      {indexerOn ? (
-        <TabPanel id="activity" active={activeTab === 'activity'} className="tab-enter mt-6">
-          <ActivityFeed oracle={pubkey} />
-        </TabPanel>
-      ) : null}
-
-      {/* Details — the readable parameters + the account bindings. */}
-      <TabPanel id="details" active={activeTab === 'details'} className="tab-enter">
         <Section title="Parameters">
           <Card>
             <dl className="flex flex-col">
