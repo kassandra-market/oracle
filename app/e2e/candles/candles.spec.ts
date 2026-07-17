@@ -70,13 +70,13 @@ test('MarketDetail renders the line chart from indexed data', async ({ page }) =
   // The order ticket exposes the Buy/Sell control (a tablist beside the chart).
   await expect(page.getByRole('tablist', { name: 'Buy or sell' })).toBeVisible()
 
-  // The interval toggle is wired (switching re-queries the series without error).
-  // Target the 1m button inside the chart's interval group. A brief chart
+  // The window toggle is wired (switching re-queries the series without error).
+  // Target the 1m button inside the chart's window group. A brief chart
   // (re)mount while the series loads can transiently duplicate the toggle, so wait
   // for it to settle to a single instance before clicking — otherwise Playwright's
   // strict-mode single-match trips on the momentary duplicate.
   const oneMinute = page
-    .getByRole('group', { name: 'Interval' })
+    .getByRole('group', { name: 'Window' })
     .getByRole('button', { name: '1m', exact: true })
   await expect(oneMinute).toHaveCount(1)
   await oneMinute.first().click()
