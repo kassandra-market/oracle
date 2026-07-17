@@ -49,14 +49,25 @@ export default defineConfig({
   // `@solana/web3.js` — dedupe to ONE copy so `Address`/`instanceof` checks pass
   // across the app + both SDKs.
   resolve: { dedupe: ['@solana/web3.js'] },
-  // Dev: the market client talks to the indexer over same-origin `/api/*`; proxy
-  // it to the local indexer (the oracle side uses a direct VITE_RPC_URL in dev).
+  // Dev: BOTH sides reach the chain through the local indexer, same-origin —
+  //   - the market client over `/api/*` (its own HTTP surface), and
+  //   - the oracle side (web3.js `Connection` in gateway mode) over `/indexer/rpc`,
+  //     the JSON-RPC gateway the indexer exposes at `/rpc` and production serves at
+  //     that same path. Without this proxy, oracle writes' blockhash fetch to
+  //     `/indexer/rpc` 404s ("Failed to fetch"). A direct `VITE_RPC_URL` still
+  //     bypasses the gateway entirely when set.
   server: {
     proxy: {
       '/api': {
         target:
           process.env.INDEXER_URL ?? process.env.VITE_INDEXER_URL ?? 'http://127.0.0.1:3111',
         changeOrigin: true,
+      },
+      '/indexer/rpc': {
+        target:
+          process.env.INDEXER_URL ?? process.env.VITE_INDEXER_URL ?? 'http://127.0.0.1:3111',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/indexer\/rpc/, '/rpc'),
       },
     },
   },
