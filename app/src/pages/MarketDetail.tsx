@@ -299,7 +299,7 @@ function DetailBody({
   // probability + oracle + bindings (Details).
   const tabs = useMemo<TabItem[]>(() => {
     const items: TabItem[] = [];
-    if (isActive) items.push({ id: "trade", label: "Trade", dot: "ember" });
+    if (isActive) items.push({ id: "trade", label: "Trade", dot: "coral" });
     items.push({ id: "liquidity", label: "Liquidity" });
     items.push({ id: "manage", label: "Manage" });
     items.push({ id: "details", label: "Details" });

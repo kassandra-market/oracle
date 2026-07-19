@@ -14,7 +14,7 @@ import { Tabs, TabPanel } from '../src/components/ui/Tabs'
 const ITEMS = [
   { id: 'overview', label: 'Overview' },
   { id: 'records', label: 'Records', count: 3 },
-  { id: 'market', label: 'Market', dot: 'chestnut' as const },
+  { id: 'market', label: 'Market', dot: 'aqua' as const },
 ]
 
 function render(active: string): string {

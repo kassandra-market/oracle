@@ -8,7 +8,7 @@ export interface TabItem {
   /** Optional count badge (e.g. Facts (3)). */
   count?: number
   /** A quiet accent dot before the label — the single ember/aqua punctuation. */
-  dot?: 'chestnut' | 'ember' | null
+  dot?: 'aqua' | 'coral' | null
 }
 
 export interface TabsProps {
@@ -60,7 +60,7 @@ export function Tabs({ items, value, onChange, ariaLabel, className = '' }: Tabs
     >
       {items.map((t, i) => {
         const selected = t.id === value
-        const dotClass = t.dot === 'ember' ? 'bg-coral' : t.dot === 'chestnut' ? 'bg-aqua' : ''
+        const dotClass = t.dot === 'coral' ? 'bg-coral' : t.dot === 'aqua' ? 'bg-aqua' : ''
         return (
           <button
             key={t.id}

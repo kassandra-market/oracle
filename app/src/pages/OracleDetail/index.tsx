@@ -159,7 +159,7 @@ function OracleBody({
     return [
       { id: 'overview', label: 'Overview' },
       { id: 'facts', label: 'Facts', count: facts.length },
-      { id: 'manage', label: 'Manage', dot: market ? 'chestnut' : canAdvance ? 'ember' : null },
+      { id: 'manage', label: 'Manage', dot: market ? 'aqua' : canAdvance ? 'coral' : null },
       { id: 'details', label: 'Details', count: detailsCount || undefined },
     ]
   }, [facts.length, proposers.length, aiClaims.length, market, canAdvance])
