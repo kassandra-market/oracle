@@ -127,7 +127,7 @@
 .wallet-adapter-modal-wrapper {
   background-color: var(--color-liquid-deep);
   color: var(--color-liquid-mist);
-  border: 1px solid var(--color-pebble);
+  border: 1px solid var(--color-hairline);
   border-radius: var(--radius-card);
   box-shadow: none;
   font-family: var(--font-inter);
