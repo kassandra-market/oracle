@@ -4,8 +4,8 @@
  * (`amount` KASS) and a "Liquidity" row (`lateLp` LP) — instead of one combined
  * "KASS · LP" line. A pure funder shows only funding; a pure late LP shows only
  * the LP it added (never a misleading "0 KASS"); a both-cohort contributor shows
- * two separate rows. Also covers the top-panel LP overview (pool value, LP supply,
- * the connected wallet's share).
+ * two separate rows. Also covers the top-panel LP overview (cYES/cNO reserve
+ * amounts, LP supply, the connected wallet's share).
  */
 import { vi } from "vitest";
 import { MarketStatus } from "@kassandra-market/markets";
@@ -37,8 +37,7 @@ const detail = {
     lpTotal: 6_500_000_000n,
   },
   oracle: { optionsCount: 2, phase: Phase.Resolved, resolvedOption: 0 },
-  // 6 cYES / 4 cNO → mark-to-market pool value 2·6·4/(6+4) = 4.8 KASS.
-  reserves: { base: 6_000_000_000n, quote: 4_000_000_000n },
+  reserves: { base: 6_000_000_000n, quote: 4_000_000_000n }, // 6 cYES / 4 cNO
   contributions: [
     { pubkey: "C3", slot: 300n, contribution: { contributor: { toString: () => "Both1111" }, amount: 2_000_000_000n, lateLp: 3_000_000_000n, claimed: false } },
     { pubkey: "C1", slot: 200n, contribution: { contributor: { toString: () => "Fund1111" }, amount: 1_000_000_000n, lateLp: 0n, claimed: false } },
@@ -98,9 +97,11 @@ describe("contributions ledger — tagged funding vs liquidity rows", () => {
     expect(html).toContain("Liquidity");
   });
 
-  it("shows the LP overview: pool value, LP supply, and the wallet's share", () => {
+  it("shows the LP overview: cYES/cNO reserves, LP supply, and the wallet's share", () => {
     const html = render();
-    expect(html).toMatch(/4\.8\s*KASS/); // mark-to-market pool value
+    expect(html).not.toContain("Pool value");
+    expect(html).toMatch(/>cYES<[\s\S]*?>6</); // cYES reserve amount (reserves.base)
+    expect(html).toMatch(/>cNO<[\s\S]*?>4</); // cNO reserve amount (reserves.quote)
     expect(html).toMatch(/6\.5\s*shares/); // LP supply (grossLpTotal)
     expect(html).toMatch(/76\.9%/); // your share of the pool
     expect(html).toMatch(/5\s*LP/); // your gross LP

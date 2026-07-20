@@ -25,7 +25,6 @@ import {
   impliedYesProbability,
   phaseLabel,
   outcomeResolutionText,
-  poolValueKass,
   truncateMiddle,
 } from "../market/lib/marketView";
 
@@ -136,9 +135,12 @@ function ContribTag({ kind }: { kind: "funding" | "liquidity" }) {
 }
 
 /**
- * The top-of-tab LP overview: pool value + LP supply + the connected wallet's
- * share once a pool exists (activated); before activation it degrades to funding
- * progress + the wallet's stake (there is no LP yet).
+ * The top-of-tab LP overview: the pool's cYES/cNO token amounts + LP supply +
+ * the connected wallet's share once a pool exists (activated); before
+ * activation it degrades to funding progress + the wallet's stake (there is no
+ * LP yet). Shows each side's actual reserve amount rather than a single
+ * KASS-denominated "pool value" — the latter is a mark-to-market figure that
+ * moves with the trade itself, so it reads as an odd, unstable headline number.
  */
 function LiquidityOverview({ detail }: { detail: MarketDetailData }) {
   const { market, reserves, contributions } = detail;
@@ -150,11 +152,11 @@ function LiquidityOverview({ detail }: { detail: MarketDetailData }) {
 
   // A pool exists (activated) → LP-denominated overview.
   if (market.grossLpTotal > 0n) {
-    const value = poolValueKass(reserves);
     const yourLp = mine ? contributorLp(mine.contribution, market) : 0n;
     return (
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <StatTile label="Pool value" value={value === null ? "—" : `${formatKass(value)} KASS`} />
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatTile label="cYES" value={reserves ? formatKass(reserves.base) : "—"} />
+        <StatTile label="cNO" value={reserves ? formatKass(reserves.quote) : "—"} />
         <StatTile label="LP supply" value={`${formatKass(market.grossLpTotal)} shares`} />
         <StatTile
           label="Your share"
@@ -373,10 +375,11 @@ function DetailBody({
         </TabPanel>
       ) : null}
 
-      {/* Liquidity — TWO panels. Top: the LP overview (pool value, LP supply, your
-          share) + the phase-appropriate provide/claim form, folding in bulk group
-          liquidity for a categorical group. Bottom: the detailed pool composition +
-          the tagged, latest-first contributions ledger. Present in every phase. */}
+      {/* Liquidity — TWO panels. Top: the LP overview (cYES/cNO reserves, LP supply,
+          your share) + the phase-appropriate provide/claim form, folding in bulk
+          group liquidity for a categorical group. Bottom: the detailed pool
+          composition + the tagged, latest-first contributions ledger. Present in
+          every phase. */}
       <TabPanel id="liquidity" active={activeTab === "liquidity"} className="tab-enter flex flex-col gap-6">
         <Panel title="Liquidity">
           <LiquidityOverview detail={detail} />

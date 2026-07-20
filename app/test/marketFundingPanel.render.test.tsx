@@ -88,6 +88,15 @@ describe("Funding & liquidity panel", () => {
     expect(html).toContain("cNO (pays 1 KASS on NO)");
   });
 
+  it("shows the pool's cYES/cNO reserve AMOUNTS at the top of the tab, not a KASS pool value", () => {
+    const html = render();
+    expect(html).not.toContain("Pool value");
+    // The overview stat tiles surface each side's raw reserve amount (base=cYES,
+    // quote=cNO from the fixture's `reserves`), not a mark-to-market KASS total.
+    expect(html).toMatch(/>cYES<[\s\S]*?0\.64/);
+    expect(html).toMatch(/>cNO<[\s\S]*?0\.36/);
+  });
+
   it("does NOT show the implied-probability gauge on the Liquidity tab", () => {
     const html = render();
     // The gauge moved to the Details tab (dormant here).
