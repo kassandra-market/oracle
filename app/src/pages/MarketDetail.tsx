@@ -62,7 +62,7 @@ function AddressRow({ label, address }: { label: string; address: Address }) {
   );
 }
 
-/** A small titled Delphi card block. */
+/** A small titled card block. */
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Card className="flex flex-col gap-4">

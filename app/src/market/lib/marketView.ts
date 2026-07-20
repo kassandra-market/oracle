@@ -24,7 +24,7 @@ export const KASS_DECIMALS = 9;
 /** On-brand chip tones (mirrors the sibling oracle `Chip` vocabulary). */
 export type ChipTone = "neutral" | "info" | "ember" | "confirmed" | "muted";
 
-/** Tailwind class strings (Delphi tokens) per {@link ChipTone}. */
+/** Tailwind class strings per {@link ChipTone}. */
 export const CHIP_TONE_CLASSES: Record<ChipTone, string> = {
   // Quiet default — achromatic warm.
   neutral: "border-hairline bg-liquid-deep text-silver",
@@ -73,7 +73,7 @@ export function statusTone(status: MarketStatus): ChipTone {
   }
 }
 
-/** The Delphi chip class string for a {@link MarketStatus}. */
+/** The chip class string for a {@link MarketStatus}. */
 export function statusChipClasses(status: MarketStatus): string {
   return CHIP_TONE_CLASSES[statusTone(status)];
 }

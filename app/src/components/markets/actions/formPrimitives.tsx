@@ -11,7 +11,7 @@ const inputClass =
 /**
  * A labelled field wrapper: a label, the control, and inline error text
  * associated to the control via `aria-describedby` (the child input reads
- * `describedById` + `invalid`). Delphi: hairline inputs, ember only for the
+ * `describedById` + `invalid`). Hairline inputs, ember only for the
  * inline error text.
  */
 export function Field({

@@ -12,7 +12,7 @@ const focusRing =
   "focus-visible:ring-offset-2 focus-visible:ring-offset-liquid-abyss";
 
 /**
- * A categorical (N>2) oracle rendered as ONE grouped Delphi card: the QUESTION
+ * A categorical (N>2) oracle rendered as ONE grouped card: the QUESTION
  * (on-chain oracle subject, read best-effort via {@link OracleMetaView}) is the
  * title, and each outcome sub-market is listed by its option LABEL with that
  * outcome's implied chance (its sub-market's YES probability from the pool

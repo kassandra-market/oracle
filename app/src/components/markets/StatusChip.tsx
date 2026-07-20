@@ -3,7 +3,7 @@ import { statusChipClasses, statusLabel } from "../../market/lib/marketView";
 
 /**
  * The market lifecycle-status chip. Maps a {@link MarketStatus} → a readable
- * label + an on-brand Delphi tone (Active is the one ember spark). The label is
+ * label + an on-brand tone (Active is the one ember spark). The label is
  * real text (never color-only) and an `aria-label` names it as the status.
  */
 export function StatusChip({ status }: { status: MarketStatus }) {

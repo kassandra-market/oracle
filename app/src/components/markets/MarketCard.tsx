@@ -14,7 +14,7 @@ const focusRing =
   "focus-visible:ring-offset-2 focus-visible:ring-offset-liquid-abyss";
 
 /**
- * One market rendered as a clickable Delphi card. The on-chain oracle metadata
+ * One market rendered as a clickable card. The on-chain oracle metadata
  * (subject + option labels, read best-effort via {@link OracleMetaView}) leads:
  * the title is the QUESTION and the sub-line is the outcome this market pays YES
  * on, in words. Without metadata it degrades to the short pubkey + numeric

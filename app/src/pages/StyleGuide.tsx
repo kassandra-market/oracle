@@ -9,27 +9,22 @@ import {
 } from '../components/ui'
 
 /**
- * Every color token: legacy (Delphi) name + its ACTUAL Auros @theme value, in
- * @theme order. The names are preserved so components re-skin without edits; the
- * hexes below mirror the live values in `index.css` (danger = coral ember-orange,
- * positive = aqua chestnut). `dark` = the swatch is dark, so label text goes light.
+ * Every color token in the Auros palette, in @theme order. The hexes mirror the
+ * live values in `index.css` (danger = coral, positive = aqua). `dark` = the
+ * swatch is dark, so label text goes light.
  */
-const COLORS: { name: string; token: string; hex: string; dark?: boolean }[] = [
-  { name: 'parchment', token: 'bg-liquid-abyss', hex: '#012624', dark: true },
-  { name: 'soft-cream', token: 'bg-liquid-deep', hex: '#011d1c', dark: true },
-  { name: 'pure-card', token: 'bg-liquid-kelp', hex: '#003734', dark: true },
-  { name: 'ink-black', token: 'bg-liquid-deep', hex: '#011d1c', dark: true },
-  { name: 'charcoal-bark', token: 'bg-liquid-mist', hex: '#edfffe' },
-  { name: 'sepia', token: 'bg-platinum', hex: '#ffffff' },
-  { name: 'bronze', token: 'bg-silver', hex: '#bbc7c6' },
-  { name: 'driftwood', token: 'bg-silver', hex: '#bbc7c6' },
-  { name: 'stone', token: 'bg-silver-dim', hex: '#8fa3a1' },
-  { name: 'pebble', token: 'bg-hairline', hex: 'rgba(255,255,255,0.1)', dark: true },
-  { name: 'chestnut', token: 'bg-aqua', hex: '#8fe9dd' },
-  { name: 'ember-orange', token: 'bg-coral', hex: '#ff6f61' },
-  { name: 'saffron-pulse', token: 'bg-cyan-phosphor', hex: '#cbfffc' },
-  { name: 'peach-glow', token: 'bg-liquid-kelp', hex: '#003734', dark: true },
-  { name: 'cobalt', token: 'bg-cyan-phosphor', hex: '#cbfffc' },
+const COLORS: { token: string; label: string; hex: string; dark?: boolean }[] = [
+  { token: 'bg-liquid-abyss', label: 'liquid-abyss', hex: '#012624', dark: true },
+  { token: 'bg-liquid-deep', label: 'liquid-deep', hex: '#011d1c', dark: true },
+  { token: 'bg-liquid-kelp', label: 'liquid-kelp', hex: '#003734', dark: true },
+  { token: 'bg-liquid-mist', label: 'liquid-mist', hex: '#edfffe' },
+  { token: 'bg-platinum', label: 'platinum', hex: '#ffffff' },
+  { token: 'bg-silver', label: 'silver', hex: '#bbc7c6' },
+  { token: 'bg-silver-dim', label: 'silver-dim', hex: '#8fa3a1' },
+  { token: 'bg-hairline', label: 'hairline', hex: 'rgba(255,255,255,0.1)', dark: true },
+  { token: 'bg-aqua', label: 'aqua', hex: '#8fe9dd' },
+  { token: 'bg-coral', label: 'coral', hex: '#ff6f61' },
+  { token: 'bg-cyan-phosphor', label: 'cyan-phosphor', hex: '#cbfffc' },
 ]
 
 /** Type-scale roles. Serif is used ONLY for display >= 20px (subheading and up). */
@@ -68,14 +63,14 @@ export default function StyleGuide() {
       <Panel title="Color tokens">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
           {COLORS.map((c) => (
-            <div key={c.name} className="overflow-hidden rounded-tag border border-hairline">
+            <div key={c.token} className="overflow-hidden rounded-tag border border-hairline">
               <div
                 className={`${c.token} flex h-20 items-end p-2 ${c.dark ? 'text-white' : 'text-platinum'}`}
               >
                 <span className="font-mono text-[11px]">{c.hex}</span>
               </div>
               <div className="bg-liquid-kelp px-2 py-1.5 font-inter text-[12px] text-liquid-mist">
-                {c.name}
+                {c.label}
               </div>
             </div>
           ))}
