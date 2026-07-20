@@ -391,6 +391,21 @@ export function TradePanel({
               />
             </div>
 
+            {/* Owned shares — visible in both buy and sell mode, unlike the
+                amount field's balance line below (which only shows the side
+                relevant to the current mode/outcome). */}
+            <div className="flex items-center justify-between font-inter text-[12px] text-silver">
+              <span>You own</span>
+              <span className="flex gap-3 tabular-nums">
+                <span className="text-aqua">
+                  {yes.balance === null ? "—" : formatKass(yes.balance)} YES
+                </span>
+                <span className="text-coral">
+                  {no.balance === null ? "—" : formatKass(no.balance)} NO
+                </span>
+              </span>
+            </div>
+
             {/* Amount — large field + balance line + quick-add chips. */}
             <div className="flex flex-col gap-2">
               <div className="flex items-baseline justify-between gap-2">
