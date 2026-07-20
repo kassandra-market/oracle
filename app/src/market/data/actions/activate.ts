@@ -8,8 +8,15 @@
  * much account-creation + CPI to fit one transaction — the Rust harness
  * (`compose_metadao_market` + `activate`) sends each composition instruction in
  * its OWN transaction, so we mirror that: {@link buildActivateSequence} returns
- * an ORDERED list of {@link ActivateStep}s the control sends one at a time
- * (each its own wallet-signed tx, compute-budget raised).
+ * an ORDERED list of {@link ActivateStep}s. The sequence RUNNER
+ * (`useActionSequence`) then packs as many of these steps as will fit into as
+ * few transactions as possible (see `data/actions/packTx`) and, when more than
+ * one transaction is still needed, signs them all in a SINGLE wallet approval
+ * via `signAllTransactions` — the four instructions together create a Question,
+ * a vault + 2 conditional mints, an AMM + LP mint + 2 vault ATAs, and 3
+ * market-owned token accounts (well past the 1232-byte tx size limit before
+ * even accounting for compute cost), so they still land as multiple
+ * transactions, just not multiple wallet popups.
  *
  * RESUME SAFETY: the composition instructions are NOT idempotent — each creates a
  * fresh deterministic-PDA account (Question / vault / AMM) and REVERTS with
@@ -20,16 +27,10 @@
  * probes it with {@link stepAlreadyLanded} before (re)sending and SKIPS the step
  * when the account already exists — a landed-but-unconfirmed step becomes a safe
  * skip instead of a fatal revert.
- *
- * (A single combined tx was rejected as the model: the four instructions create
- * a Question, a vault + 2 conditional mints, an AMM + LP mint + 2 vault ATAs, and
- * 3 market-owned token accounts — well past the 1232-byte tx size limit even
- * before the compute cost, so batching cannot work.)
  */
 import { Address, type TransactionInstruction } from "@solana/web3.js";
 import { flows } from "@kassandra-market/markets";
 import type { IndexerReads } from "../../lib/indexer";
-import { setComputeUnitLimitIx } from "./compute";
 import { toAddress, type AddressInput } from "./ata";
 
 /** One transaction in the activate sequence: a human label + its instructions. */
@@ -142,15 +143,4 @@ export async function stepAlreadyLanded(indexer: IndexerReads, step: ActivateSte
   } catch {
     return false;
   }
-}
-
-/**
- * Flatten an {@link ActivateStep} into the exact instruction list its
- * transaction carries — the `SetComputeUnitLimit` (when the step sets one)
- * prepended to the step's instructions. The sequence sender uses this per step.
- */
-export function activateStepIxs(step: ActivateStep): TransactionInstruction[] {
-  return step.computeUnits
-    ? [setComputeUnitLimitIx(step.computeUnits), ...step.ixs]
-    : step.ixs;
 }

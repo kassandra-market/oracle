@@ -11,8 +11,10 @@ import { ConnectGate } from "./ConnectGate";
  * market has reached its floor and its oracle is still live. It stands up the
  * market's MetaDAO scaffolding (question → conditional vault → cYES/cNO AMM) and
  * then `activate`s — splitting the escrowed KASS into the pool and seeding LP —
- * as a SEQUENCE of four wallet-signed transactions (too much account-creation +
- * CPI for one tx). A mid-sequence failure can be retried from where it stopped.
+ * as a SEQUENCE of steps (too much account-creation + CPI for one tx).
+ * `useActionSequence` packs them into as few transactions as will fit and signs
+ * any remainder together in one wallet approval. A mid-sequence failure can be
+ * retried from where it stopped.
  */
 export function ActivateControl({
   pubkey,
@@ -60,8 +62,8 @@ export function ActivateControl({
         <h3 className="font-serif text-subheading font-light text-platinum">Activate market</h3>
         <p className="mt-1 font-inter text-[13px] text-silver">
           The funding floor is met. Activation composes the cYES/cNO pool and seeds it with the
-          escrowed KASS, opening the market for trading. Permissionless — anyone may crank it (four
-          sequential transactions).
+          escrowed KASS, opening the market for trading. Permissionless — anyone may crank it (packed
+          into as few transactions as will fit, signed together in one wallet approval).
         </p>
       </div>
       <ConnectGate connected={seq.connected}>

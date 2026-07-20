@@ -19,7 +19,8 @@ import { vi } from "vitest";
 vi.mock("@wallet-standard/react", () => ({
   useWallets: () => [],
   getWalletAccountFeature: () => ({
-    signTransaction: async () => [{ signedTransaction: new Uint8Array() }],
+    signTransaction: async (...inputs: unknown[]) =>
+      inputs.map(() => ({ signedTransaction: new Uint8Array() })),
   }),
 }));
 
@@ -32,11 +33,12 @@ import { StandardWalletProvider } from "../src/lib/standardWallet.tsx";
 
 /** Reports which signing capabilities the provider hands to `useWallet()` consumers. */
 function Probe() {
-  const { signTransaction, sendTransaction } = useWallet();
+  const { signTransaction, sendTransaction, signAllTransactions } = useWallet();
   return (
     <>
       <span>{typeof signTransaction === "function" ? "HAS_SIGN" : "NO_SIGN"}</span>
       <span>{typeof sendTransaction === "function" ? "HAS_SEND" : "NO_SEND"}</span>
+      <span>{typeof signAllTransactions === "function" ? "HAS_SIGN_ALL" : "NO_SIGN_ALL"}</span>
     </>
   );
 }
@@ -56,5 +58,9 @@ describe("StandardWalletProvider — capabilities exposed to consumers", () => {
 
   it("still exposes sendTransaction (the oracle RPC write path)", () => {
     expect(html).toContain("HAS_SEND");
+  });
+
+  it("exposes signAllTransactions (batch-sign path — one wallet approval for several txs)", () => {
+    expect(html).toContain("HAS_SIGN_ALL");
   });
 });

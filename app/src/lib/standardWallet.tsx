@@ -114,28 +114,47 @@ function solanaChain(account: UiWalletAccount): `solana:${string}` {
 }
 
 /**
- * Sign a prepared (feePayer + blockhash already set) legacy transaction with the
- * account's Wallet-Standard `solana:signTransaction` feature, returning the fully
- * signed WIRE bytes. Shared by both write paths: the oracle `sendTransaction`
- * (relays these bytes over its RPC) and the markets `signTransaction` (rehydrates
- * a `Transaction` the indexer relay serializes + submits).
+ * Sign one or more prepared (feePayer + blockhash already set) legacy
+ * transactions with the account's Wallet-Standard `solana:signTransaction`
+ * feature, returning their fully signed WIRE bytes in the same order.
+ *
+ * The feature's `signTransaction` method is VARIADIC (`...inputs`) — the
+ * modern Wallet-Standard spec folded the old separate `signAllTransactions`
+ * feature into this one: passing several inputs in a single call signs them
+ * all under ONE wallet approval, exactly like the legacy `signAllTransactions`
+ * did. So batch-signing needs no extra feature detection, just more inputs.
  */
-async function signWithAccount(account: UiWalletAccount, tx: Transaction): Promise<Uint8Array> {
-  const wire = await tx.serialize({ requireAllSignatures: false, verifySignatures: false })
+async function signAllWithAccount(
+  account: UiWalletAccount,
+  txs: readonly Transaction[],
+): Promise<Uint8Array[]> {
   // NOTE (needs live-wallet validation): the exact Wallet-Standard
   // `signTransaction` input shape (esp. the `account` — UiWalletAccount vs the
   // underlying WalletAccount) is the one bit we can't verify without a browser
   // wallet, so the feature is typed permissively here.
   const getFeature = getWalletAccountFeature as (a: UiWalletAccount, f: string) => unknown
   const feature = getFeature(account, SolanaSignTransaction) as {
-    signTransaction: (input: unknown) => Promise<ReadonlyArray<{ signedTransaction: Uint8Array }>>
+    signTransaction: (...inputs: unknown[]) => Promise<ReadonlyArray<{ signedTransaction: Uint8Array }>>
   }
-  const [{ signedTransaction }] = await feature.signTransaction({
-    account,
-    transaction: wire,
-    chain: solanaChain(account),
-  })
-  return signedTransaction
+  const chain = solanaChain(account)
+  const inputs = await Promise.all(
+    txs.map(async (tx) => ({
+      account,
+      transaction: await tx.serialize({ requireAllSignatures: false, verifySignatures: false }),
+      chain,
+    })),
+  )
+  const outputs = await feature.signTransaction(...inputs)
+  return outputs.map((o) => o.signedTransaction)
+}
+
+/** Sign a SINGLE prepared transaction — see {@link signAllWithAccount}. Shared by
+ *  both write paths: the oracle `sendTransaction` (relays these bytes over its
+ *  RPC) and the markets `signTransaction` (rehydrates a `Transaction` the
+ *  indexer relay serializes + submits). */
+async function signWithAccount(account: UiWalletAccount, tx: Transaction): Promise<Uint8Array> {
+  const [signed] = await signAllWithAccount(account, [tx])
+  return signed
 }
 
 interface WalletMenuValue {
@@ -213,6 +232,17 @@ export function StandardWalletProvider({ children }: { children: ReactNode }) {
     [account, publicKey],
   )
 
+  // Batch-sign path: pack several markets/activation transactions into ONE
+  // wallet approval (see `signAllWithAccount`) instead of one popup per tx.
+  const signAllTransactions = useCallback(
+    async (txs: Transaction[]): Promise<Transaction[]> => {
+      if (!account || !publicKey) throw new Error('wallet not connected')
+      const signed = await signAllWithAccount(account, txs)
+      return signed.map((wire) => Transaction.from(wire))
+    },
+    [account, publicKey],
+  )
+
   const disconnect = useCallback(async () => {
     const wallet = wallets.find((w) => w.accounts.some((a) => a.address === account?.address))
     const feat = (wallet?.features as Record<string, { disconnect?: () => Promise<void> }> | undefined)?.[
@@ -238,11 +268,11 @@ export function StandardWalletProvider({ children }: { children: ReactNode }) {
         disconnect,
         sendTransaction: sendTransaction as unknown as WalletContextState['sendTransaction'],
         signTransaction: signTransaction as unknown as WalletContextState['signTransaction'],
-        signAllTransactions: undefined,
+        signAllTransactions: signAllTransactions as unknown as WalletContextState['signAllTransactions'],
         signMessage: undefined,
         signIn: undefined,
       }) as unknown as WalletContextState,
-    [publicKey, account, disconnect, sendTransaction, signTransaction],
+    [publicKey, account, disconnect, sendTransaction, signTransaction, signAllTransactions],
   )
 
   const menu = useMemo<WalletMenuValue>(

@@ -22,6 +22,9 @@ import { IndexerTxError, type IndexerReads } from "../lib/indexer";
 /** Signs a prepared (feePayer + blockhash set) legacy {@link Transaction} in place. */
 export type SignTransaction = (tx: Transaction) => Promise<Transaction>;
 
+/** Signs several prepared transactions in ONE wallet approval (`wallet-adapter`'s `signAllTransactions`). */
+export type SignAllTransactions = (txs: Transaction[]) => Promise<Transaction[]>;
+
 /**
  * The signer-abstraction seam: given the instruction list, sign + relay a legacy
  * transaction through the indexer and resolve to its base58 signature. The UI
@@ -103,6 +106,16 @@ export function humanizeProgramError(text: string, logs?: string[]): string | un
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+/** Build an unsigned legacy transaction from `ixs`, stamped with `feePayer` + `blockhash`. */
+export function buildUnsignedTx(feePayer: Address, blockhash: string, ixs: TransactionInstruction[]): Transaction {
+  const tx = new Transaction();
+  for (const ix of ixs) tx.add(ix);
+  tx.feePayer = feePayer;
+  // The indexer returns a base58 blockhash string; brand it to the tx field type.
+  tx.recentBlockhash = blockhash as Transaction["recentBlockhash"];
+  return tx;
+}
+
 /**
  * Build a legacy transaction from `ixs`, stamp it with `feePayer` + a fresh
  * indexer blockhash, sign it via `signTransaction`, then RELAY it to the indexer
@@ -115,11 +128,7 @@ export async function signAndRelay(
   signTransaction: SignTransaction,
   ixs: TransactionInstruction[],
 ): Promise<string> {
-  const tx = new Transaction();
-  for (const ix of ixs) tx.add(ix);
-  tx.feePayer = feePayer;
-  // The indexer returns a base58 blockhash string; brand it to the tx field type.
-  tx.recentBlockhash = (await indexer.getBlockhash()) as Transaction["recentBlockhash"];
+  const tx = buildUnsignedTx(feePayer, await indexer.getBlockhash(), ixs);
   const signed = await signTransaction(tx);
   return indexer.sendTransaction(bytesToBase64(await signed.serialize()));
 }
@@ -149,18 +158,15 @@ export async function confirmSignature(
 }
 
 /**
- * Send `ixs` via `sender` (sign + relay), then confirm the resulting signature
- * against the indexer. Throws a {@link SendError} (with the signature + logs when
- * available) if the relay throws or the tx fails / never confirms.
+ * Relay a signature-producing step, then confirm it against the indexer,
+ * mapping either failure into a typed {@link SendError}. The shared core of
+ * {@link sendAndConfirm} (sign THEN relay) and {@link sendSignedAndConfirm}
+ * (already signed — just relay).
  */
-export async function sendAndConfirm(
-  indexer: IndexerReads,
-  sender: TxSender,
-  ixs: TransactionInstruction[],
-): Promise<SendResult> {
+async function relayAndConfirm(indexer: IndexerReads, relay: () => Promise<string>): Promise<SendResult> {
   let signature: string;
   try {
-    signature = await sender(ixs);
+    signature = await relay();
   } catch (e) {
     const logs = e instanceof IndexerTxError ? e.logs : extractLogs(e);
     const human = humanizeProgramError(errMsg(e), logs);
@@ -179,6 +185,29 @@ export async function sendAndConfirm(
     });
   }
   return { signature };
+}
+
+/**
+ * Send `ixs` via `sender` (sign + relay), then confirm the resulting signature
+ * against the indexer. Throws a {@link SendError} (with the signature + logs when
+ * available) if the relay throws or the tx fails / never confirms.
+ */
+export async function sendAndConfirm(
+  indexer: IndexerReads,
+  sender: TxSender,
+  ixs: TransactionInstruction[],
+): Promise<SendResult> {
+  return relayAndConfirm(indexer, () => sender(ixs));
+}
+
+/**
+ * Relay an ALREADY-SIGNED transaction (see {@link buildUnsignedTx} +
+ * `signAllTransactions`) and confirm it. The counterpart to {@link sendAndConfirm}
+ * for the batch-sign path, where signing happens once up front for several
+ * transactions and each is then relayed + confirmed in turn.
+ */
+export async function sendSignedAndConfirm(indexer: IndexerReads, tx: Transaction): Promise<SendResult> {
+  return relayAndConfirm(indexer, async () => indexer.sendTransaction(bytesToBase64(await tx.serialize())));
 }
 
 /**

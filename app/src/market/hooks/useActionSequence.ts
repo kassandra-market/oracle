@@ -1,28 +1,43 @@
 /**
- * The React seam driving a STAGED, multi-tx SEQUENCE (the activate bring-up).
+ * The React seam driving a STAGED, multi-tx SEQUENCE (the activate bring-up and
+ * bulk-liquidity deposits/withdrawals).
  *
- * `compose → activate` can't fit one transaction (see `data/actions/activate`),
- * so {@link buildActivateSequence} returns an ORDERED list of {@link ActivateStep}s
- * this hook sends as a sequence of wallet-signed `sendAndConfirm` calls — one tx
- * per step, each with its own `SetComputeUnitLimit` prepended — tracking a
- * per-step {@link StepStatus}. On a mid-sequence failure it stops and lets the
- * control RETRY from the failed step.
+ * `compose → activate` (and a group liquidity deposit across several sub-markets)
+ * often can't fit ONE transaction, so a builder returns an ORDERED list of
+ * {@link ActivateStep}s. This hook first PACKS the not-yet-landed steps into as
+ * few transactions as {@link packSteps} can fit (each packed transaction may
+ * cover several steps at once — see `data/actions/packTx`), then sends them:
+ *
+ *   - ONE packed transaction → the existing single-tx wallet-signed path (one
+ *     approval already).
+ *   - MORE THAN ONE → every transaction is signed together in a SINGLE
+ *     `signAllTransactions` wallet approval, then relayed + confirmed one at a
+ *     time in order (a later transaction may read accounts an earlier one
+ *     creates, so relaying still waits for each confirm before the next). A
+ *     wallet that doesn't expose `signAllTransactions` falls back to the
+ *     one-popup-per-transaction path.
+ *
+ * Per-step {@link StepStatus} stays index-aligned to the ORIGINAL step list
+ * regardless of packing — every step in the same packed transaction moves
+ * through `running`/`done`/`error` together, sharing that transaction's
+ * signature, so the step-list UI (`BatchStepList`/`StepList`) needs no changes.
  *
  * The composition instructions are NOT idempotent (re-running a landed init
- * reverts "already in use"), so BEFORE sending each step the hook probes the
- * account that step creates ({@link stepAlreadyLanded}) and SKIPS it when it
- * already exists — making a resume after a confirm-timeout safe instead of fatal.
+ * reverts "already in use"), so BEFORE packing, the hook probes each step's
+ * account ({@link stepAlreadyLanded}) and SKIPS it when it already exists —
+ * making a resume after a confirm-timeout safe instead of fatal.
  *
  * It reuses the SAME wallet-adapter sender the single-write seam
  * ({@link useWriteAction}) uses.
  */
 import { useCallback, useMemo, useState } from "react";
-import { Address } from "@solana/web3.js";
+import { Address, type Transaction } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useIndexer } from "../lib/indexer";
-import { sendAndConfirm, signAndRelay, type TxSender } from "../data/send";
+import { buildUnsignedTx, sendAndConfirm, sendSignedAndConfirm, signAndRelay, type TxSender } from "../data/send";
 import { mapWriteError } from "../data/writeAction";
-import { activateStepIxs, stepAlreadyLanded, type ActivateStep } from "../data/actions/activate";
+import { stepAlreadyLanded, type ActivateStep } from "../data/actions/activate";
+import { packSteps } from "../data/actions/packTx";
 
 /** The lifecycle of one step in the sequence. */
 export type StepStatus =
@@ -57,7 +72,7 @@ export interface ActionSequence {
 
 export function useActionSequence(onDone?: () => void): ActionSequence {
   const indexer = useIndexer();
-  const { publicKey, connected, signTransaction } = useWallet();
+  const { publicKey, connected, signTransaction, signAllTransactions } = useWallet();
   const [statuses, setStatuses] = useState<StepStatus[]>([]);
 
   const walletSender = useMemo<TxSender | null>(() => {
@@ -73,7 +88,7 @@ export function useActionSequence(onDone?: () => void): ActionSequence {
   const run = useCallback(
     async (steps: ActivateStep[]) => {
       if (isRunning(statuses)) return;
-      if (!walletSender) {
+      if (!walletSender || !publicKey) {
         setStatuses(steps.map(() => ({ kind: "pending" as const })));
         return;
       }
@@ -89,44 +104,103 @@ export function useActionSequence(onDone?: () => void): ActionSequence {
       statusArr = statusArr.map((s, i) => (i >= begin && s.kind === "error" ? { kind: "pending" } : s));
       setStatuses(statusArr);
 
+      // Probe every not-yet-done step for a landed (but unconfirmed) prior send,
+      // marking it done and excluding it from packing (see `stepAlreadyLanded`).
+      const pending: { index: number; step: ActivateStep }[] = [];
       for (let i = begin; i < steps.length; i++) {
-        setStatuses((prev) => {
-          const next = [...prev];
-          next[i] = { kind: "running" };
-          return next;
-        });
-        // Skip a step whose non-idempotent instruction already landed (e.g. a
-        // prior attempt's confirm timed out after the tx actually succeeded);
-        // re-sending it would revert "already in use". Steps that legitimately
-        // repeat against an existing account opt out with `skipIfLanded: false`.
         if (steps[i].skipIfLanded !== false && (await stepAlreadyLanded(indexer, steps[i]))) {
           setStatuses((prev) => {
             const next = [...prev];
             next[i] = { kind: "done", signature: "already-landed" };
             return next;
           });
-          continue;
+        } else {
+          pending.push({ index: i, step: steps[i] });
         }
+      }
+      if (pending.length === 0) {
+        onDone?.();
+        return;
+      }
+
+      const setRunning = (idxs: number[]) =>
+        setStatuses((prev) => {
+          const next = [...prev];
+          for (const i of idxs) next[i] = { kind: "running" };
+          return next;
+        });
+      const setDone = (idxs: number[], signature: string) =>
+        setStatuses((prev) => {
+          const next = [...prev];
+          for (const i of idxs) next[i] = { kind: "done", signature };
+          return next;
+        });
+      const setError = (idxs: number[], failure: { message: string; logs?: string[] }) =>
+        setStatuses((prev) => {
+          const next = [...prev];
+          for (const i of idxs) next[i] = { kind: "error", ...failure };
+          return next;
+        });
+
+      const feePayer = new Address(publicKey.toBase58());
+      const batches = packSteps(
+        feePayer,
+        pending.map((p) => p.step),
+      );
+      let cursor = 0;
+      const batchIndices = (stepCount: number) => {
+        const idxs = pending.slice(cursor, cursor + stepCount).map((p) => p.index);
+        cursor += stepCount;
+        return idxs;
+      };
+
+      if (batches.length <= 1 || !signAllTransactions) {
+        // Either everything already packed into one transaction, or the wallet
+        // can't batch-sign — fall back to one popup per packed transaction
+        // (still fewer than one-per-step whenever packing combined steps).
+        for (const batch of batches) {
+          const idxs = batchIndices(batch.steps.length);
+          setRunning(idxs);
+          try {
+            const { signature } = await sendAndConfirm(indexer, walletSender, batch.ixs);
+            setDone(idxs, signature);
+          } catch (err) {
+            setError(idxs, mapWriteError(err));
+            return;
+          }
+        }
+      } else {
+        // More than one transaction needed — sign them ALL in one wallet
+        // approval, then relay + confirm sequentially (a later batch may read
+        // accounts an earlier batch creates).
+        let signed: Transaction[];
         try {
-          const { signature } = await sendAndConfirm(indexer, walletSender, activateStepIxs(steps[i]));
-          setStatuses((prev) => {
-            const next = [...prev];
-            next[i] = { kind: "done", signature };
-            return next;
-          });
+          const unsigned = await Promise.all(
+            batches.map((b) => indexer.getBlockhash().then((bh) => buildUnsignedTx(feePayer, bh, b.ixs))),
+          );
+          signed = await signAllTransactions(unsigned);
         } catch (err) {
-          const failure = mapWriteError(err);
-          setStatuses((prev) => {
-            const next = [...prev];
-            next[i] = { kind: "error", ...failure };
-            return next;
-          });
-          return; // stop at the first failure; the caller can retry from here.
+          setError(
+            pending.map((p) => p.index),
+            mapWriteError(err),
+          );
+          return;
+        }
+        for (let b = 0; b < batches.length; b++) {
+          const idxs = batchIndices(batches[b].steps.length);
+          setRunning(idxs);
+          try {
+            const { signature } = await sendSignedAndConfirm(indexer, signed[b]);
+            setDone(idxs, signature);
+          } catch (err) {
+            setError(idxs, mapWriteError(err));
+            return;
+          }
         }
       }
       onDone?.();
     },
-    [statuses, walletSender, indexer, onDone],
+    [statuses, walletSender, publicKey, signAllTransactions, indexer, onDone],
   );
 
   return {
