@@ -227,12 +227,6 @@ export function CreateMarketForm() {
 
   return (
     <Card className="flex flex-col gap-4">
-      <div>
-        <h3 className="font-serif text-subheading font-light text-platinum">Create market</h3>
-        <p className="mt-1 font-inter text-[13px] text-silver">
-          Bind a market to an existing Kassandra oracle and seed its funding.
-        </p>
-      </div>
       {notInitialized ? (
         <div className="rounded-tag border border-hairline bg-liquid-deep p-4">
           <p className="font-inter text-[13px] text-silver">
