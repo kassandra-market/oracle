@@ -6,6 +6,8 @@ import {
   buildSellIxs,
   marketRefs,
   previewBuy,
+  buyPriceImpact,
+  sellPriceImpact,
   DEFAULT_SLIPPAGE_BPS,
   type Outcome,
 } from "../../../market/data/actions";
@@ -21,7 +23,7 @@ import { parseKassAmount, balanceGateError } from "../../../market/data/amount";
 import { useKassUsdcPrice } from "../../../hooks/useKassUsdcPrice";
 import { PriceChart } from "../PriceChart";
 import { ConnectGate } from "./ConnectGate";
-import { SubmitButton } from "./formPrimitives";
+import { Field, SubmitButton, TextInput } from "./formPrimitives";
 import { WriteStatusRegion } from "./WriteStatusRegion";
 
 type Mode = "buy" | "sell";
@@ -48,6 +50,17 @@ function formatSharePrice(prob: number | null, unit: Unit, kassUsd: number | nul
 
 /** Whole-KASS quick-add chips (mirrors the reference's +$1/+$5/… stepper). */
 const PRESETS = [10, 50, 100] as const;
+
+/** Parse a max-slippage tolerance in percent (0..100) → basis points; blank input falls back to {@link DEFAULT_SLIPPAGE_BPS}. */
+function parseSlippagePercent(raw: string): { bps: number; error?: string } {
+  const t = raw.trim();
+  if (t === "") return { bps: DEFAULT_SLIPPAGE_BPS };
+  const pct = Number(t);
+  if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+    return { bps: DEFAULT_SLIPPAGE_BPS, error: "Slippage must be 0–100%." };
+  }
+  return { bps: Math.round(pct * 100) };
+}
 
 /** A base-unit KASS balance → a plain, comma-free decimal string the amount input
  *  (and {@link parseKassAmount}) accepts. Trailing-zero trimmed. */
@@ -227,6 +240,8 @@ export function TradePanel({
   const [amount, setAmount] = useState("");
   const [amountError, setAmountError] = useState<string | undefined>();
   const [unit, setUnit] = useState<Unit>("%");
+  const [slippageRaw, setSlippageRaw] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   // KASS→USD price (governance-anchored futarchy spot TWAP); null → USD disabled.
   const kassUsd = useKassUsdcPrice();
@@ -241,6 +256,9 @@ export function TradePanel({
   const yesProb = impliedYesProbability(reserves);
   const noProb = yesProb === null ? null : 1 - yesProb;
 
+  const slippage = parseSlippagePercent(slippageRaw);
+  const slippageBps = slippage.bps;
+
   // The chart loads its own candles and self-polls, but has no trade signal — so a
   // trade's price move only reaches it on the next poll. Key it to the live reserves
   // (refreshed post-trade by the reconcile-lag-resilient `onSuccess` burst) so the
@@ -254,8 +272,18 @@ export function TradePanel({
   const gateAsset = mode === "buy" ? "KASS" : `${outcome.toUpperCase()} shares`;
   const balanceError = balanceGateError(parsed.value, gateBalance, gateAsset);
 
-  const buyReceived =
-    mode === "buy" && parsed.value ? previewBuy(reserves, outcome, parsed.value).received : null;
+  const buyPreview =
+    mode === "buy" && parsed.value ? previewBuy(reserves, outcome, parsed.value, slippageBps) : null;
+  const buyReceived = buyPreview?.received ?? null;
+  const buyMinReceived =
+    buyPreview && parsed.value ? parsed.value + buyPreview.outputAmountMin : null;
+
+  const priceImpact = parsed.value
+    ? mode === "buy"
+      ? buyPriceImpact(reserves, outcome, parsed.value)
+      : sellPriceImpact(reserves, outcome, parsed.value)
+    : 0;
+  const priceImpactPct = Math.round(priceImpact * 1000) / 10;
 
   function bump(n: number) {
     const cur = Number(amount);
@@ -273,6 +301,7 @@ export function TradePanel({
       setAmountError(parsed.error);
       return;
     }
+    if (slippage.error) return;
     setAmountError(undefined);
     const value = parsed.value!;
     void action.run(async () => {
@@ -287,7 +316,7 @@ export function TradePanel({
           kassAmount: value,
           userKassAta,
           reserves,
-          slippageBps: DEFAULT_SLIPPAGE_BPS,
+          slippageBps,
         });
       }
       return buildSellIxs({
@@ -298,7 +327,7 @@ export function TradePanel({
         positionAmount: value,
         userKassAta,
         reserves,
-        slippageBps: DEFAULT_SLIPPAGE_BPS,
+        slippageBps,
       });
     });
   };
@@ -468,11 +497,74 @@ export function TradePanel({
               </div>
             ) : null}
 
+            {/* Price impact + a "Details" disclosure to configure max slippage. */}
+            {parsed.value ? (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between rounded-tag bg-liquid-deep px-3 py-2 font-inter text-[13px]">
+                  <span className="text-silver">
+                    Price impact{" "}
+                    <span
+                      className={`tabular-nums font-medium ${
+                        priceImpact >= 0.1 ? "text-coral" : "text-platinum"
+                      }`}
+                    >
+                      ≈ {priceImpactPct}%
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    aria-expanded={detailsOpen}
+                    onClick={() => setDetailsOpen((v) => !v)}
+                    className="flex items-center gap-1 font-inter text-[12px] text-silver transition-colors hover:text-platinum"
+                  >
+                    Details
+                    <span
+                      aria-hidden
+                      className={`inline-block transition-transform ${detailsOpen ? "rotate-180" : ""}`}
+                    >
+                      ⌄
+                    </span>
+                  </button>
+                </div>
+                {detailsOpen ? (
+                  <div className="flex flex-col gap-3 rounded-tag border border-hairline bg-liquid-kelp px-3 py-3">
+                    <Field
+                      label="Max slippage"
+                      hint="The trade reverts if the price moves beyond this tolerance before it lands."
+                      error={slippage.error}
+                    >
+                      {(ids) => (
+                        <div className="flex items-center gap-2">
+                          <TextInput
+                            ids={ids}
+                            inputMode="decimal"
+                            placeholder="1.0"
+                            value={slippageRaw}
+                            onChange={(e) => setSlippageRaw(e.target.value)}
+                            className="max-w-[6rem]"
+                          />
+                          <span className="font-inter text-[13px] text-silver">%</span>
+                        </div>
+                      )}
+                    </Field>
+                    {mode === "buy" && buyMinReceived !== null ? (
+                      <div className="flex items-baseline justify-between font-inter text-[12px]">
+                        <span className="text-silver">Minimum received</span>
+                        <span className="tabular-nums text-platinum">
+                          {formatKass(buyMinReceived)} {outcome.toUpperCase()} shares
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             <SubmitButton
               className="w-full py-3 text-[15px]"
               verb={mode === "buy" ? `Buy ${outcome.toUpperCase()}` : `Sell ${outcome.toUpperCase()}`}
               status={action.status}
-              disabled={Boolean(balanceError)}
+              disabled={Boolean(balanceError) || Boolean(slippage.error)}
             />
             <WriteStatusRegion status={action.status} successVerb={mode === "buy" ? "Bought" : "Sold"} />
 

@@ -114,6 +114,54 @@ export function previewBuy(
 }
 
 /**
+ * The BUY's price-impact fraction — the marginal-price move the AMM swap leg
+ * causes on the constant-product curve (the split is always 1:1, so it carries
+ * no impact; the entire buy's impact lives in the swap of the unwanted leg into
+ * the wanted one). Fee-EXCLUDED, matching the DeFi convention of quoting curve
+ * impact separately from the LP fee: `1 - effective/spot`, where `spot` is the
+ * pre-trade marginal rate and `effective` is `noFeeOut / kassAmount`. Clamped
+ * `0..1`; `0` on an empty pool / non-positive input.
+ */
+export function buyPriceImpact(
+  reserves: AmmReserves | null | undefined,
+  outcome: Outcome,
+  kassAmount: bigint,
+): number {
+  if (!reserves || kassAmount <= 0n) return 0;
+  const { inReserve, outReserve } = reservePair(reserves, outcome === "yes");
+  if (inReserve <= 0n || outReserve <= 0n) return 0;
+  const noFeeOut = constantProductOut(kassAmount, inReserve, outReserve);
+  if (noFeeOut <= 0n) return 0;
+  const spot = Number(outReserve) / Number(inReserve);
+  const effective = Number(noFeeOut) / Number(kassAmount);
+  return spot > 0 ? Math.min(Math.max(1 - effective / spot, 0), 1) : 0;
+}
+
+/**
+ * The SELL's price-impact fraction — same curve-impact convention as
+ * {@link buyPriceImpact}, applied to the pool-optimal unwind swap
+ * ({@link optimalUnwindSwap}) that a sell actually executes. `0` on an empty
+ * pool / a position too small to unwind.
+ */
+export function sellPriceImpact(
+  reserves: AmmReserves | null | undefined,
+  outcome: Outcome,
+  positionAmount: bigint,
+): number {
+  if (!reserves || positionAmount <= 1n) return 0;
+  const holdingYes = outcome === "yes";
+  const { inReserve, outReserve } = reservePair(reserves, !holdingYes);
+  if (inReserve <= 0n || outReserve <= 0n) return 0;
+  const swapAmount = optimalUnwindSwap(positionAmount, inReserve, outReserve);
+  if (swapAmount <= 0n) return 0;
+  const noFeeOut = constantProductOut(swapAmount, inReserve, outReserve);
+  if (noFeeOut <= 0n) return 0;
+  const spot = Number(outReserve) / Number(inReserve);
+  const effective = Number(noFeeOut) / Number(swapAmount);
+  return spot > 0 ? Math.min(Math.max(1 - effective / spot, 0), 1) : 0;
+}
+
+/**
  * The pool-optimal swap to unwind `held` units of a leg back to a balanced pair.
  * Swapping `s` of the held leg yields `out(s) = s·outRes/(inRes+s)`; we want the
  * remainder `held - s` to equal `out(s)` so both legs match for the merge. That
