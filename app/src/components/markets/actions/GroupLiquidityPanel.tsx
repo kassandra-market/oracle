@@ -6,13 +6,16 @@ import { useKassBalance } from "../../../market/hooks/useKassBalance";
 import { useActionSequence } from "../../../market/hooks/useActionSequence";
 import { useIndexer } from "../../../market/lib/indexer";
 import {
+  buildBulkActivateSteps,
   buildBulkAddLiquiditySteps,
   buildBulkClaimLpSteps,
   buildBulkContributeSteps,
+  outcomesReadyToActivate,
   uniformSplit,
   type ActivateStep,
   type BulkAddLiquidityEntry,
   type BulkContributeEntry,
+  type BulkFundingEntry,
 } from "../../../market/data/actions";
 import { parseKassAmount, balanceGateError } from "../../../market/data/amount";
 import { formatKass, outcomeLabel } from "../../../market/lib/marketView";
@@ -37,10 +40,17 @@ import { BatchStepList } from "./CreateMarketForm/BatchStepList";
  * `MarketLiquidityActions`'s `isGrouped` gate), so there is exactly one funding
  * action (this uniform-split deposit). The single cumulative progress bar for
  * the group lives in `LiquidityOverview` above this panel, not duplicated here.
+ *
+ * A deposit that pushes one or more Funding outcomes over their floor (or finds
+ * one already over it, uncranked) also activates them in the SAME batch — see
+ * {@link outcomesReadyToActivate} — so funding a categorical group advances
+ * each option to Active as soon as it's eligible, with no separate manual
+ * "Activate" step for the user to remember to come back for.
  */
 export function GroupLiquidityPanel({
   group,
   embedded = false,
+  oracleTerminal,
   onSuccess,
 }: {
   /** The oracle group this market belongs to, computed once by the parent page
@@ -48,6 +58,10 @@ export function GroupLiquidityPanel({
   group: OracleGroupState;
   /** Render as a bare subsection (no Card wrapper) — for folding into another panel. */
   embedded?: boolean;
+  /** Whether the shared oracle has reached a terminal phase — blocks activation
+   *  (an `activate` there would revert); those outcomes are left for
+   *  `CancelControl` instead. */
+  oracleTerminal: boolean;
   /** Called after a deposit/withdraw sequence completes — the parent market-detail
    *  page's `refetchAfterWrite`, so its pool value / price impact also refreshes. */
   onSuccess?: () => void;
@@ -56,7 +70,7 @@ export function GroupLiquidityPanel({
   const config = useConfig();
   const kassMint = config.data ? config.data.kassMint.toString() : undefined;
   const { balance, loading: balanceLoading, refetch: refetchBalance } = useKassBalance(kassMint);
-  const { siblings, claimable, depositable, refetch: refetchMarkets } = group;
+  const { siblings, funding, claimable, depositable, refetch: refetchMarkets } = group;
 
   const [total, setTotal] = useState("");
   const [error, setError] = useState<string | undefined>();
@@ -93,14 +107,25 @@ export function GroupLiquidityPanel({
     if (gate) return setError(gate);
 
     // Route each depositable outcome's uniform share to the right builder: Funding
-    // → contribute, Active → add_liquidity (into the live AMM).
+    // → contribute, Active → add_liquidity (into the live AMM). Every Funding
+    // entry also carries its pre-deposit floor state, so a step that crosses the
+    // floor can be flagged for auto-activation below.
     const contributeEntries: BulkContributeEntry[] = [];
     const addEntries: BulkAddLiquidityEntry[] = [];
+    const fundingEntries: BulkFundingEntry[] = [];
     for (let i = 0; i < depositable.length; i++) {
       const m = depositable[i];
       const label = outcomeLabel(m.market.outcomeIndex);
       if (m.market.status === MarketStatus.Funding) {
         contributeEntries.push({ market: m.pubkey, label, amount: shares[i] });
+        fundingEntries.push({
+          market: m.pubkey,
+          oracle: m.market.oracle,
+          label,
+          totalContributed: m.market.totalContributed,
+          minLiquidity: m.market.minLiquidity,
+          amount: shares[i],
+        });
       } else {
         addEntries.push({
           market: m.pubkey,
@@ -126,6 +151,16 @@ export function GroupLiquidityPanel({
       if (addEntries.some((entry) => entry.amount > 0n)) {
         built.push(
           ...(await buildBulkAddLiquiditySteps({ contributor: seq.address, entries: addEntries })),
+        );
+      }
+      // "If a transaction is about to fund the market, it should also advance to
+      // the next phase if possible" — any outcome this deposit pushes over its
+      // floor (or one already over it that nobody has cranked yet) activates in
+      // the SAME batch, no separate manual Activate click needed.
+      const readyToActivate = outcomesReadyToActivate(fundingEntries, oracleTerminal);
+      if (readyToActivate.length > 0) {
+        built.push(
+          ...(await buildBulkActivateSteps({ kassMint, payer: seq.address, entries: readyToActivate })),
         );
       }
       seq.reset();
@@ -192,6 +227,12 @@ export function GroupLiquidityPanel({
                 )}
               </Field>
               <KassBalanceLine balance={balance} loading={balanceLoading} format={formatKass} />
+              {funding.length > 0 && !oracleTerminal ? (
+                <p className="font-inter text-[12px] text-silver">
+                  Any outcome this reaches the funding floor activates automatically, in the same
+                  transaction.
+                </p>
+              ) : null}
               <div>
                 <Button type="submit" variant="PrimaryChestnut" disabled={seq.busy}>
                   {seq.busy ? "Depositing…" : `Deposit into ${depositable.length} outcomes`}

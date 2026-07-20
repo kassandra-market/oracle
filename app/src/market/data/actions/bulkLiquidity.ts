@@ -8,15 +8,23 @@
  * the fundable sub-markets ({@link uniformSplit}). Each step reuses the existing
  * single-market builder, and sets `skipIfLanded: false` — contribute/claim-LP
  * legitimately act on an existing account, so the sequence must never skip them.
+ *
+ * {@link outcomesReadyToActivate} + {@link buildBulkActivateSteps} extend this to
+ * the funding→activation handoff: whenever a deposit is ABOUT to push one or more
+ * Funding outcomes over their floor (or sweeps in one already over it that nobody
+ * has cranked yet), their `activate` sequence is appended to the SAME batch —
+ * "if a transaction is about to fund the market, it should also advance to the
+ * next phase if possible" — instead of leaving a separate manual crank for later.
  */
 import { buildContributeIxs } from "./contribute";
 import { buildClaimLpIxs } from "./claimLp";
 import { buildAddLiquidityIxs } from "./addLiquidity";
-import type { ActivateStep } from "./activate";
+import { buildActivateSequence, type ActivateStep } from "./activate";
 import { toAddress, type AddressInput } from "./ata";
 import type { IndexerReads } from "../../lib/indexer";
 import type { Market } from "@kassandra-market/markets";
 import type { AmmReserves } from "../markets";
+import { fundingProgress } from "../../lib/marketView";
 import { ValidationError } from "../writeAction";
 
 /**
@@ -81,6 +89,72 @@ export async function buildBulkContributeSteps(
       skipIfLanded: false,
     })),
   );
+}
+
+/** One Funding sub-market's floor state + this deposit's share, for the
+ *  funding→activation handoff ({@link outcomesReadyToActivate}). */
+export interface BulkFundingEntry {
+  market: AddressInput;
+  /** The sub-market's own oracle (shared by every outcome in the group). */
+  oracle: AddressInput;
+  label: string;
+  /** This outcome's `totalContributed` BEFORE the current deposit lands. */
+  totalContributed: bigint;
+  minLiquidity: bigint;
+  /** This outcome's share of the current deposit (0 if it isn't receiving one). */
+  amount: bigint;
+}
+
+/**
+ * Which Funding entries will be AT OR OVER their floor once `amount` lands (or
+ * already are, even with a zero share this round — sweeping in one nobody has
+ * cranked yet), and therefore ready to activate in the SAME transaction batch.
+ * Empty whenever the shared oracle is terminal (an `activate` there would
+ * revert — those outcomes fall back to `CancelControl` instead).
+ */
+export function outcomesReadyToActivate(
+  entries: BulkFundingEntry[],
+  oracleTerminal: boolean,
+): BulkFundingEntry[] {
+  if (oracleTerminal) return [];
+  return entries.filter(
+    (e) =>
+      fundingProgress({
+        totalContributed: e.totalContributed + e.amount,
+        minLiquidity: e.minLiquidity,
+      }).funded,
+  );
+}
+
+export interface BuildBulkActivateArgs {
+  /** Canonical KASS mint (shared by every sub-market in the group). */
+  kassMint: AddressInput;
+  /** Rent payer + signer for every step (the connected keeper wallet). */
+  payer: AddressInput;
+  /** Pre-filtered via {@link outcomesReadyToActivate}. */
+  entries: BulkFundingEntry[];
+}
+
+/**
+ * One full {@link buildActivateSequence} (compose + activate, 4 steps) PER newly-
+ * eligible outcome, concatenated in order — each step's label prefixed with its
+ * outcome so a multi-outcome batch's step list ("Outcome 1 · Initialize
+ * question", "Outcome 1 · Activate market", "Outcome 2 · …") stays legible in
+ * the UI instead of four identically-labelled steps repeated per outcome.
+ */
+export async function buildBulkActivateSteps(args: BuildBulkActivateArgs): Promise<ActivateStep[]> {
+  const groups = await Promise.all(
+    args.entries.map(async (e) => {
+      const steps = await buildActivateSequence({
+        market: e.market,
+        oracle: e.oracle,
+        kassMint: args.kassMint,
+        payer: args.payer,
+      });
+      return steps.map((s) => ({ ...s, label: `${e.label} · ${s.label}` }));
+    }),
+  );
+  return groups.flat();
 }
 
 /**

@@ -11,7 +11,12 @@
  *     the KASS balance, AND the parent market-detail page — not just the balance
  *     (regression coverage for the missing-refetch bug: a bulk deposit used to
  *     leave both this panel's reserves and the page's pool value/price impact
- *     stuck on pre-deposit data).
+ *     stuck on pre-deposit data);
+ *   - the auto-activation hint appears whenever a deposit could cross a Funding
+ *     outcome's floor, and is suppressed once the shared oracle is terminal
+ *     (the actual decision logic — which outcomes qualify — is unit-tested
+ *     directly in `bulkLiquidity.unit.test.ts`; `onDeposit`'s branching isn't
+ *     reachable from a static-markup render, so this only covers the UI wiring).
  */
 import { vi } from "vitest";
 
@@ -100,8 +105,14 @@ function buildGroup(siblings: ReturnType<typeof summary>[]): OracleGroupState {
   };
 }
 
-function render(siblings: ReturnType<typeof summary>[], onSuccess?: () => void): string {
-  return renderToStaticMarkup(<GroupLiquidityPanel group={buildGroup(siblings)} onSuccess={onSuccess} />);
+function render(
+  siblings: ReturnType<typeof summary>[],
+  onSuccess?: () => void,
+  oracleTerminal = false,
+): string {
+  return renderToStaticMarkup(
+    <GroupLiquidityPanel group={buildGroup(siblings)} oracleTerminal={oracleTerminal} onSuccess={onSuccess} />,
+  );
 }
 
 describe("GroupLiquidityPanel", () => {
@@ -188,5 +199,25 @@ describe("GroupLiquidityPanel", () => {
     expect(() => captured.onDone!()).not.toThrow();
     expect(spies.refetchBalance).toHaveBeenCalledTimes(1);
     expect(spies.refetchMarkets).toHaveBeenCalledTimes(1);
+  });
+
+  it("hints that a deposit reaching the floor activates automatically, while any outcome is Funding", () => {
+    const html = render([summary(0, MarketStatus.Funding), summary(1, MarketStatus.Funding)]);
+    expect(html).toMatch(/activates automatically/);
+  });
+
+  it("suppresses the auto-activation hint once the shared oracle is terminal", () => {
+    const html = render(
+      [summary(0, MarketStatus.Funding), summary(1, MarketStatus.Funding)],
+      undefined,
+      true, // oracleTerminal
+    );
+    expect(html).not.toMatch(/activates automatically/);
+  });
+
+  it("omits the auto-activation hint for an Active-only group (add_liquidity never activates)", () => {
+    const r = { base: 1_000_000n, quote: 1_000_000n };
+    const html = render([summary(0, MarketStatus.Active, false, r), summary(1, MarketStatus.Active, false, r)]);
+    expect(html).not.toMatch(/activates automatically/);
   });
 });

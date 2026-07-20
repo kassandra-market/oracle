@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { MarketStatus } from "@kassandra-market/markets";
+import { MarketStatus, isTerminal } from "@kassandra-market/markets";
 import type { Address } from "@solana/web3.js";
 import { Button, Card, EyebrowTag, SectionHeader, Tabs, TabPanel, type TabItem } from "../components/ui";
 import { StatusChip } from "../components/markets/StatusChip";
@@ -8,7 +8,7 @@ import { FundingBar } from "../components/markets/FundingBar";
 import { ProbabilityGauge } from "../components/markets/ProbabilityGauge";
 import { Truncated } from "../components/markets/Truncated";
 import { useOracleMeta } from "../hooks/useOracleMeta";
-import { TradePanel } from "../components/markets/actions/TradePanel";
+import { GroupTradePanel } from "../components/markets/actions/GroupTradePanel";
 import {
   MarketLiquidityActions,
   MarketLifecycleActions,
@@ -293,6 +293,10 @@ function DetailBody({
   // market) — computed once here so the per-outcome contribute form and the
   // cumulative funding bar agree on the exact same set of sibling markets.
   const group = useOracleGroup(market.oracle.toString());
+  // Every sub-market in the group shares this ONE oracle, so its phase gates
+  // activation identically for all of them — computed once here (rather than
+  // per-outcome) and handed to GroupLiquidityPanel's funding→activation handoff.
+  const oracleTerminal = oracle ? isTerminal(oracle.phase) : false;
 
   // LP provenance (only meaningful once the pool is seeded at activation):
   //   - funding LP  = `activationLp` (minted from the funders' escrow at activate),
@@ -315,20 +319,28 @@ function DetailBody({
   // The full-text label of the specific outcome THIS sub-market pays YES on.
   const boundLabel = options[market.outcomeIndex]?.trim() || null;
 
-  // Tabs are grouped by intent: act on the AMM (Trade, Active only), provide/
-  // withdraw + read funding & pool composition (Liquidity — present in EVERY phase
-  // incl. Active), run the lifecycle cranks (Manage), and inspect the implied
-  // probability + oracle + bindings (Details).
+  // Trade is available whenever SOME outcome in the group has a live pool — this
+  // market's own (isActive) or a sibling's — since GroupTradePanel lets the page
+  // trade any of them without navigating away. A still-Funding outcome viewed
+  // directly thus still gets a Trade tab as soon as one sibling activates.
+  const hasTradableOutcome = isActive || group.active.some((m) => m.pubkey !== pubkey);
+
+  // Tabs are grouped by intent: act on the AMM (Trade, whenever an outcome is
+  // tradable), provide/withdraw + read funding & pool composition (Liquidity —
+  // present in EVERY phase incl. Active), run the lifecycle cranks (Manage), and
+  // inspect the implied probability + oracle + bindings (Details).
   const tabs = useMemo<TabItem[]>(() => {
     const items: TabItem[] = [];
-    if (isActive) items.push({ id: "trade", label: "Trade", dot: "coral" });
+    if (hasTradableOutcome) items.push({ id: "trade", label: "Trade", dot: "coral" });
     items.push({ id: "liquidity", label: "Liquidity" });
     items.push({ id: "manage", label: "Manage" });
     items.push({ id: "details", label: "Details" });
     return items;
-  }, [isActive]);
+  }, [hasTradableOutcome]);
 
-  // Default to trading; a non-Active market (no Trade tab) opens on Liquidity.
+  // Default to trading only when THIS outcome is itself Active — a Funding-phase
+  // page defaults to Liquidity (what brought you here) even if a sibling is
+  // already tradable; Trade is still one click away via the tab.
   const defaultTab = isActive ? "trade" : "liquidity";
   // The active tab lives in the URL (`?tab=`) so a refresh (or a shared link)
   // restores it. An absent or stale param (e.g. an Active market resolved away the
@@ -381,16 +393,17 @@ function DetailBody({
 
       <Tabs items={tabs} value={activeTab} onChange={setTab} ariaLabel="Market sections" />
 
-      {/* Trade — the price chart + buy/sell form (Active only; the cYES/cNO pool exists). */}
-      {isActive ? (
+      {/* Trade — the price chart + buy/sell form, unified across every tradable
+          outcome in the group (an outcome selector above the order ticket when
+          more than one is Active; nothing to select for a lone/binary market). */}
+      {hasTradableOutcome ? (
         <TabPanel id="trade" active={activeTab === "trade"} className="tab-enter">
-          <TradePanel
-            pubkey={pubkey}
-            market={market}
-            reserves={reserves}
-            onSuccess={refetch}
-            question={subject}
-            boundLabel={boundLabel}
+          <GroupTradePanel
+            detail={detail}
+            group={group}
+            subject={subject}
+            options={options}
+            refetch={refetch}
           />
         </TabPanel>
       ) : null}
@@ -406,7 +419,12 @@ function DetailBody({
           <div className="border-t border-hairline pt-5">
             <MarketLiquidityActions detail={detail} refetch={refetch} isGrouped={group.isGroup} />
           </div>
-          <GroupLiquidityPanel group={group} embedded onSuccess={refetch} />
+          <GroupLiquidityPanel
+            group={group}
+            embedded
+            oracleTerminal={oracleTerminal}
+            onSuccess={refetch}
+          />
         </Panel>
 
         <Panel title="Pool composition & contributions">
