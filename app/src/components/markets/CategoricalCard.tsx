@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { MarketStatus } from "@kassandra-market/markets";
 import { Card } from "../ui";
 import { StatusChip } from "./StatusChip";
+import { FundingBar } from "./FundingBar";
 import type { OracleGroup } from "../../market/data/markets";
 import { formatKass, formatProbability, outcomeRow, truncateMiddle } from "../../market/lib/marketView";
 import type { OracleMetaView } from "../../hooks/useOracleMeta";
@@ -37,6 +38,18 @@ export function CategoricalCard({
   const subject = meta?.subject?.trim();
   const stagger = enterIndex !== undefined;
 
+  // While any outcome is still Funding, ONE cumulative bar for the group's
+  // combined raised/floor — not a bar per outcome (there is no per-outcome
+  // funding bar anywhere in the group case, matching the detail page).
+  const funding = group.markets.filter((m) => m.market.status === MarketStatus.Funding);
+  const cumulativeFunding =
+    funding.length > 0
+      ? {
+          totalContributed: funding.reduce((sum, m) => sum + m.market.totalContributed, 0n),
+          minLiquidity: funding.reduce((sum, m) => sum + m.market.minLiquidity, 0n),
+        }
+      : null;
+
   return (
     <Card
       className={`flex h-full flex-col gap-3${stagger ? " stagger-in" : ""}`}
@@ -64,6 +77,12 @@ export function CategoricalCard({
           {group.markets.length} of {optionsCount} outcomes live
         </h3>
       )}
+
+      {cumulativeFunding ? (
+        <div className="mt-1">
+          <FundingBar market={cumulativeFunding} />
+        </div>
+      ) : null}
 
       <ul className="mt-1 flex flex-col divide-y divide-hairline/60">
         {outcomes.map((row) => (

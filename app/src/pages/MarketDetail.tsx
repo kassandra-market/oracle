@@ -15,6 +15,7 @@ import {
 } from "../components/markets/actions/MarketActions";
 import { GroupLiquidityPanel } from "../components/markets/actions/GroupLiquidityPanel";
 import { useMarketDetail } from "../market/hooks/useMarketDetail";
+import { useOracleGroup, type OracleGroupState } from "../market/hooks/useOracleGroup";
 import { MarketNotFoundError, type MarketDetail as MarketDetailData } from "../market/data/markets";
 import { explorerAddressUrl } from "../market/lib/explorer";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -141,8 +142,14 @@ function ContribTag({ kind }: { kind: "funding" | "liquidity" }) {
  * LP yet). Shows each side's actual reserve amount rather than a single
  * KASS-denominated "pool value" — the latter is a mark-to-market figure that
  * moves with the trade itself, so it reads as an odd, unstable headline number.
+ *
+ * Pre-activation on a GROUPED market (`group.isGroup`), the bar + "Raised"
+ * figure are the GROUP's cumulative funding (summed across every outcome still
+ * Funding), not just this one outcome — matching the single cumulative bar in
+ * `GroupLiquidityPanel` below, since that panel is the only place funding for a
+ * group happens. A lone (non-grouped) market shows its own numbers, unchanged.
  */
-function LiquidityOverview({ detail }: { detail: MarketDetailData }) {
+function LiquidityOverview({ detail, group }: { detail: MarketDetailData; group: OracleGroupState }) {
   const { market, reserves, contributions } = detail;
   const { publicKey } = useWallet();
   const address = publicKey?.toBase58() ?? null;
@@ -167,16 +174,24 @@ function LiquidityOverview({ detail }: { detail: MarketDetailData }) {
     );
   }
 
-  // Pre-activation (Funding) → funding progress + the wallet's stake.
+  // Pre-activation (Funding) → funding progress + the wallet's stake. Grouped →
+  // the cumulative bar/figure across every outcome still Funding; lone → this
+  // market's own numbers (`group.funding` is empty for a lone market).
+  const fundingMarket = group.isGroup
+    ? {
+        totalContributed: group.funding.reduce((sum, m) => sum + m.market.totalContributed, 0n),
+        minLiquidity: group.funding.reduce((sum, m) => sum + m.market.minLiquidity, 0n),
+      }
+    : market;
   const yourStake = mine?.contribution.amount ?? 0n;
   return (
     <div className="flex flex-col gap-4">
-      <FundingBar market={market} />
+      <FundingBar market={fundingMarket} />
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <StatTile label="Raised" value={`${formatKass(market.totalContributed)} KASS`} />
+        <StatTile label="Raised" value={`${formatKass(fundingMarket.totalContributed)} KASS`} />
         <StatTile
           label="Your stake"
-          value={address ? percentOf(yourStake, market.totalContributed) : "—"}
+          value={address ? percentOf(yourStake, fundingMarket.totalContributed) : "—"}
           sub={address ? `${formatKass(yourStake)} KASS` : "Connect a wallet to see your stake"}
         />
       </div>
@@ -273,6 +288,11 @@ function DetailBody({
   // Binary markets are `outcome 0 of 2`; a categorical oracle exposes N outcomes.
   const optionsCount = oracle?.optionsCount ?? null;
   const yesProbability = impliedYesProbability(reserves);
+
+  // The categorical group this market's oracle spans (empty/lone for a binary
+  // market) — computed once here so the per-outcome contribute form and the
+  // cumulative funding bar agree on the exact same set of sibling markets.
+  const group = useOracleGroup(market.oracle.toString());
 
   // LP provenance (only meaningful once the pool is seeded at activation):
   //   - funding LP  = `activationLp` (minted from the funders' escrow at activate),
@@ -382,11 +402,11 @@ function DetailBody({
           every phase. */}
       <TabPanel id="liquidity" active={activeTab === "liquidity"} className="tab-enter flex flex-col gap-6">
         <Panel title="Liquidity">
-          <LiquidityOverview detail={detail} />
+          <LiquidityOverview detail={detail} group={group} />
           <div className="border-t border-hairline pt-5">
-            <MarketLiquidityActions detail={detail} refetch={refetch} />
+            <MarketLiquidityActions detail={detail} refetch={refetch} isGrouped={group.isGroup} />
           </div>
-          <GroupLiquidityPanel oracle={market.oracle.toString()} embedded onSuccess={refetch} />
+          <GroupLiquidityPanel group={group} embedded onSuccess={refetch} />
         </Panel>
 
         <Panel title="Pool composition & contributions">

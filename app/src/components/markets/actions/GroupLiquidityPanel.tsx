@@ -1,7 +1,6 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { MarketStatus } from "@kassandra-market/markets";
 import { Button, Card } from "../../ui";
-import { useMarkets } from "../../../market/hooks/useMarkets";
 import { useConfig } from "../../../market/hooks/useMarketDetail";
 import { useKassBalance } from "../../../market/hooks/useKassBalance";
 import { useActionSequence } from "../../../market/hooks/useActionSequence";
@@ -17,7 +16,7 @@ import {
 } from "../../../market/data/actions";
 import { parseKassAmount, balanceGateError } from "../../../market/data/amount";
 import { formatKass, outcomeLabel } from "../../../market/lib/marketView";
-import type { MarketSummary } from "../../../market/data/markets";
+import type { OracleGroupState } from "../../../market/hooks/useOracleGroup";
 import { ConnectGate } from "./ConnectGate";
 import { Field, KassBalanceLine, TextInput } from "./formPrimitives";
 import { BatchStepList } from "./CreateMarketForm/BatchStepList";
@@ -31,13 +30,22 @@ import { BatchStepList } from "./CreateMarketForm/BatchStepList";
  * Withdraw claims LP across every outcome whose fee has been collected. All fan the
  * single-market builders into one {@link useActionSequence} run. Renders nothing
  * for a lone market (not a group).
+ *
+ * While any outcome is still Funding, this is the ONLY place a categorical
+ * group's floor can be seeded from — the market-detail page suppresses each
+ * outcome's own per-market contribute form while a group exists (see
+ * `MarketLiquidityActions`'s `isGrouped` gate), so there is exactly one funding
+ * action (this uniform-split deposit). The single cumulative progress bar for
+ * the group lives in `LiquidityOverview` above this panel, not duplicated here.
  */
 export function GroupLiquidityPanel({
-  oracle,
+  group,
   embedded = false,
   onSuccess,
 }: {
-  oracle: string;
+  /** The oracle group this market belongs to, computed once by the parent page
+   *  via `useOracleGroup` (shared with the per-market contribute-form gate). */
+  group: OracleGroupState;
   /** Render as a bare subsection (no Card wrapper) — for folding into another panel. */
   embedded?: boolean;
   /** Called after a deposit/withdraw sequence completes — the parent market-detail
@@ -48,40 +56,7 @@ export function GroupLiquidityPanel({
   const config = useConfig();
   const kassMint = config.data ? config.data.kassMint.toString() : undefined;
   const { balance, loading: balanceLoading, refetch: refetchBalance } = useKassBalance(kassMint);
-  const { data: allMarkets, refetchAfterWrite: refetchMarkets } = useMarkets();
-
-  // The group = every sub-market on this oracle, in outcome order.
-  const siblings = useMemo<MarketSummary[]>(
-    () =>
-      (allMarkets ?? [])
-        .filter((m) => m.market.oracle.toString() === oracle)
-        .sort((a, b) => a.market.outcomeIndex - b.market.outcomeIndex),
-    [allMarkets, oracle],
-  );
-
-  const funding = useMemo(
-    () => siblings.filter((m) => m.market.status === MarketStatus.Funding),
-    [siblings],
-  );
-  // Active outcomes can take AMM liquidity, but only when their live reserves are
-  // known (needed to size the balanced deposit); drop any whose reserves haven't
-  // loaded yet.
-  const active = useMemo(
-    () =>
-      siblings.filter((m) => m.market.status === MarketStatus.Active && m.reserves != null),
-    [siblings],
-  );
-  // Everything that can take liquidity right now, in outcome order — the uniform
-  // split covers Funding (contribute) + Active (add_liquidity) alike.
-  const depositable = useMemo(
-    () =>
-      [...funding, ...active].sort((a, b) => a.market.outcomeIndex - b.market.outcomeIndex),
-    [funding, active],
-  );
-  const claimable = useMemo(
-    () => siblings.filter((m) => m.market.feeCollected),
-    [siblings],
-  );
+  const { siblings, claimable, depositable, refetch: refetchMarkets } = group;
 
   const [total, setTotal] = useState("");
   const [error, setError] = useState<string | undefined>();

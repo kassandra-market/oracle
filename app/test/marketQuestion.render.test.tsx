@@ -47,6 +47,18 @@ vi.mock('../src/market/hooks/useMarketDetail', () => ({
   }),
   useConfig: () => ({ data: undefined, loading: false, error: undefined, refetch: () => {} }),
 }))
+vi.mock('../src/market/hooks/useOracleGroup', () => ({
+  useOracleGroup: () => ({
+    siblings: [],
+    isGroup: false,
+    funding: [],
+    active: [],
+    claimable: [],
+    depositable: [],
+    loading: false,
+    refetch: () => {},
+  }),
+}))
 
 // The MarketDetail default tab is Trade; stub the trade surface (it needs wallet +
 // indexer context) so the header-focused render doesn't crash.

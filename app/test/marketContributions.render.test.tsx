@@ -49,6 +49,18 @@ vi.mock("../src/market/hooks/useMarketDetail", () => ({
   useMarketDetail: () => ({ data: detail, loading: false, error: undefined, refetch: () => {}, refetchAfterWrite: () => {} }),
   useConfig: () => ({ data: undefined, loading: false, error: undefined, refetch: () => {} }),
 }));
+vi.mock("../src/market/hooks/useOracleGroup", () => ({
+  useOracleGroup: () => ({
+    siblings: [],
+    isGroup: false,
+    funding: [],
+    active: [],
+    claimable: [],
+    depositable: [],
+    loading: false,
+    refetch: () => {},
+  }),
+}));
 vi.mock("../src/hooks/useOracleMeta", () => ({ useOracleMeta: () => new Map() }));
 // A connected wallet = the both-cohort contributor, so the overview's "Your share"
 // resolves (its gross LP = 2/3·3 activation + 3 late = 5 of 6.5 = 76.9%).

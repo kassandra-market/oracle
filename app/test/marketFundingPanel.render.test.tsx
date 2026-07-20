@@ -38,6 +38,18 @@ vi.mock("../src/market/hooks/useMarketDetail", () => ({
   useMarketDetail: () => ({ data: detail, loading: false, error: undefined, refetch: () => {}, refetchAfterWrite: () => {} }),
   useConfig: () => ({ data: undefined, loading: false, error: undefined, refetch: () => {} }),
 }));
+vi.mock("../src/market/hooks/useOracleGroup", () => ({
+  useOracleGroup: () => ({
+    siblings: [],
+    isGroup: false,
+    funding: [],
+    active: [],
+    claimable: [],
+    depositable: [],
+    loading: false,
+    refetch: () => {},
+  }),
+}));
 vi.mock("../src/hooks/useOracleMeta", () => ({ useOracleMeta: () => new Map() }));
 vi.mock("../src/components/markets/actions/MarketActions", () => ({
   MarketLiquidityActions: () => null,

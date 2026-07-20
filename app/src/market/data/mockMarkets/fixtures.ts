@@ -23,6 +23,9 @@
  *   - a 3-outcome CATEGORICAL group — one oracle (`optionsCount = 3`), three
  *     sub-markets at `outcomeIndex` 0/1/2 (`groupByOracle` collapses these into
  *     one `OracleGroup`; `isCategorical` is true since `optionsCount > 2`)
+ *   - a second 3-outcome CATEGORICAL group, every outcome still `Funding` (none
+ *     activated yet) — exercises the single cumulative funding bar + the
+ *     group-only deposit action on a group that hasn't started resolving
  */
 import { Address } from "@solana/web3.js";
 import type { CandleDto, ConfigDto, ContributionDto, MarketDetailDto, MarketDto, OracleDto, ReservesDto } from "../../lib/indexer";
@@ -74,6 +77,7 @@ const O_RESOLVED = fixturePubkey("oracle-resolved");
 const O_VOID = fixturePubkey("oracle-void");
 const O_CANCELLED = fixturePubkey("oracle-cancelled");
 const O_CATEGORICAL = fixturePubkey("oracle-categorical");
+const O_CATEGORICAL_FUNDING = fixturePubkey("oracle-categorical-funding");
 
 const ORACLES: Record<string, OracleDto> = {
   [O_FUNDING]: { optionsCount: 2, phase: 1 /* Proposal */, resolvedOption: 0 },
@@ -85,6 +89,11 @@ const ORACLES: Record<string, OracleDto> = {
   // own `resolve_market` crank hasn't run yet (its `status` is still `Active`),
   // a realistic "resolution pending" categorical state.
   [O_CATEGORICAL]: { optionsCount: 3, phase: 7 /* Resolved */, resolvedOption: 2 },
+  // A categorical group still pre-activation — every outcome Funding, none has
+  // met its own floor yet. Exercises the single cumulative funding bar + the
+  // group-only deposit action (no per-outcome contribute form) on a group that
+  // hasn't started resolving at all yet.
+  [O_CATEGORICAL_FUNDING]: { optionsCount: 3, phase: 1 /* Proposal */, resolvedOption: 0 },
 };
 
 // --- markets -------------------------------------------------------------------
@@ -157,6 +166,9 @@ const MKT_CANCELLED = fixturePubkey("market-cancelled-binary");
 const MKT_CAT_0 = fixturePubkey("market-categorical-outcome-0");
 const MKT_CAT_1 = fixturePubkey("market-categorical-outcome-1");
 const MKT_CAT_2 = fixturePubkey("market-categorical-outcome-2");
+const MKT_CAT_FUNDING_0 = fixturePubkey("market-categorical-funding-outcome-0");
+const MKT_CAT_FUNDING_1 = fixturePubkey("market-categorical-funding-outcome-1");
+const MKT_CAT_FUNDING_2 = fixturePubkey("market-categorical-funding-outcome-2");
 
 const FIXTURES: MarketFixture[] = [
   {
@@ -370,6 +382,54 @@ const FIXTURES: MarketFixture[] = [
     oracle: ORACLES[O_CATEGORICAL],
     reserves: null,
     contributions: [makeContribution(MKT_CAT_2, "cat2-a", 200_000, { claimed: false, slot: "1038" })],
+  },
+  {
+    // Funding categorical outcome 0/3 — barely started.
+    dto: makeMarket("cat-funding-0", {
+      address: MKT_CAT_FUNDING_0,
+      oracle: O_CATEGORICAL_FUNDING,
+      status: 0 /* Funding */,
+      statusLabel: "Funding",
+      outcomeIndex: 0,
+      totalContributed: kass(5_000),
+      openContributions: 1,
+      slot: "1050",
+    }),
+    oracle: ORACLES[O_CATEGORICAL_FUNDING],
+    reserves: null,
+    contributions: [makeContribution(MKT_CAT_FUNDING_0, "cat-funding-0-a", 5_000, { slot: "1050" })],
+  },
+  {
+    // Funding categorical outcome 1/3 — partially funded, still under floor.
+    dto: makeMarket("cat-funding-1", {
+      address: MKT_CAT_FUNDING_1,
+      oracle: O_CATEGORICAL_FUNDING,
+      status: 0 /* Funding */,
+      statusLabel: "Funding",
+      outcomeIndex: 1,
+      totalContributed: kass(80_000),
+      openContributions: 1,
+      slot: "1051",
+    }),
+    oracle: ORACLES[O_CATEGORICAL_FUNDING],
+    reserves: null,
+    contributions: [makeContribution(MKT_CAT_FUNDING_1, "cat-funding-1-a", 80_000, { slot: "1051" })],
+  },
+  {
+    // Funding categorical outcome 2/3 — partially funded, still under floor.
+    dto: makeMarket("cat-funding-2", {
+      address: MKT_CAT_FUNDING_2,
+      oracle: O_CATEGORICAL_FUNDING,
+      status: 0 /* Funding */,
+      statusLabel: "Funding",
+      outcomeIndex: 2,
+      totalContributed: kass(120_000),
+      openContributions: 1,
+      slot: "1052",
+    }),
+    oracle: ORACLES[O_CATEGORICAL_FUNDING],
+    reserves: null,
+    contributions: [makeContribution(MKT_CAT_FUNDING_2, "cat-funding-2-a", 120_000, { slot: "1052" })],
   },
 ];
 

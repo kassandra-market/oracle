@@ -108,7 +108,12 @@ function LiquidityActionTabs({ detail, refetch }: { detail: MarketDetail; refetc
  * pool, phase-routed so it's available across the market's whole life (this is
  * why the Liquidity tab is present for Active markets too, not just Funding):
  *
- *   - Funding   → ContributeForm (seed the funding floor).
+ *   - Funding   → ContributeForm (seed the funding floor) for a LONE market; a
+ *                 GROUPED market (`isGrouped`) has no per-outcome contribute form
+ *                 at all — funding only happens through the cumulative
+ *                 GroupLiquidityPanel below, so there is exactly one funding
+ *                 action + one progress bar for the whole group, not one per
+ *                 outcome.
  *   - Active    → LiquidityActionTabs: Deposit (add into the live AMM) + Claim
  *                 (LP withdrawal; self-gates until settle) as two tabs of one panel.
  *   - Resolved / Void → ClaimLpControl (waits for fee collection before it opens).
@@ -120,15 +125,23 @@ function LiquidityActionTabs({ detail, refetch }: { detail: MarketDetail; refetc
 export function MarketLiquidityActions({
   detail,
   refetch,
+  isGrouped,
 }: {
   detail: MarketDetail;
   refetch: () => void;
+  /** True when this market shares its oracle with sibling outcome markets — see
+   *  {@link useOracleGroup}. Suppresses the per-outcome Funding contribute form. */
+  isGrouped: boolean;
 }) {
   const { pubkey, market, contributions } = detail;
 
   switch (market.status) {
     case MarketStatus.Funding:
-      return <ContributeForm pubkey={pubkey} market={market} onSuccess={refetch} />;
+      return isGrouped ? (
+        <NoActions>Fund this option as part of the group below.</NoActions>
+      ) : (
+        <ContributeForm pubkey={pubkey} market={market} onSuccess={refetch} />
+      );
 
     case MarketStatus.Active:
       // Active markets can BOTH take new liquidity (into the live AMM) and, once

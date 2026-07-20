@@ -42,6 +42,18 @@ vi.mock('../src/market/hooks/useMarketDetail', () => ({
   }),
   useConfig: () => ({ data: undefined, loading: false, error: undefined, refetch: () => {} }),
 }))
+vi.mock('../src/market/hooks/useOracleGroup', () => ({
+  useOracleGroup: () => ({
+    siblings: [],
+    isGroup: false,
+    funding: [],
+    active: [],
+    claimable: [],
+    depositable: [],
+    loading: false,
+    refetch: () => {},
+  }),
+}))
 
 // Stub the Trade surface — it's the default panel now, but it pulls in wallet +
 // indexer context this lightweight structural test doesn't provide.
