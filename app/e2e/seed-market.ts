@@ -30,7 +30,7 @@ import {
 } from '@kassandra-market/markets'
 
 import { toHex, tokenAccountBytes } from '../../sdks/oracles/ts/test/surfpool/harness.ts'
-import { sendIx, sendIxs, type SeedCtx } from './seed.ts'
+import { driveToResolvedUncontested, sendIx, sendIxs, type SeedCtx } from './seed.ts'
 
 type MarketRefs = flows.MarketRefs
 
@@ -329,6 +329,33 @@ export async function seedMarkets(
   if (oracles.factVoting?.address) {
     log('creating a floor-funded, activatable market (outcome 0) on the fact-voting oracle')
     seeded.activatableMarket = await createOne(oracles.factVoting.address, 0, MIN_LIQUIDITY)
+  }
+
+  // A 3-way categorical oracle RESOLVED right at the start of the session: activate
+  // all 3 outcome legs FIRST (activation requires a non-terminal oracle — see
+  // `createAndActivateMarket`'s doc comment), then resolve the oracle uncontested.
+  // Trading itself is a MetaDAO AMM swap on the conditional mints, gated only by
+  // the MARKET's own `Active` status (not the oracle's phase — see
+  // `MarketDetail.tsx`'s `isActive`), so all 3 legs stay tradeable after the
+  // oracle resolves. Best-effort: a failure here must not lose the markets already
+  // seeded above.
+  if (oracles.resolvedCategorical?.address) {
+    const oracle = oracles.resolvedCategorical.address
+    try {
+      log('activating all 3 outcome legs of the resolved-categorical oracle')
+      const legs: string[] = []
+      for (let i = 0; i < 3; i++) {
+        const leg = await createAndActivateMarket(ctx, oracle, payerKass, { outcomeIndex: i }, log)
+        legs.push(leg.market)
+      }
+      log('resolving the categorical oracle to option 0 (uncontested)')
+      await driveToResolvedUncontested(ctx, new Address(oracle), 0)
+      seeded.resolvedCategoricalOracle = oracle
+      seeded.resolvedCategoricalMarkets = legs
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(`[dev] ⚠ resolved-categorical seed failed (earlier markets still stand): ${(e as Error).message}`)
+    }
   }
 
   return { seeded, active }

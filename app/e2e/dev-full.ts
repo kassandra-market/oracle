@@ -123,6 +123,14 @@ async function main(): Promise<void> {
     await driveToResolvedUncontested(ctx, o, 1)
     oracles.resolved = { nonce: '4', address: o.toString() }
   }
+  {
+    // NOT resolved here — its 3 outcome legs must activate first (a market can't
+    // activate against an already-terminal oracle); `seedMarkets` activates all 3,
+    // then resolves this oracle uncontested, so every leg lands Active for trading.
+    log('[dev]   · oracle #5 "Dev: resolved — 3-way categorical" (3 options) → creating (resolved once its 3 markets are live)')
+    const o = await createOracleReal(ctx, 5n, 3, 'Dev: resolved — 3-way categorical')
+    oracles.resolvedCategorical = { nonce: '5', address: o.toString() }
+  }
 
   // ── 1b) deploy the market program (+ MetaDAO fixtures) + seed demo markets ──
   // Same surfpool node, same KASS mint — so the single indexer picks up both and
